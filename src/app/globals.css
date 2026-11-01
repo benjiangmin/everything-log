@@ -231,3 +231,11 @@ body {
 .journal-text > :last-child {
   margin-bottom: 0;
 }
+
+/* Room on the left for the navigation bar (wide screens only; phones get a floating button).
+   Keep 3.5rem in step with RAIL in src/components/ui/SideNav.tsx. */
+@media (min-width: 48rem) {
+  body:has([data-side-nav]) {
+    padding-left: 3.5rem;
+  }
+}

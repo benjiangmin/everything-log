@@ -35,7 +35,7 @@ export default function JournalEditor({
   onChange,
   onStatus,
   autoFocus,
-  placeholder = "Dear diary…",
+  placeholder = "Hello unsus...",
 }: {
   initial: string; // HTML
   onChange: (html: string) => void;
