@@ -6,21 +6,12 @@ import type { PersonItem } from "@/lib/person";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
 import PersonForm from "./PersonForm";
 
-// The black-bordered box. Pinned things on top; everything else folded behind
-// "Expand for more details" (it opens by itself when a search result is in there).
+// The black-bordered box: pinned things on top, then everything else (oldest first).
 // Fills the rest of the screen and scrolls inside itself. Phones: a fixed share of the screen.
 export default function PersonList({ items, focusId }: { items: PersonItem[]; focusId?: string }) {
   const [scrolled, setScrolled] = useState(false);
   const pinned = items.filter((i) => i.pinned);
   const rest = items.filter((i) => !i.pinned);
-  const [open, setOpen] = useState(() => rest.some((i) => i.id === focusId));
-
-  // Picked a folded one from search while already on the page: unfold.
-  const [seenFocus, setSeenFocus] = useState(focusId);
-  if (focusId !== seenFocus) {
-    setSeenFocus(focusId);
-    if (rest.some((i) => i.id === focusId)) setOpen(true);
-  }
 
   return (
     <section
@@ -52,36 +43,11 @@ export default function PersonList({ items, focusId }: { items: PersonItem[]; fo
             )}
 
             {rest.length > 0 && (
-              <>
-                <button
-                  type="button"
-                  onClick={() => setOpen((o) => !o)}
-                  aria-expanded={open}
-                  className={`flex w-full items-center gap-2 rounded-control px-2 py-2 text-left text-sm font-semibold text-muted transition-colors hover:bg-surface hover:text-ink ${
-                    pinned.length > 0 ? "mt-3" : ""
-                  }`}
-                >
-                  <svg
-                    width="14"
-                    height="14"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    aria-hidden="true"
-                    className={`shrink-0 transition-transform ${open ? "rotate-90" : ""}`}
-                  >
-                    <path d="M9 5l7 7-7 7" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                  {open ? "Hide the details" : "Expand for more details"}
-                  <span className="font-normal opacity-70">{rest.length}</span>
-                </button>
-                {open && (
-                  <ul className="mt-1 space-y-2">
-                    {rest.map((t) => (
-                      <Item key={t.id} item={t} focused={t.id === focusId} />
-                    ))}
-                  </ul>
-                )}
-              </>
+              <ul className={`space-y-2 ${pinned.length > 0 ? "mt-2" : ""}`}>
+                {rest.map((t) => (
+                  <Item key={t.id} item={t} focused={t.id === focusId} />
+                ))}
+              </ul>
             )}
           </>
         )}
@@ -149,12 +115,12 @@ function Item({ item, focused }: { item: PersonItem; focused: boolean }) {
         <Linkified text={item.body} />
       </p>
       <div className="-my-1 -mr-1 flex">
-        {/* Pin: keep it on top, above "Expand for more details". */}
+        {/* Pin: keep it at the top of the list. */}
         <button
           type="button"
           disabled={pending}
           onClick={() => startTransition(() => setPersonPinned(item.id, !item.pinned))}
-          aria-label={item.pinned ? "Unpin (fold it away with the rest)" : "Pin to the top"}
+          aria-label={item.pinned ? "Unpin" : "Pin to the top"}
           title={item.pinned ? "Unpin" : "Pin to the top"}
           className={`grid size-8 place-items-center rounded-control transition hover:bg-paper ${
             item.pinned ? "text-accent" : "text-muted opacity-50 group-hover:text-black group-hover:opacity-100"

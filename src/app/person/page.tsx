@@ -7,8 +7,8 @@ import PersonForm from "@/components/person/PersonForm";
 import PersonList from "@/components/person/PersonList";
 import PersonSearch from "@/components/person/PersonSearch";
 
-// The person: things I look for in a partner. A simple list like Regrets, oldest first. The pinned
-// ones show on top; the rest fold away behind "Expand for more details".
+// The person: things I look for in a partner. A simple list like Regrets, oldest first, with the
+// pinned ones on top.
 export default function PersonPage(props: PageProps<"/person">) {
   return (
     <main className="mx-auto flex min-h-dvh w-full max-w-4xl flex-col px-4 pt-8 sm:pt-10">
@@ -33,10 +33,7 @@ async function Person({ focus }: { focus?: string }) {
       {/* Pinned to the top while you scroll: the title + search. The add box scrolls away. */}
       <StickyTop className="sticky top-0 z-30 -mx-4 -mt-3 shrink-0 bg-paper px-4 pb-2 pt-3">
         <header className="flex items-baseline justify-between gap-4 rounded-card bg-accent px-5 py-4 text-accent-ink shadow-lg shadow-ink/15">
-          <div className="min-w-0">
-            <h1 className="font-display text-2xl font-semibold tracking-tight sm:text-3xl">The person</h1>
-            <p className="text-sm opacity-70">Things I look for in a partner</p>
-          </div>
+          <h1 className="font-display text-2xl font-semibold tracking-tight sm:text-3xl">The person</h1>
           <p className="shrink-0 text-sm opacity-70">
             {items.length} {items.length === 1 ? "thing" : "things"}
           </p>

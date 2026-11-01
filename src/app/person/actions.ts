@@ -37,7 +37,7 @@ export async function updatePersonItem(_prev: FormState, formData: FormData): Pr
   return { ok: true, message: null, savedAt: Date.now() };
 }
 
-// Pinned ones show above "Expand for more details".
+// Pinned ones show at the top of the list.
 export async function setPersonPinned(id: string, pinned: boolean) {
   if (!isUuid(id)) return;
   const { error } = await db().from("person_items").update({ pinned }).eq("id", id);
