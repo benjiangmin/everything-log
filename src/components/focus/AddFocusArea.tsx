@@ -39,7 +39,7 @@ export default function AddFocusArea({ recordId }: { recordId: string }) {
             onChange={(e) => setName(e.target.value)}
             required
             maxLength={100}
-            placeholder="A focus area (guitar, code, cooking…)"
+            placeholder="A focus area"
             aria-label="New focus area"
             style={{ outline: "none" }}
             className={`${field} pr-24`}
@@ -78,7 +78,7 @@ export default function AddFocusArea({ recordId }: { recordId: string }) {
             onChange={(e) => setGoal(e.target.value)}
             rows={2}
             maxLength={2000}
-            placeholder="The goal (optional): what you're going for this stretch"
+            placeholder="An optional concrete goal"
             aria-label="Goal (optional)"
             style={{ outline: "none" }}
             className={`${field} resize-y`}

@@ -53,8 +53,8 @@ function Linkified({ text }: { text: string }) {
   return <>{parts}</>;
 }
 
-// Left: the focus areas (just their names). Right: a black-bordered box that's empty until you
-// pick one, then shows its add box on top and its logs below (newest first).
+// Left: the focus areas (just their names). Right: a black-bordered box with a placeholder until you
+// pick one, then its add box on top and its logs below (newest first). Click the picked one again to close it.
 export default function FocusAreaList({ areas, focusId }: { areas: FocusArea[]; focusId?: string }) {
   const [selected, setSelected] = useState<string | null>(() => areas.find((a) => a.logs.some((l) => l.id === focusId))?.id ?? null);
 
@@ -77,7 +77,7 @@ export default function FocusAreaList({ areas, focusId }: { areas: FocusArea[]; 
         ) : (
           <ul className="space-y-2">
             {areas.map((a) => (
-              <AreaCard key={a.id} area={a} selected={a.id === selected} onSelect={() => setSelected(a.id)} onDeleted={() => a.id === selected && setSelected(null)} />
+              <AreaCard key={a.id} area={a} selected={a.id === selected} onSelect={() => setSelected((cur) => (cur === a.id ? null : a.id))} onDeleted={() => a.id === selected && setSelected(null)} />
             ))}
           </ul>
         )}
@@ -88,7 +88,14 @@ export default function FocusAreaList({ areas, focusId }: { areas: FocusArea[]; 
         aria-label={area ? `${area.name} logs` : "Logs"}
         className="relative flex h-[75dvh] min-h-[24rem] min-w-0 flex-col overflow-hidden rounded-card border-[1.5px] border-ink lg:h-auto lg:min-h-0 lg:flex-1"
       >
-        {area && <AreaPanel key={area.id} area={area} focusId={focusId} />}
+        {area ? (
+          <AreaPanel key={area.id} area={area} focusId={focusId} />
+        ) : (
+          // Nothing picked: a dashed placeholder.
+          <div className="m-3 grid flex-1 place-items-center rounded-card border-2 border-dashed border-line p-6 text-center text-muted sm:m-4">
+            Click on a focus to edit
+          </div>
+        )}
       </section>
     </div>
   );
