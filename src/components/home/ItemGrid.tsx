@@ -2,11 +2,21 @@
 
 import Link from "next/link";
 import { useState, useTransition } from "react";
-import { addItem, deleteItem, moveItem, reorderItems, updateItem } from "@/app/home-actions";
+import {
+  addItem,
+  addSection,
+  deleteItem,
+  deleteSection,
+  moveItem,
+  renameSection,
+  saveCategoryLayout,
+  setCategoryDescription,
+  updateItem,
+} from "@/app/home-actions";
 import { createJournalDoc } from "@/app/journal/actions";
 import { createTrip } from "@/app/trips/actions";
 import { createFocusRecord } from "@/app/focus/actions";
-import type { HomeItem } from "@/lib/home";
+import type { HomeItem, HomeSection } from "@/lib/home";
 import {
   BIBLE_LABEL,
   JOURNAL_LABEL,
@@ -24,22 +34,57 @@ import {
 } from "@/lib/home-pages";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
 import SelectPicker from "@/components/ui/SelectPicker";
-import SortableGrid from "./SortableGrid";
+import SectionBoard, { type Group } from "./SectionBoard";
 import { AddCard, DeleteButton, Empty, InlineInput, PageHeader, useLocalCopy } from "./bits";
 import { localNow } from "@/lib/month";
 
 type Cat = { id: string; name: string };
 
-// A category's page: one card per subcategory. Built pages are solid cards you can click;
-// ones that don't open anything yet are dashed. "Edit" turns on dragging, editing and moving.
-export default function ItemGrid({ category, items, all }: { category: Cat; items: HomeItem[]; all: Cat[] }) {
+// A category's page: a description under the title, then one card per page, split into sections
+// (subcategories) like "Breaks" or "California". Built pages are solid cards you can click; ones that
+// don't open anything yet are dashed. "Edit" turns on the description, dragging (pages and whole
+// sections), renaming, adding and moving.
+export default function ItemGrid({
+  category,
+  sections,
+  items,
+  all,
+}: {
+  category: Cat & { description: string | null };
+  sections: HomeSection[];
+  items: HomeItem[];
+  all: Cat[];
+}) {
   const [editing, setEditing] = useState(false);
   const [order, setOrder] = useLocalCopy(items);
+  const [secs, setSecs] = useLocalCopy(sections);
+  const [description, setDescription] = useLocalCopy(category.description);
   const [, startTransition] = useTransition();
   const confirm = useConfirm();
 
+  const byId = new Map(order.map((i) => [i.id, i]));
+  // "No section" first, then each section, each with its pages in order.
+  const groups: Group[] = [
+    { id: null, name: "", itemIds: order.filter((i) => !i.section_id || !secs.some((s) => s.id === i.section_id)).map((i) => i.id) },
+    ...secs.map((s) => ({ id: s.id, name: s.name, itemIds: order.filter((i) => i.section_id === s.id).map((i) => i.id) })),
+  ];
+
   const patch = (id: string, changes: Partial<HomeItem>) =>
     setOrder((o) => o.map((x) => (x.id === id ? { ...x, ...changes } : x)));
+
+  // After a drag: rebuild the local order from the groups, then save the whole layout.
+  function saveLayout(next: Group[]) {
+    const flat = next.flatMap((g) => g.itemIds.map((id) => ({ ...byId.get(id)!, section_id: g.id })));
+    const nextSecs = next.slice(1).map((g) => secs.find((s) => s.id === g.id)!);
+    setOrder(flat);
+    setSecs(nextSecs);
+    startTransition(() =>
+      saveCategoryLayout(
+        nextSecs.map((s) => s.id),
+        flat.map((i) => ({ id: i.id, section_id: i.section_id })),
+      ),
+    );
+  }
 
   async function remove(item: HomeItem) {
     const ok = await confirm({
@@ -52,6 +97,19 @@ export default function ItemGrid({ category, items, all }: { category: Cat; item
     startTransition(() => deleteItem(item.id));
   }
 
+  async function removeSection(section: HomeSection) {
+    const count = order.filter((i) => i.section_id === section.id).length;
+    const ok = await confirm({
+      title: `Delete the "${section.name}" subcategory?`,
+      body: count ? `Its ${count} ${count === 1 ? "page moves" : "pages move"} back to the top (nothing else is deleted).` : undefined,
+      confirmLabel: "Delete",
+    });
+    if (!ok) return;
+    setSecs((ss) => ss.filter((x) => x.id !== section.id));
+    setOrder((o) => o.map((i) => (i.section_id === section.id ? { ...i, section_id: null } : i)));
+    startTransition(() => deleteSection(section.id));
+  }
+
   return (
     <>
       <PageHeader
@@ -59,24 +117,49 @@ export default function ItemGrid({ category, items, all }: { category: Cat; item
         back={{ href: "/", label: "Home" }}
         editing={editing}
         onToggle={() => setEditing((e) => !e)}
+        description={description}
+        onDescription={(d) => {
+          setDescription(d || null);
+          startTransition(() => setCategoryDescription(category.id, d));
+        }}
       />
 
       <div className="mt-8">
-        {order.length === 0 && !editing ? (
+        {order.length === 0 && secs.length === 0 && !editing ? (
           <Empty>Nothing in {category.name} yet. Press Edit to add something.</Empty>
         ) : (
-          <SortableGrid
-            id={`items-${category.id}`}
-            items={order}
+          <SectionBoard
+            dndId={`items-${category.id}`}
+            groups={groups}
             editing={editing}
-            onReorder={(next) => {
-              setOrder(next);
-              startTransition(() => reorderItems(next.map((i) => i.id)));
+            onChange={saveLayout}
+            renderAdd={(sectionId) => (
+              <AddCard key={`add-${sectionId ?? "none"}`} label="Add page" onAdd={(name) => startTransition(() => addItem(category.id, name, sectionId))} />
+            )}
+            after={<AddCard label="Add subcategory" onAdd={(name) => startTransition(() => addSection(category.id, name))} />}
+            renderSectionHead={(g, handle) => {
+              const section = secs.find((s) => s.id === g.id)!;
+              return editing ? (
+                <div className="flex items-center gap-1 border-b border-line pb-1.5">
+                  {handle}
+                  <InlineInput
+                    value={section.name}
+                    label="Subcategory name"
+                    onSave={(name) => {
+                      setSecs((ss) => ss.map((x) => (x.id === section.id ? { ...x, name } : x)));
+                      startTransition(() => renameSection(section.id, name));
+                    }}
+                    className="flex-1 font-display text-xl font-semibold"
+                  />
+                  <DeleteButton label={`Delete the ${section.name} subcategory`} onClick={() => removeSection(section)} />
+                </div>
+              ) : (
+                <h2 className="border-b border-line pb-2 font-display text-xl font-semibold text-ink/80">{section.name}</h2>
+              );
             }}
-            className="grid gap-3 sm:grid-cols-2"
-            after={editing && <AddCard label="Add page" onAdd={(name) => startTransition(() => addItem(category.id, name))} />}
-            render={(item, handle) =>
-              editing ? (
+            renderItem={(id, handle) => {
+              const item = byId.get(id)!;
+              return editing ? (
                 <div className="rounded-card bg-surface py-3 pl-2 pr-2">
                   <div className="flex items-center gap-1">
                     {handle}
@@ -127,10 +210,7 @@ export default function ItemGrid({ category, items, all }: { category: Cat; item
                   </div>
                 </div>
               ) : item.href ? (
-                <Link
-                  href={item.href}
-                  className="block min-h-20 rounded-card bg-surface p-5 transition-colors hover:bg-line/70"
-                >
+                <Link href={item.href} className="block min-h-20 rounded-card bg-surface p-5 transition-colors hover:bg-line/70">
                   <p className="font-display text-lg font-semibold">{item.name}</p>
                   {item.blurb && <p className="mt-1 text-sm text-muted">{item.blurb}</p>}
                 </Link>
@@ -139,8 +219,8 @@ export default function ItemGrid({ category, items, all }: { category: Cat; item
                   <p className="font-display text-lg font-semibold text-muted">{item.name}</p>
                   <p className="mt-1 text-sm text-muted">Coming soon</p>
                 </div>
-              )
-            }
+              );
+            }}
           />
         )}
       </div>

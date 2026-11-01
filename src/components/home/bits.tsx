@@ -18,16 +18,21 @@ export function useLocalCopy<T>(value: T) {
 }
 
 // The dark bar at the top of the page, with the Edit/Done button on the right.
+// description: a short line under the title; onDescription makes it editable while editing.
 export function PageHeader({
   title,
   back,
   editing,
   onToggle,
+  description,
+  onDescription,
 }: {
   title: string;
   back?: { href: string; label: string };
   editing: boolean;
   onToggle: () => void;
+  description?: string | null;
+  onDescription?: (next: string) => void;
 }) {
   return (
     <>
@@ -40,7 +45,21 @@ export function PageHeader({
         </Link>
       )}
       <header className="flex items-center justify-between gap-4 rounded-card bg-accent px-5 py-4 text-accent-ink shadow-lg shadow-ink/15">
-        <h1 className="min-w-0 truncate font-display text-2xl font-semibold tracking-tight sm:text-3xl">{title}</h1>
+        <div className="min-w-0 flex-1">
+          <h1 className="min-w-0 truncate font-display text-2xl font-semibold tracking-tight sm:text-3xl">{title}</h1>
+          {editing && onDescription ? (
+            <InlineInput
+              value={description ?? ""}
+              label="Description"
+              placeholder="Add a description"
+              allowEmpty
+              onSave={onDescription}
+              className="mt-0.5 w-full text-sm text-accent-ink/80 placeholder:text-accent-ink/40 hover:border-accent-ink/25 focus:border-accent-ink/70"
+            />
+          ) : (
+            description && <p className="mt-0.5 text-sm opacity-75">{description}</p>
+          )}
+        </div>
         <button
           type="button"
           onClick={onToggle}

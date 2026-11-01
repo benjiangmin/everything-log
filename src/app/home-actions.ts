@@ -47,6 +47,13 @@ export async function addCategory(name: string) {
   done();
 }
 
+// The short line under a category's title. Empty = none.
+export async function setCategoryDescription(id: string, description: string) {
+  const d = description.trim().slice(0, 200) || null;
+  await run("save the description", db().from("home_categories").update({ description: d }).eq("id", checkId(id)));
+  done();
+}
+
 export async function renameCategory(id: string, name: string) {
   await run("rename", db().from("home_categories").update({ name: cleanName(name) }).eq("id", checkId(id)));
   done();
@@ -65,11 +72,13 @@ export async function reorderCategories(ids: string[]) {
 
 /* Subcategories */
 
-export async function addItem(categoryId: string, name: string) {
+// sectionId: which section it goes in (null = no section).
+export async function addItem(categoryId: string, name: string, sectionId: string | null = null) {
   await run(
     "add the page",
     db().from("home_items").insert({
       category_id: checkId(categoryId),
+      section_id: sectionId === null ? null : checkId(sectionId),
       name: cleanName(name),
       position: await endOf("home_items", categoryId),
     }),
@@ -102,6 +111,41 @@ export async function reorderItems(ids: string[]) {
 // Moves a subcategory to the end of another category.
 export async function moveItem(id: string, categoryId: string) {
   const position = await endOf("home_items", checkId(categoryId));
-  await run("move", db().from("home_items").update({ category_id: categoryId, position }).eq("id", checkId(id)));
+  await run("move", db().from("home_items").update({ category_id: categoryId, section_id: null, position }).eq("id", checkId(id)));
+  done();
+}
+
+/* Sections (subcategories inside a category) */
+
+export async function addSection(categoryId: string, name: string) {
+  const { count } = await db().from("home_sections").select("id", { count: "exact", head: true }).eq("category_id", checkId(categoryId));
+  await run("add the subcategory", db().from("home_sections").insert({ category_id: categoryId, name: cleanName(name), position: count ?? 0 }));
+  done();
+}
+
+export async function renameSection(id: string, name: string) {
+  await run("rename", db().from("home_sections").update({ name: cleanName(name) }).eq("id", checkId(id)));
+  done();
+}
+
+// Its pages stay, back in "no section".
+export async function deleteSection(id: string) {
+  await run("delete", db().from("home_sections").delete().eq("id", checkId(id)));
+  done();
+}
+
+// Save a category's whole layout after a drag: the sections' order, and every page's section and order.
+export async function saveCategoryLayout(sectionIds: string[], items: { id: string; section_id: string | null }[]) {
+  const results = await Promise.all([
+    ...sectionIds.map((id, i) => db().from("home_sections").update({ position: i }).eq("id", checkId(id))),
+    ...items.map((it, i) =>
+      db()
+        .from("home_items")
+        .update({ position: i, section_id: it.section_id === null ? null : checkId(it.section_id) })
+        .eq("id", checkId(it.id)),
+    ),
+  ]);
+  const failed = results.find((r) => r.error);
+  if (failed?.error) throw new Error(`Couldn't save the order: ${failed.error.message}`);
   done();
 }

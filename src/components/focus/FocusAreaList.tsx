@@ -449,7 +449,8 @@ function LogRow({
             disabled={!log.notes || editing}
             className="flex min-w-0 flex-1 items-start gap-3 text-left disabled:cursor-default"
           >
-            <span className="num w-14 shrink-0 pt-px text-sm font-semibold text-muted">{short}</span>
+            {/* Same line height as the log text (26px), so the date sits centered on its first line. */}
+            <span className="num w-14 shrink-0 text-sm font-semibold leading-[1.625rem] text-muted">{short}</span>
             <span className="min-w-0 flex-1 whitespace-pre-line break-words leading-relaxed text-ink">
               <Linkified text={log.log} />
             </span>

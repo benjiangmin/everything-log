@@ -19,7 +19,7 @@ export default function CategoryPage({ params }: PageProps<"/c/[id]">) {
 async function Items({ id }: { id: string }) {
   const data = await getCategory(id);
   if (!data) notFound();
-  return <ItemGrid category={data.category} items={data.items} all={data.all} />;
+  return <ItemGrid category={data.category} sections={data.sections} items={data.items} all={data.all} />;
 }
 
 function Skeleton() {
