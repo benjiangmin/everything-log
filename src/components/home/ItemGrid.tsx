@@ -5,11 +5,13 @@ import { useState, useTransition } from "react";
 import { addItem, deleteItem, moveItem, reorderItems, updateItem } from "@/app/home-actions";
 import { createJournalDoc } from "@/app/journal/actions";
 import { createTrip } from "@/app/trips/actions";
+import { createFocusRecord } from "@/app/focus/actions";
 import type { HomeItem } from "@/lib/home";
 import {
   BIBLE_LABEL,
   JOURNAL_LABEL,
   PAGES,
+  FOCUS_LABEL,
   TRIP_LABEL,
   bibleHref,
   bibleYear,
@@ -17,6 +19,8 @@ import {
   journalYear,
   tripHref,
   tripId,
+  focusHref,
+  focusId,
 } from "@/lib/home-pages";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
 import SelectPicker from "@/components/ui/SelectPicker";
@@ -152,6 +156,7 @@ const selectClass =
 // Picking "Bible in a year…" asks which year, then links to that year's page.
 const ASK_YEAR = "__journal";
 const NEW_TRIP = "__trip";
+const NEW_FOCUS = "__focus"; // "Unrecreational record… (new)" makes a new, empty record
 const ASK_BIBLE = "__bible";
 
 function OpensPicker({ href, onChange }: { href: string | null; onChange: (href: string | null) => void }) {
@@ -161,6 +166,7 @@ function OpensPicker({ href, onChange }: { href: string | null; onChange: (href:
   const [saving, setSaving] = useState(false);
   const year = journalYear(href);
   const trip = tripId(href);
+  const focus = focusId(href);
   const bible = bibleYear(href);
 
   return (
@@ -177,6 +183,8 @@ function OpensPicker({ href, onChange }: { href: string | null; onChange: (href:
             { value: ASK_YEAR, label: `${JOURNAL_LABEL}…` },
             ...(trip !== null ? [{ value: href!, label: TRIP_LABEL }] : []),
             { value: NEW_TRIP, label: saving ? "Making…" : `${TRIP_LABEL}… (new)` },
+            ...(focus !== null ? [{ value: href!, label: FOCUS_LABEL }] : []),
+            { value: NEW_FOCUS, label: saving ? "Making…" : `${FOCUS_LABEL}… (new)` },
             ...(bible !== null ? [{ value: href!, label: `${BIBLE_LABEL} · ${bible}` }] : []),
             { value: ASK_BIBLE, label: `${BIBLE_LABEL}…` },
           ]}
@@ -184,6 +192,13 @@ function OpensPicker({ href, onChange }: { href: string | null; onChange: (href:
             setAskingBible(v === ASK_BIBLE);
             if (v === ASK_BIBLE) return setAskingYear(false);
             if (v === ASK_YEAR) return setAskingYear(true);
+            if (v === NEW_FOCUS) {
+              setAskingYear(false);
+              setSaving(true);
+              const id = await createFocusRecord();
+              setSaving(false);
+              return onChange(focusHref(id));
+            }
             if (v === NEW_TRIP) {
               setAskingYear(false);
               setSaving(true);

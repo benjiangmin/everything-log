@@ -46,5 +46,15 @@ export const bibleYear = (href: string | null) => {
   return m ? Number(m[1]) : null;
 };
 
+// Unrecreational records (a semester / break with focus areas): one page design shared by every
+// record, e.g. /focus/<id>. In the "Opens" dropdown: "Unrecreational record… (new)" makes a new one.
+export const FOCUS_LABEL = "Unrecreational record";
+export const focusHref = (id: string) => `/focus/${id}`;
+export const focusId = (href: string | null) => href?.match(/^\/focus\/([0-9a-f-]{36})$/i)?.[1] ?? null;
+
 export const isKnownPage = (href: string) =>
-  PAGES.some((p) => p.href === href) || journalYear(href) !== null || tripId(href) !== null || bibleYear(href) !== null;
+  PAGES.some((p) => p.href === href) ||
+  journalYear(href) !== null ||
+  tripId(href) !== null ||
+  bibleYear(href) !== null ||
+  focusId(href) !== null;
