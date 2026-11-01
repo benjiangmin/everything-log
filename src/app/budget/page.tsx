@@ -1,13 +1,11 @@
-import Link from "next/link";
 import { Suspense } from "react";
 import MonthView from "@/components/budget/MonthView";
+import BackLink from "@/components/ui/BackLink";
 
 export default function Page(props: PageProps<"/budget">) {
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-4xl flex-col px-4 pt-8 sm:pt-14">
-      <Link href="/" className="mb-4 inline-block text-sm text-muted underline-offset-4 hover:text-ink hover:underline">
-        ← All documents
-      </Link>
+      <BackLink className="mb-4 inline-block text-sm text-muted underline-offset-4 hover:text-ink hover:underline" />
       <Suspense fallback={<MonthSkeleton />}>
         <MonthView searchParams={props.searchParams} />
       </Suspense>

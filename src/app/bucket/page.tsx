@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { Suspense } from "react";
 import { connection } from "next/server";
 import { getBucket } from "@/lib/bucket";
@@ -6,15 +5,14 @@ import StickyTop from "@/components/ui/StickyTop";
 import BucketBoard from "@/components/bucket/BucketBoard";
 import BucketForm from "@/components/bucket/BucketForm";
 import BucketSearch from "@/components/bucket/BucketSearch";
+import BackLink from "@/components/ui/BackLink";
 
 // Bucket list: title + search pinned, the add box, then Not yet | Done (each folds away, like
 // National parks). Click an item for its details.
 export default function BucketPage(props: PageProps<"/bucket">) {
   return (
     <main className="mx-auto flex min-h-dvh w-full max-w-6xl flex-col px-4 pb-6 pt-8 sm:pt-10">
-      <Link href="/" className="mb-4 inline-block self-start text-sm text-muted underline-offset-4 hover:text-ink hover:underline">
-        ← Home
-      </Link>
+      <BackLink className="mb-4 inline-block self-start text-sm text-muted underline-offset-4 hover:text-ink hover:underline" />
       <Suspense fallback={<Skeleton />}>
         {props.searchParams.then((sp) => (
           <Bucket focus={typeof sp.focus === "string" ? sp.focus : undefined} />

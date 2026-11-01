@@ -1,4 +1,3 @@
-import Link from "next/link";
 import StickyTop from "@/components/ui/StickyTop";
 import { Suspense } from "react";
 import { connection } from "next/server";
@@ -6,6 +5,7 @@ import { getGames } from "@/lib/games";
 import GameForm from "@/components/games/GameForm";
 import GameBoard from "@/components/games/GameBoard";
 import GameSearch from "@/components/games/GameSearch";
+import BackLink from "@/components/ui/BackLink";
 
 // Games log: a board. In progress / Completed / Stopped playing side by side, Backlog underneath.
 // On wide screens the page is one screen tall: the board fills the rest and scrolls inside.
@@ -13,9 +13,7 @@ export default function GamesPage(props: PageProps<"/games">) {
   return (
     // At least one screen tall; the board takes whatever height is left.
     <main className="mx-auto flex min-h-dvh w-full max-w-6xl flex-col px-4 pb-6 pt-8 sm:pt-10">
-      <Link href="/" className="mb-4 inline-block self-start text-sm text-muted underline-offset-4 hover:text-ink hover:underline">
-        ← Home
-      </Link>
+      <BackLink className="mb-4 inline-block self-start text-sm text-muted underline-offset-4 hover:text-ink hover:underline" />
       <Suspense fallback={<Skeleton />}>
         {props.searchParams.then((sp) => (
           <Games focus={typeof sp.focus === "string" ? sp.focus : undefined} />

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { useEffect, useState, useSyncExternalStore, type ReactNode } from "react";
 
 // The navigation bar on the left of every page (not the login page).
@@ -39,16 +39,9 @@ const subscribe = (l: () => void) => {
 // The bar itself. Hidden on the login page. The room it needs on the left is made in globals.css
 // (body:has([data-side-nav])), so pages don't have to know about it.
 export default function SideNav() {
-  const router = useRouter();
   const pathname = usePathname();
   const open = useSyncExternalStore(subscribe, readOpen, () => false); // wide screens
   const [drawer, setDrawer] = useState(false); // phones
-
-  // Back: the previous page, or Home if this tab started here.
-  const back = () => {
-    if (window.history.length > 1) router.back();
-    else router.push("/");
-  };
 
   // Phones: close the drawer after moving somewhere, or with Escape.
   const [seenPath, setSeenPath] = useState(pathname);
@@ -67,9 +60,6 @@ export default function SideNav() {
     <>
       <NavButton label="Home" showLabel={labels} href="/" active={pathname === "/"}>
         <path d="M4 11l8-7 8 7v8a1 1 0 0 1-1 1h-4v-6h-6v6H5a1 1 0 0 1-1-1v-8z" />
-      </NavButton>
-      <NavButton label="Back" showLabel={labels} onClick={back}>
-        <path d="M15 5l-7 7 7 7" />
       </NavButton>
     </>
   );

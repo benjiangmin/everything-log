@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { Suspense } from "react";
 import { connection } from "next/server";
 import { getTears } from "@/lib/tears";
@@ -6,15 +5,14 @@ import StickyTop from "@/components/ui/StickyTop";
 import TearForm from "@/components/tears/TearForm";
 import TearList from "@/components/tears/TearList";
 import TearSearch from "@/components/tears/TearSearch";
+import BackLink from "@/components/ui/BackLink";
 
 // Tears: the times I've cried. Title + search pinned, the add box, then one bordered box that
 // fills the rest of the screen and scrolls inside itself.
 export default function TearsPage(props: PageProps<"/tears">) {
   return (
     <main className="mx-auto flex min-h-dvh w-full max-w-4xl flex-col px-4 pt-8 sm:pt-10">
-      <Link href="/" className="mb-4 inline-block self-start text-sm text-muted underline-offset-4 hover:text-ink hover:underline">
-        ← Home
-      </Link>
+      <BackLink className="mb-4 inline-block self-start text-sm text-muted underline-offset-4 hover:text-ink hover:underline" />
       <Suspense fallback={<Skeleton />}>
         {props.searchParams.then((sp) => (
           <Tears focus={typeof sp.focus === "string" ? sp.focus : undefined} />

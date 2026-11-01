@@ -8,15 +8,14 @@ import YearPicker from "@/components/ui/YearPicker";
 import ResolutionForm from "@/components/resolutions/ResolutionForm";
 import ResolutionList from "@/components/resolutions/ResolutionList";
 import ResolutionSearch from "@/components/resolutions/ResolutionSearch";
+import BackLink from "@/components/ui/BackLink";
 
 // New year's resolutions: one year at a time (‹ year ›). Each resolution can have a reflection
 // written at the end of the year; each year can have a note above its list.
 export default function ResolutionsPage(props: PageProps<"/resolutions">) {
   return (
     <main className="mx-auto flex min-h-dvh w-full max-w-4xl flex-col px-4 pb-6 pt-8 sm:pt-10">
-      <Link href="/" className="mb-4 inline-block self-start text-sm text-muted underline-offset-4 hover:text-ink hover:underline">
-        ← Home
-      </Link>
+      <BackLink className="mb-4 inline-block self-start text-sm text-muted underline-offset-4 hover:text-ink hover:underline" />
       <Suspense fallback={<Skeleton />}>
         {props.searchParams.then((sp) => (
           <Resolutions y={typeof sp.y === "string" ? sp.y : undefined} focus={typeof sp.focus === "string" ? sp.focus : undefined} />

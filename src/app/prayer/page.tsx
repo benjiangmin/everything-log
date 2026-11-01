@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { Suspense } from "react";
 import { connection } from "next/server";
 import { getPrayers } from "@/lib/prayers";
@@ -6,14 +5,13 @@ import StickyTop from "@/components/ui/StickyTop";
 import PrayerForm from "@/components/prayer/PrayerForm";
 import PrayerList from "@/components/prayer/PrayerList";
 import PrayerSearch from "@/components/prayer/PrayerSearch";
+import BackLink from "@/components/ui/BackLink";
 
 // Prayer: write on the left, every prayer on the right (newest first, folded to its title + date).
 export default function PrayerPage(props: PageProps<"/prayer">) {
   return (
     <main className="mx-auto flex min-h-dvh w-full max-w-6xl flex-col px-4 pb-6 pt-8 sm:pt-10">
-      <Link href="/" className="mb-4 inline-block self-start text-sm text-muted underline-offset-4 hover:text-ink hover:underline">
-        ← Home
-      </Link>
+      <BackLink className="mb-4 inline-block self-start text-sm text-muted underline-offset-4 hover:text-ink hover:underline" />
       <Suspense fallback={<Skeleton />}>
         {props.searchParams.then((sp) => (
           <Prayers focus={typeof sp.focus === "string" ? sp.focus : undefined} />

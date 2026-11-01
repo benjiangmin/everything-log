@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { Suspense } from "react";
 import { connection } from "next/server";
 import { getShopping } from "@/lib/shopping";
@@ -6,15 +5,14 @@ import StickyTop from "@/components/ui/StickyTop";
 import ShoppingBoard from "@/components/shopping/ShoppingBoard";
 import ShoppingForm from "@/components/shopping/ShoppingForm";
 import ShoppingSearch from "@/components/shopping/ShoppingSearch";
+import BackLink from "@/components/ui/BackLink";
 
 // Shopping list: title + search pinned, the add box, then "To buy" (left) and "Bought" (right,
 // folded away until you open it). On wide screens it fills the screen and each box scrolls inside.
 export default function ShoppingPage(props: PageProps<"/shopping">) {
   return (
     <main className="mx-auto flex min-h-dvh w-full max-w-6xl flex-col px-4 pb-6 pt-8 sm:pt-10">
-      <Link href="/" className="mb-4 inline-block self-start text-sm text-muted underline-offset-4 hover:text-ink hover:underline">
-        ← Home
-      </Link>
+      <BackLink className="mb-4 inline-block self-start text-sm text-muted underline-offset-4 hover:text-ink hover:underline" />
       <Suspense fallback={<Skeleton />}>
         {props.searchParams.then((sp) => (
           <Shopping focus={typeof sp.focus === "string" ? sp.focus : undefined} />

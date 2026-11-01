@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { Suspense } from "react";
 import { connection } from "next/server";
 import { notFound } from "next/navigation";
@@ -9,15 +8,14 @@ import StickyTop from "@/components/ui/StickyTop";
 import BibleSearch from "@/components/bible/BibleSearch";
 import BibleWorkspace from "@/components/bible/BibleWorkspace";
 import { localNow } from "@/lib/month";
+import BackLink from "@/components/ui/BackLink";
 
 // Bible in a year: one page per year (/bible/2024), Jan–Dec, shown a month at a time.
 // Same layout as the unsuspicious documents.
 export default function BibleYearPage({ params, searchParams }: PageProps<"/bible/[year]">) {
   return (
     <main className="mx-auto flex min-h-dvh w-full max-w-6xl flex-col px-4 pb-6 pt-8 sm:pt-10">
-      <Link href="/" className="mb-4 inline-block self-start text-sm text-muted underline-offset-4 hover:text-ink hover:underline">
-        ← Home
-      </Link>
+      <BackLink className="mb-4 inline-block self-start text-sm text-muted underline-offset-4 hover:text-ink hover:underline" />
       <Suspense fallback={<Skeleton />}>
         {Promise.all([params, searchParams]).then(([p, sp]) => (
           <BibleYear year={p.year} m={sp.m} focus={sp.focus} />

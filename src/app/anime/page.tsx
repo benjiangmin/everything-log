@@ -1,4 +1,3 @@
-import Link from "next/link";
 import StickyTop from "@/components/ui/StickyTop";
 import { Suspense } from "react";
 import { connection } from "next/server";
@@ -6,15 +5,14 @@ import { getAnime } from "@/lib/anime";
 import AnimeBoard from "@/components/anime/AnimeBoard";
 import AnimeForm from "@/components/anime/AnimeForm";
 import AnimeSearch from "@/components/anime/AnimeSearch";
+import BackLink from "@/components/ui/BackLink";
 
 // Anime log: a board like Games. Completed on the left, Watching + Dropped on the right,
 // Plan to watch underneath. On wide screens the page is one screen tall; the board scrolls inside.
 export default function AnimePage(props: PageProps<"/anime">) {
   return (
     <main className="mx-auto flex min-h-dvh w-full max-w-6xl flex-col px-4 pb-6 pt-8 sm:pt-10">
-      <Link href="/" className="mb-4 inline-block self-start text-sm text-muted underline-offset-4 hover:text-ink hover:underline">
-        ← Home
-      </Link>
+      <BackLink className="mb-4 inline-block self-start text-sm text-muted underline-offset-4 hover:text-ink hover:underline" />
       <Suspense fallback={<Skeleton />}>
         {props.searchParams.then((sp) => (
           <AnimeLog focus={typeof sp.focus === "string" ? sp.focus : undefined} />

@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { Suspense } from "react";
 import { connection } from "next/server";
 import { getParks } from "@/lib/parks";
@@ -6,15 +5,14 @@ import StickyTop from "@/components/ui/StickyTop";
 import ParksBoard from "@/components/parks/ParksBoard";
 import ParkForm from "@/components/parks/ParkForm";
 import ParkSearch from "@/components/parks/ParkSearch";
+import BackLink from "@/components/ui/BackLink";
 
 // National parks progress: title + search pinned, Visited | Not yet in one box (each folds away),
 // and the add box for your own parks underneath.
 export default function ParksPage(props: PageProps<"/parks">) {
   return (
     <main className="mx-auto flex min-h-dvh w-full max-w-6xl flex-col px-4 pb-6 pt-8 sm:pt-10">
-      <Link href="/" className="mb-4 inline-block self-start text-sm text-muted underline-offset-4 hover:text-ink hover:underline">
-        ← Home
-      </Link>
+      <BackLink className="mb-4 inline-block self-start text-sm text-muted underline-offset-4 hover:text-ink hover:underline" />
       <Suspense fallback={<Skeleton />}>
         {props.searchParams.then((sp) => (
           <Parks focus={typeof sp.focus === "string" ? sp.focus : undefined} />

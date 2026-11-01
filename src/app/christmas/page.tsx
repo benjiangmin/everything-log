@@ -9,15 +9,14 @@ import GiftForm from "@/components/christmas/GiftForm";
 import GiftList from "@/components/christmas/GiftList";
 import { money } from "@/components/christmas/money";
 import { localNow } from "@/lib/month";
+import BackLink from "@/components/ui/BackLink";
 
 // Christmas list: one year at a time (‹ year ›), gifts grouped by person, with each person's total
 // and the year's running total.
 export default function ChristmasPage(props: PageProps<"/christmas">) {
   return (
     <main className="mx-auto flex min-h-dvh w-full max-w-5xl flex-col px-4 pb-6 pt-8 sm:pt-10">
-      <Link href="/" className="mb-4 inline-block self-start text-sm text-muted underline-offset-4 hover:text-ink hover:underline">
-        ← Home
-      </Link>
+      <BackLink className="mb-4 inline-block self-start text-sm text-muted underline-offset-4 hover:text-ink hover:underline" />
       <Suspense fallback={<Skeleton />}>
         {props.searchParams.then((sp) => (
           <Christmas y={typeof sp.y === "string" ? sp.y : undefined} focus={typeof sp.focus === "string" ? sp.focus : undefined} />

@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { Suspense } from "react";
 import { connection } from "next/server";
 import { notFound } from "next/navigation";
@@ -7,15 +6,14 @@ import StickyTop from "@/components/ui/StickyTop";
 import StartDate from "@/components/trips/StartDate";
 import TripSearch from "@/components/trips/TripSearch";
 import TripWorkspace from "@/components/trips/TripWorkspace";
+import BackLink from "@/components/ui/BackLink";
 
 // One recreational record (a trip / break). Every trip uses this same page (/trips/<id>).
 // Like an unsuspicious document: writing box on the left, the days on the right.
 export default function TripPage({ params, searchParams }: PageProps<"/trips/[id]">) {
   return (
     <main className="mx-auto flex min-h-dvh w-full max-w-6xl flex-col px-4 pb-6 pt-8 sm:pt-10">
-      <Link href="/" className="mb-4 inline-block self-start text-sm text-muted underline-offset-4 hover:text-ink hover:underline">
-        ← Home
-      </Link>
+      <BackLink className="mb-4 inline-block self-start text-sm text-muted underline-offset-4 hover:text-ink hover:underline" />
       <Suspense fallback={<Skeleton />}>
         {Promise.all([params, searchParams]).then(([p, sp]) => (
           <TripDocument id={p.id} focus={typeof sp.focus === "string" ? sp.focus : undefined} />

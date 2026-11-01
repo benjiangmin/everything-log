@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { Suspense } from "react";
 import { connection } from "next/server";
 import { notFound } from "next/navigation";
@@ -6,15 +5,14 @@ import { focusRecordExists, getFocusAreas, getFocusName } from "@/lib/focus";
 import StickyTop from "@/components/ui/StickyTop";
 import FocusSearch from "@/components/focus/FocusSearch";
 import FocusAreaList from "@/components/focus/FocusAreaList";
+import BackLink from "@/components/ui/BackLink";
 
 // One unrecreational record (a semester, a winter break…). Every record uses this same page
 // (/focus/<id>): focus areas on the left; the chosen one's logs (one per day) on the right.
 export default function FocusPage({ params, searchParams }: PageProps<"/focus/[id]">) {
   return (
     <main className="mx-auto flex min-h-dvh w-full max-w-6xl flex-col px-4 pb-6 pt-8 sm:pt-10">
-      <Link href="/" className="mb-4 inline-block self-start text-sm text-muted underline-offset-4 hover:text-ink hover:underline">
-        ← Home
-      </Link>
+      <BackLink className="mb-4 inline-block self-start text-sm text-muted underline-offset-4 hover:text-ink hover:underline" />
       <Suspense fallback={<Skeleton />}>
         {Promise.all([params, searchParams]).then(([p, sp]) => (
           <FocusRecord id={p.id} focus={typeof sp.focus === "string" ? sp.focus : undefined} />

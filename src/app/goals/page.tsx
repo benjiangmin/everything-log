@@ -1,4 +1,3 @@
-import Link from "next/link";
 import StickyTop from "@/components/ui/StickyTop";
 import { Suspense } from "react";
 import { connection } from "next/server";
@@ -6,15 +5,14 @@ import { getGoals } from "@/lib/goals";
 import GoalBoard from "@/components/goals/GoalBoard";
 import GoalForm from "@/components/goals/GoalForm";
 import GoalSearch from "@/components/goals/GoalSearch";
+import BackLink from "@/components/ui/BackLink";
 
 // Goals log: a board like Games. Yet to start | In progress | Completed side by side,
 // Dropped underneath. On wide screens the page is one screen tall; the board scrolls inside.
 export default function GoalsPage(props: PageProps<"/goals">) {
   return (
     <main className="mx-auto flex min-h-dvh w-full max-w-6xl flex-col px-4 pb-6 pt-8 sm:pt-10">
-      <Link href="/" className="mb-4 inline-block self-start text-sm text-muted underline-offset-4 hover:text-ink hover:underline">
-        ← Home
-      </Link>
+      <BackLink className="mb-4 inline-block self-start text-sm text-muted underline-offset-4 hover:text-ink hover:underline" />
       <Suspense fallback={<Skeleton />}>
         {props.searchParams.then((sp) => (
           <GoalsLog focus={typeof sp.focus === "string" ? sp.focus : undefined} />

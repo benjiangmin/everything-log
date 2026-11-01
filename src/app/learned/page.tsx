@@ -1,14 +1,12 @@
-import Link from "next/link";
 import { Suspense } from "react";
 import LearnedView from "@/components/learned/LearnedView";
+import BackLink from "@/components/ui/BackLink";
 
 // Something new I've learned: one page, a month at a time. Left: add one. Right: the month's list.
 export default function LearnedPage(props: PageProps<"/learned">) {
   return (
     <main className="mx-auto flex min-h-dvh w-full max-w-6xl flex-col px-4 pb-6 pt-8 sm:pt-10">
-      <Link href="/" className="mb-4 inline-block self-start text-sm text-muted underline-offset-4 hover:text-ink hover:underline">
-        ← Home
-      </Link>
+      <BackLink className="mb-4 inline-block self-start text-sm text-muted underline-offset-4 hover:text-ink hover:underline" />
       <Suspense fallback={<Skeleton />}>
         <LearnedView searchParams={props.searchParams} />
       </Suspense>

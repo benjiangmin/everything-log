@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { Suspense } from "react";
 import { connection } from "next/server";
 import { getWishlist } from "@/lib/wishlist";
@@ -6,15 +5,14 @@ import StickyTop from "@/components/ui/StickyTop";
 import WishBoard from "@/components/wishlist/WishBoard";
 import WishForm from "@/components/wishlist/WishForm";
 import WishSearch from "@/components/wishlist/WishSearch";
+import BackLink from "@/components/ui/BackLink";
 
 // Wishlist: title + search pinned, the add box, then "Want" (left) and "Got it" + "Changed my mind"
 // (right, folded away until you open it). On wide screens it fills the screen and each box scrolls inside.
 export default function WishlistPage(props: PageProps<"/wishlist">) {
   return (
     <main className="mx-auto flex min-h-dvh w-full max-w-6xl flex-col px-4 pb-6 pt-8 sm:pt-10">
-      <Link href="/" className="mb-4 inline-block self-start text-sm text-muted underline-offset-4 hover:text-ink hover:underline">
-        ← Home
-      </Link>
+      <BackLink className="mb-4 inline-block self-start text-sm text-muted underline-offset-4 hover:text-ink hover:underline" />
       <Suspense fallback={<Skeleton />}>
         {props.searchParams.then((sp) => (
           <Wishlist focus={typeof sp.focus === "string" ? sp.focus : undefined} />
