@@ -29,7 +29,6 @@ async function FocusRecord({ id, focus }: { id: string; focus?: string }) {
   await connection(); // always fresh
   if (!(await focusRecordExists(id))) notFound();
   const [name, areas] = await Promise.all([getFocusName(id), getFocusAreas(id)]);
-  const days = new Set(areas.flatMap((a) => a.logs.map((l) => l.entry_date))).size;
 
   return (
     <>
@@ -38,7 +37,7 @@ async function FocusRecord({ id, focus }: { id: string; focus?: string }) {
         <header className="flex items-baseline justify-between gap-4 rounded-card bg-accent px-5 py-4 text-accent-ink shadow-lg shadow-ink/15">
           <h1 className="min-w-0 truncate font-display text-2xl font-semibold tracking-tight sm:text-3xl">{name ?? "Unrecreational record"}</h1>
           <p className="shrink-0 text-sm opacity-70">
-            {areas.length} {areas.length === 1 ? "focus area" : "focus areas"} · {days} {days === 1 ? "day" : "days"}
+            {areas.length} {areas.length === 1 ? "focus area" : "focus areas"}
           </p>
         </header>
         <FocusSearch recordId={id} />

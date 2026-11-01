@@ -1,7 +1,7 @@
 "use client";
 
-import { useLayoutEffect, useRef, useState, useTransition, type ReactNode } from "react";
-import { deleteFocusArea, deleteFocusLog, saveFocusLog, updateFocusArea, updateFocusLog } from "@/app/focus/actions";
+import { useEffect, useLayoutEffect, useRef, useState, useTransition, type ReactNode } from "react";
+import { deleteFocusArea, deleteFocusLog, saveFocusLog, updateFocusArea } from "@/app/focus/actions";
 import type { FocusArea, FocusLog } from "@/lib/focus";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
 import DateWheel from "@/components/ui/DateWheel";
@@ -24,6 +24,7 @@ function dateParts(date: string) {
     long: dt.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
   };
 }
+const FADE_MS = 160; // the band's fade out / in when you switch what's in it
 const daysLogged = (n: number) => `${n} ${n === 1 ? "day" : "days"} logged`;
 
 // Text with web links made clickable, shown short ("learn.unity.com/tutorial/lesson-3…").
@@ -172,14 +173,47 @@ function AreaEditor({ area, onDone }: { area: FocusArea; onDone: () => void }) {
   );
 }
 
-// The right box for one focus area: name (+ goal) and jumps on top, the add box, then the logs.
+// The right box for one focus area: name (+ goal) and buttons on top, then a band across the whole
+// box for adding / editing, then the logs.
+//
+// The band shows today's add box while today has no log yet. Once today's logged it says "Click an
+// entry to edit". The pencil on a log fades the band over to that day's edit box, and that log fades
+// in the list with "Editing" (like the unsuspicious documents).
 function AreaPanel({ area, focusId }: { area: FocusArea; focusId?: string }) {
+  const today = useToday() ?? todayKey();
+  const todayLogged = area.logs.some((l) => l.entry_date === today);
+  const resting = todayLogged ? null : today; // where the add box sits when you're not doing anything
+  const [editing, setEditing] = useState<string | null>(resting); // the day in the band; null = the message
+
+  // Today just got logged (or the date rolled over): go back to resting.
+  const [seenResting, setSeenResting] = useState(resting);
+  if (resting !== seenResting) {
+    setSeenResting(resting);
+    setEditing(resting);
+  }
+
   const [scrolled, setScrolled] = useState(false);
   const scrollerRef = useRef<HTMLDivElement>(null);
   const jump = (to: "top" | "bottom") => {
     const el = scrollerRef.current;
     if (el) el.scrollTo({ top: to === "top" ? 0 : el.scrollHeight, behavior: "smooth" });
   };
+
+  // The band fades out, swaps to what's asked for, then fades back in.
+  const [shown, setShown] = useState(editing);
+  const [fading, setFading] = useState(false);
+  if (editing !== shown && !fading) setFading(true);
+  useEffect(() => {
+    if (!fading) return;
+    const t = setTimeout(() => {
+      setShown(editing);
+      setFading(false);
+    }, FADE_MS);
+    return () => clearTimeout(t);
+  }, [fading, editing]);
+
+  const existing = shown ? (area.logs.find((l) => l.entry_date === shown) ?? null) : null;
+  const canClose = shown !== null && shown !== resting; // the resting add box has nothing to close to
 
   return (
     <>
@@ -203,10 +237,26 @@ function AreaPanel({ area, focusId }: { area: FocusArea; focusId?: string }) {
             )}
           </div>
         </div>
-        <div className="mt-3">
-          <LogComposer area={area} />
+      </div>
+
+      {/* The band: today's add box, the edit box for the day you clicked, or "Click an entry to edit". */}
+      <div className="relative z-10 shrink-0 border-y border-accent/20 bg-line/50 px-4 py-3 sm:px-5">
+        <div className={`transition-opacity duration-150 ease-out ${fading ? "opacity-0" : "opacity-100"}`}>
+          {shown !== null ? (
+            <ComposerFields
+              key={`${shown}-${existing?.id ?? "new"}`}
+              areaId={area.id}
+              date={shown}
+              existing={existing}
+              onDate={setEditing}
+              onSaved={(savedDate) => setEditing(todayLogged || savedDate === today ? null : today)}
+              onClose={canClose ? () => setEditing(resting) : undefined}
+            />
+          ) : (
+            <p className="grid h-11 place-items-center text-sm text-muted">Click an entry to edit</p>
+          )}
         </div>
-        {/* Fade under the top part once the logs have scrolled. */}
+        {/* Fade under the band once the logs have scrolled. */}
         <div
           aria-hidden="true"
           className={`pointer-events-none absolute inset-x-0 top-full h-6 bg-gradient-to-b from-paper to-transparent transition-opacity duration-200 ${
@@ -220,14 +270,21 @@ function AreaPanel({ area, focusId }: { area: FocusArea; focusId?: string }) {
           ref={scrollerRef}
           data-scroller
           onScroll={(e) => setScrolled(e.currentTarget.scrollTop > 0)}
-          className="absolute inset-0 overflow-y-auto px-3 pb-4 sm:px-4"
+          className="absolute inset-0 overflow-y-auto px-3 pb-4 pt-3 sm:px-4"
         >
           {area.logs.length === 0 ? (
             <p className="mt-1 rounded-card border border-dashed border-line px-5 py-6 text-muted">No logs yet.</p>
           ) : (
             <ul className="space-y-2">
               {area.logs.map((l) => (
-                <LogRow key={l.id} log={l} focused={l.id === focusId} />
+                <LogRow
+                  key={l.id}
+                  log={l}
+                  focused={l.id === focusId}
+                  editing={l.entry_date === editing}
+                  onEdit={() => setEditing(l.entry_date)}
+                  onDeleted={() => l.entry_date === editing && setEditing(resting)}
+                />
               ))}
             </ul>
           )}
@@ -237,22 +294,22 @@ function AreaPanel({ area, focusId }: { area: FocusArea; focusId?: string }) {
   );
 }
 
-// The add box: date | the log [+ Notes] | Add. One log per day: picking a day that already has one
-// loads it, and saving updates it.
-function LogComposer({ area }: { area: FocusArea }) {
-  const today = useToday();
-  const [date, setDate] = useState(() => todayKey());
-  // Once the browser knows its own date, start there (the server's guess may be a day off).
-  const [seenToday, setSeenToday] = useState(today);
-  if (today !== seenToday) {
-    setSeenToday(today);
-    if (today) setDate(today);
-  }
-  const existing = area.logs.find((l) => l.entry_date === date) ?? null;
-  return <ComposerFields key={`${date}-${existing?.id ?? "new"}`} areaId={area.id} date={date} existing={existing} onDate={setDate} />;
-}
-
-function ComposerFields({ areaId, date, existing, onDate }: { areaId: string; date: string; existing: FocusLog | null; onDate: (d: string) => void }) {
+// The add box: date | the log [+ Notes] | Add (or Update, when that day already has a log) [×].
+function ComposerFields({
+  areaId,
+  date,
+  existing,
+  onDate,
+  onSaved,
+  onClose,
+}: {
+  areaId: string;
+  date: string;
+  existing: FocusLog | null;
+  onDate: (d: string) => void;
+  onSaved: (date: string) => void;
+  onClose?: () => void;
+}) {
   const [log, setLog] = useState(existing?.log ?? "");
   const [notes, setNotes] = useState(existing?.notes ?? "");
   const [showNotes, setShowNotes] = useState(Boolean(existing?.notes));
@@ -265,17 +322,18 @@ function ComposerFields({ areaId, date, existing, onDate }: { areaId: string; da
         e.preventDefault();
         start(async () => {
           const res = await saveFocusLog(areaId, date, log, notes);
-          setMessage(res.ok ? null : res.message);
+          if (res.ok) onSaved(date);
+          else setMessage(res.message);
         });
       }}
-      className="rounded-card bg-line/60 p-3 ring-1 ring-accent/20"
     >
       <div className="flex flex-col gap-2 sm:flex-row sm:items-start">
-        <div className="sm:w-44 sm:shrink-0">
-          <DateWheel key={date} name="focus_date" defaultValue={date} onChange={onDate} />
+        <div className="sm:w-32 sm:shrink-0">
+          <DateWheel key={date} name="focus_date" defaultValue={date} onChange={onDate} noYear />
         </div>
         <div className="relative flex min-w-0 flex-1">
           <textarea
+            autoFocus={Boolean(onClose)}
             value={log}
             onChange={(e) => setLog(e.target.value)}
             rows={1}
@@ -283,26 +341,43 @@ function ComposerFields({ areaId, date, existing, onDate }: { areaId: string; da
             placeholder="The log"
             aria-label="Log"
             style={{ outline: "none" }}
-            className={`${field} field-sizing-content min-h-11 resize-none pr-24 leading-relaxed`}
+            // 44px tall on one line (same as the date box and Add), growing as you write more.
+            className="field-sizing-content min-h-11 w-full resize-none rounded-control border border-line bg-paper py-2 pl-3 pr-24 leading-relaxed text-ink placeholder:text-muted/70 focus:border-ink"
           />
+          {/* Centered in the one-line box: (44 - 28) / 2 = 8px from the top. */}
           <button
             type="button"
             onClick={() => setShowNotes((v) => !v)}
             aria-expanded={showNotes}
-            className={`absolute right-1.5 top-[7px] rounded-[9px] px-2.5 py-1.5 text-xs font-semibold transition-colors ${
+            className={`absolute right-1.5 top-2 rounded-[9px] px-2.5 py-1.5 text-xs font-semibold transition-colors ${
               showNotes ? "bg-accent/15 text-accent" : "bg-surface text-muted hover:text-ink"
             }`}
           >
             {showNotes ? "− Notes" : "+ Notes"}
           </button>
         </div>
-        <button
-          type="submit"
-          disabled={pending}
-          className="h-11 shrink-0 rounded-control bg-accent px-5 font-semibold text-accent-ink shadow-sm transition-opacity hover:opacity-90 disabled:opacity-60"
-        >
-          {pending ? "Saving…" : existing ? "Update" : "Add"}
-        </button>
+        <div className="flex shrink-0 items-center gap-1">
+          <button
+            type="submit"
+            disabled={pending}
+            className="h-11 flex-1 rounded-control bg-accent px-5 font-semibold text-accent-ink shadow-sm transition-opacity hover:opacity-90 disabled:opacity-60"
+          >
+            {pending ? "Saving…" : existing ? "Update" : "Add"}
+          </button>
+          {onClose && (
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Close the add box"
+              title="Close"
+              className="grid size-11 place-items-center rounded-control text-muted transition-colors hover:bg-surface hover:text-ink"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="M6 6l12 12M18 6L6 18" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
+              </svg>
+            </button>
+          )}
+        </div>
       </div>
       {showNotes && (
         <div className="mt-3 border-t border-accent/20 pt-3">
@@ -318,19 +393,30 @@ function ComposerFields({ areaId, date, existing, onDate }: { areaId: string; da
           />
         </div>
       )}
-      {(message || existing) && (
-        <p role="status" className={`mt-2 px-1 text-sm ${message ? "text-danger" : "text-muted"}`}>
-          {message ?? "This day already has a log. Saving updates it."}
+      {message && (
+        <p role="status" className="mt-2 px-1 text-sm text-danger">
+          {message}
         </p>
       )}
     </form>
   );
 }
 
-// One day: date | log, folded (notes hidden). Click to show the notes.
-function LogRow({ log, focused }: { log: FocusLog; focused: boolean }) {
+// One day: date | log, folded (notes hidden). Click to show the notes. Faded while it's in the add box.
+function LogRow({
+  log,
+  focused,
+  editing,
+  onEdit,
+  onDeleted,
+}: {
+  log: FocusLog;
+  focused: boolean;
+  editing: boolean;
+  onEdit: () => void;
+  onDeleted: () => void;
+}) {
   const [open, setOpen] = useState(focused);
-  const [editing, setEditing] = useState(false);
   const [pending, startTransition] = useTransition();
   const confirm = useConfirm();
   const ref = useRef<HTMLLIElement>(null);
@@ -346,99 +432,60 @@ function LogRow({ log, focused }: { log: FocusLog; focused: boolean }) {
 
   async function remove() {
     const ok = await confirm({ title: "Delete this day's log?", body: `The log for ${long} will be removed for good.`, confirmLabel: "Delete" });
-    if (ok) startTransition(() => deleteFocusLog(log.id));
+    if (!ok) return;
+    onDeleted();
+    startTransition(() => deleteFocusLog(log.id));
   }
 
-  if (editing) return <LogEditor log={log} onDone={() => setEditing(false)} />;
-
   return (
-    <li ref={ref} className={`group rounded-card bg-surface px-3 py-2.5 transition-opacity sm:px-4 ${pending ? "opacity-40" : ""} ${focused ? "flash" : ""}`}>
-      <div className="flex items-start gap-3">
-        <button
-          type="button"
-          onClick={() => setOpen((o) => !o)}
-          aria-expanded={open}
-          disabled={!log.notes}
-          className="flex min-w-0 flex-1 items-start gap-3 text-left disabled:cursor-default"
-        >
-          <span className="num w-14 shrink-0 pt-px text-sm font-semibold text-muted">{short}</span>
-          <span className="min-w-0 flex-1 whitespace-pre-line break-words leading-relaxed text-ink">
-            <Linkified text={log.log} />
-          </span>
-          {log.notes && (
-            <svg
-              width="14"
-              height="14"
-              viewBox="0 0 24 24"
-              fill="none"
-              aria-hidden="true"
-              className={`mt-1.5 shrink-0 text-muted/70 transition-transform ${open ? "rotate-180" : ""}`}
-            >
-              <path d="M6 9l6 6 6-6" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          )}
-        </button>
-        <div className="-my-1 -mr-1 flex shrink-0">
-          <IconButton label={`Edit the log for ${long}`} onClick={() => setEditing(true)} disabled={pending}>
-            <path d="M4 20h4L19 9l-4-4L4 16v4zM14 6l4 4" />
-          </IconButton>
-          <IconButton label={`Delete the log for ${long}`} onClick={remove} disabled={pending} danger>
-            <path d="M6 6l12 12M18 6L6 18" />
-          </IconButton>
+    <li ref={ref} className={`group relative rounded-card bg-surface px-3 py-2.5 transition-opacity sm:px-4 ${pending ? "opacity-40" : ""} ${focused ? "flash" : ""}`}>
+      <div className={`transition-opacity duration-300 ${editing ? "opacity-20" : ""}`}>
+        <div className="flex items-start gap-3">
+          <button
+            type="button"
+            onClick={() => setOpen((o) => !o)}
+            aria-expanded={open}
+            disabled={!log.notes || editing}
+            className="flex min-w-0 flex-1 items-start gap-3 text-left disabled:cursor-default"
+          >
+            <span className="num w-14 shrink-0 pt-px text-sm font-semibold text-muted">{short}</span>
+            <span className="min-w-0 flex-1 whitespace-pre-line break-words leading-relaxed text-ink">
+              <Linkified text={log.log} />
+            </span>
+            {log.notes && (
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                aria-hidden="true"
+                className={`mt-1.5 shrink-0 text-muted/70 transition-transform ${open ? "rotate-180" : ""}`}
+              >
+                <path d="M6 9l6 6 6-6" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            )}
+          </button>
+          <div className={`-my-1 -mr-1 flex shrink-0 ${editing ? "invisible" : ""}`}>
+            <IconButton label={`Edit the log for ${long}`} onClick={onEdit} disabled={pending}>
+              <path d="M4 20h4L19 9l-4-4L4 16v4zM14 6l4 4" />
+            </IconButton>
+            <IconButton label={`Delete the log for ${long}`} onClick={remove} disabled={pending} danger>
+              <path d="M6 6l12 12M18 6L6 18" />
+            </IconButton>
+          </div>
         </div>
+        {open && log.notes && (
+          <p className="ml-[4.25rem] mt-2 whitespace-pre-line break-words border-t border-accent/20 pt-2 text-sm leading-relaxed text-ink/70">
+            <Linkified text={log.notes} />
+          </p>
+        )}
       </div>
-      {open && log.notes && (
-        <p className="ml-[4.25rem] mt-2 whitespace-pre-line break-words border-t border-accent/20 pt-2 text-sm leading-relaxed text-ink/70">
-          <Linkified text={log.notes} />
+
+      {editing && (
+        <p className="absolute inset-0 grid place-items-center">
+          <span className="rounded-full bg-paper px-4 py-1.5 font-display text-sm font-semibold text-muted shadow-sm">Editing</span>
         </p>
       )}
-    </li>
-  );
-}
-
-function LogEditor({ log, onDone }: { log: FocusLog; onDone: () => void }) {
-  const [date, setDate] = useState(log.entry_date);
-  const [text, setText] = useState(log.log);
-  const [notes, setNotes] = useState(log.notes ?? "");
-  const [message, setMessage] = useState<string | null>(null);
-  const [pending, start] = useTransition();
-  return (
-    <li className="rounded-card bg-surface p-3 ring-1 ring-line">
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          start(async () => {
-            const res = await updateFocusLog(log.id, date, text, notes);
-            if (res.ok) onDone();
-            else setMessage(res.message);
-          });
-        }}
-        className="flex flex-col gap-2"
-      >
-        <div className="w-44">
-          <DateWheel name="edit_date" defaultValue={log.entry_date} onChange={setDate} />
-        </div>
-        <textarea autoFocus value={text} onChange={(e) => setText(e.target.value)} rows={2} maxLength={5000} aria-label="Log" style={{ outline: "none" }} className={`${field} resize-y leading-relaxed`} />
-        <textarea
-          value={notes}
-          onChange={(e) => setNotes(e.target.value)}
-          rows={2}
-          maxLength={5000}
-          placeholder="Notes (optional)"
-          aria-label="Notes"
-          style={{ outline: "none" }}
-          className={`${field} resize-y leading-relaxed`}
-        />
-        <div className="flex flex-wrap items-center gap-2">
-          <button type="submit" disabled={pending} className="rounded-control bg-accent px-5 py-2.5 font-semibold text-accent-ink hover:opacity-90 disabled:opacity-60">
-            {pending ? "Saving…" : "Save"}
-          </button>
-          <button type="button" onClick={onDone} className="rounded-control px-4 py-2.5 text-muted hover:bg-paper hover:text-ink">
-            Cancel
-          </button>
-          {message && <p className="text-sm text-danger">{message}</p>}
-        </div>
-      </form>
     </li>
   );
 }
