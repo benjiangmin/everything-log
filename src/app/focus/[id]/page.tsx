@@ -5,7 +5,6 @@ import { notFound } from "next/navigation";
 import { focusRecordExists, getFocusAreas, getFocusName } from "@/lib/focus";
 import StickyTop from "@/components/ui/StickyTop";
 import FocusSearch from "@/components/focus/FocusSearch";
-import AddFocusArea from "@/components/focus/AddFocusArea";
 import FocusAreaList from "@/components/focus/FocusAreaList";
 
 // One unrecreational record (a semester, a winter break…). Every record uses this same page
@@ -43,12 +42,7 @@ async function FocusRecord({ id, focus }: { id: string; focus?: string }) {
         <FocusSearch recordId={id} />
       </StickyTop>
 
-      {/* Add a focus area. */}
-      <div className="relative z-20 mt-1 shrink-0 rounded-card bg-line/70 p-3 shadow-md shadow-ink/10 ring-1 ring-accent/25 sm:p-4">
-        <AddFocusArea recordId={id} />
-      </div>
-
-      <FocusAreaList key={id} areas={areas} focusId={focus} />
+      <FocusAreaList key={id} recordId={id} areas={areas} focusId={focus} />
     </>
   );
 }

@@ -7,6 +7,7 @@ import { useConfirm } from "@/components/ui/ConfirmDialog";
 import DateWheel from "@/components/ui/DateWheel";
 import { useToday } from "@/components/journal/useToday";
 import { localNow } from "@/lib/month";
+import AddFocusArea from "./AddFocusArea";
 
 const field =
   "w-full rounded-control border border-line bg-paper px-3 py-2.5 text-ink placeholder:text-muted/70 focus:border-ink";
@@ -56,7 +57,7 @@ function Linkified({ text }: { text: string }) {
 
 // Left: the focus areas (just their names). Right: a black-bordered box with a placeholder until you
 // pick one, then its add box on top and its logs below (newest first). Click the picked one again to close it.
-export default function FocusAreaList({ areas, focusId }: { areas: FocusArea[]; focusId?: string }) {
+export default function FocusAreaList({ recordId, areas, focusId }: { recordId: string; areas: FocusArea[]; focusId?: string }) {
   const [selected, setSelected] = useState<string | null>(() => areas.find((a) => a.logs.some((l) => l.id === focusId))?.id ?? null);
 
   // Picked a search result while already on the page: show its focus area.
@@ -73,15 +74,15 @@ export default function FocusAreaList({ areas, focusId }: { areas: FocusArea[]; 
     <div className="mt-5 flex flex-col gap-6 lg:min-h-[32rem] lg:flex-1 lg:basis-0 lg:flex-row">
       {/* ---------- Left: the focus areas ---------- */}
       <section aria-label="Focus areas" className="shrink-0 lg:w-[19rem]">
-        {areas.length === 0 ? (
-          <p className="rounded-card border border-dashed border-line px-5 py-6 text-muted">No focus areas yet. Add one above.</p>
-        ) : (
-          <ul className="space-y-2">
+        {areas.length > 0 && (
+          <ul className="mb-2 space-y-2">
             {areas.map((a) => (
               <AreaCard key={a.id} area={a} selected={a.id === selected} onSelect={() => setSelected((cur) => (cur === a.id ? null : a.id))} onDeleted={() => a.id === selected && setSelected(null)} />
             ))}
           </ul>
         )}
+        {/* The dashed "+ Add focus area" box under the list. */}
+        <AddFocusArea recordId={recordId} />
       </section>
 
       {/* ---------- Right: the chosen focus area's logs ---------- */}
