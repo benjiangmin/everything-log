@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState, useSyncExternalStore, type ReactNode } from "react";
+import { lock, lockOtherDevices } from "@/app/login/actions";
+import { useEffect, useState, useSyncExternalStore, useTransition, type ReactNode } from "react";
 
 // The navigation bar on the left of every page (not the login page).
 //  - Wide screens: a slim rail of icons. The » at the bottom slides it open to show labels too;
@@ -77,7 +78,9 @@ export default function SideNav() {
         }`}
       >
         <div className="flex flex-col gap-1">{items(open)}</div>
-        <div className="mt-auto">
+        <div className="mt-auto flex flex-col gap-1">
+          <LockOthersButton showLabel={open} />
+          <LockButton showLabel={open} />
           <NavButton label={open ? "Collapse" : "Expand"} showLabel={open} onClick={() => writeOpen(!open)}>
             {open ? <path d="M17 6l-6 6 6 6M11 6l-6 6 6 6" /> : <path d="M7 6l6 6-6 6M13 6l6 6-6 6" />}
           </NavButton>
@@ -100,6 +103,10 @@ export default function SideNav() {
           <button type="button" aria-label="Close navigation" onClick={() => setDrawer(false)} className="absolute inset-0 bg-ink/25" />
           <nav aria-label="Navigation" className="absolute inset-y-0 left-0 flex w-56 flex-col gap-1 bg-surface px-2 py-4 shadow-xl shadow-ink/20">
             {items(true)}
+            <div className="mt-auto flex flex-col gap-1">
+              <LockOthersButton showLabel />
+              <LockButton showLabel />
+            </div>
           </nav>
         </div>
       )}
@@ -107,13 +114,110 @@ export default function SideNav() {
   );
 }
 
-// One button in the bar: an icon, and its label when the bar is open. Either a link or an action.
+// Signs this browser out (you'll need the password again).
+function LockButton({ showLabel }: { showLabel: boolean }) {
+  return (
+    <form action={lock}>
+      <NavButton label="Lock site" showLabel={showLabel} submit>
+        <rect x="5" y="11" width="14" height="10" rx="2" />
+        <path d="M8 11V8a4 4 0 0 1 8 0v3" />
+      </NavButton>
+    </form>
+  );
+}
+
+// Signs out every other browser and phone (this one stays unlocked). Asks for the password first.
+function LockOthersButton({ showLabel }: { showLabel: boolean }) {
+  const [asking, setAsking] = useState(false);
+  const [password, setPassword] = useState("");
+  const [message, setMessage] = useState<{ text: string; ok?: boolean } | null>(null);
+  const [pending, start] = useTransition();
+
+  const close = () => {
+    setAsking(false);
+    setPassword("");
+    setMessage(null);
+  };
+
+  return (
+    <>
+      <NavButton label="Lock other devices" showLabel={showLabel} onClick={() => setAsking(true)}>
+        <rect x="2" y="4" width="13" height="10" rx="1.5" />
+        <path d="M6 18h5" />
+        <rect x="15" y="14" width="7" height="6" rx="1" />
+        <path d="M16.5 14v-1.5a2 2 0 0 1 4 0V14" />
+      </NavButton>
+
+      {asking && (
+        <div className="fixed inset-0 z-[70] grid place-items-center p-4">
+          <button type="button" aria-label="Cancel" onClick={close} className="absolute inset-0 bg-ink/30" />
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              start(async () => {
+                const res = await lockOtherDevices(password);
+                if (!res.ok) return setMessage({ text: res.message });
+                setPassword("");
+                setMessage({ text: "Done. Every other device will need the password again.", ok: true });
+              });
+            }}
+            onKeyDown={(e) => e.key === "Escape" && close()}
+            className="relative w-full max-w-sm rounded-card bg-paper p-5 shadow-2xl shadow-ink/25"
+          >
+            <h2 className="font-display text-lg font-semibold">Lock all other devices?</h2>
+            <p className="mt-1 text-sm text-muted">Every other browser and phone will need the password again. This one stays unlocked.</p>
+            {message?.ok ? (
+              <p className="mt-4 rounded-control bg-accent/10 px-3 py-2.5 text-sm text-ink">{message.text}</p>
+            ) : (
+              <input
+                type="password"
+                autoFocus
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Password"
+                aria-label="Password"
+                autoComplete="current-password"
+                style={{ outline: "none" }}
+                className="mt-4 w-full rounded-control border border-line bg-surface px-3 py-2.5 text-ink placeholder:text-muted/70 focus:border-ink"
+              />
+            )}
+            {message && !message.ok && <p className="mt-2 text-sm text-danger">{message.text}</p>}
+            <div className="mt-4 flex justify-end gap-2">
+              {message?.ok ? (
+                <button type="button" onClick={close} className="rounded-control bg-accent px-5 py-2 text-sm font-semibold text-accent-ink hover:opacity-90">
+                  Done
+                </button>
+              ) : (
+                <>
+                  <button type="button" onClick={close} className="rounded-control px-4 py-2 text-sm text-muted hover:bg-surface hover:text-ink">
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={pending || !password}
+                    className="rounded-control bg-accent px-5 py-2 text-sm font-semibold text-accent-ink hover:opacity-90 disabled:opacity-50"
+                  >
+                    {pending ? "Locking…" : "Lock them"}
+                  </button>
+                </>
+              )}
+            </div>
+          </form>
+        </div>
+      )}
+    </>
+  );
+}
+
+// One button in the bar: an icon, and its label when the bar is open. A link, an action, or a
+// form's submit button.
 function NavButton({
   label,
   showLabel,
   href,
   onClick,
   active,
+  submit,
   children,
 }: {
   label: string;
@@ -121,6 +225,7 @@ function NavButton({
   href?: string;
   onClick?: () => void;
   active?: boolean;
+  submit?: boolean;
   children: ReactNode; // the icon's path(s)
 }) {
   const className = `flex h-10 w-full items-center gap-3 overflow-hidden whitespace-nowrap rounded-control px-[11px] text-sm font-semibold transition-colors ${
@@ -139,7 +244,7 @@ function NavButton({
       {inner}
     </Link>
   ) : (
-    <button type="button" onClick={onClick} aria-label={label} title={showLabel ? undefined : label} className={className}>
+    <button type={submit ? "submit" : "button"} onClick={onClick} aria-label={label} title={showLabel ? undefined : label} className={className}>
       {inner}
     </button>
   );

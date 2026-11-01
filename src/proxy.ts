@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { AUTH_COOKIE, fingerprint, sameText } from "@/lib/auth";
+import { AUTH_COOKIE, cookieOptions, fingerprint, sameText } from "@/lib/auth";
+import { getLockEpoch } from "@/lib/lock-epoch";
 
 // Runs before every request. No valid unlock cookie → you get sent to /login.
 // This covers pages, saving (server actions), and the search APIs.
@@ -15,7 +16,12 @@ export async function proxy(request: NextRequest) {
   }
 
   const cookie = request.cookies.get(AUTH_COOKIE)?.value;
-  if (cookie && sameText(cookie, await fingerprint(password))) return NextResponse.next();
+  if (cookie && sameText(cookie, await fingerprint(password, await getLockEpoch()))) {
+    // Unlocked: start the week over, so it only locks after a week of not using the site.
+    const res = NextResponse.next();
+    res.cookies.set(AUTH_COOKIE, cookie, cookieOptions);
+    return res;
+  }
 
   if (pathname.startsWith("/api/") || (request.method !== "GET" && request.method !== "HEAD")) {
     return NextResponse.json({ error: "Locked" }, { status: 401 });
