@@ -25,6 +25,13 @@ export async function getGratitudeForMonth(monthKey: string): Promise<GratitudeE
   return data;
 }
 
+// Which of these days already have an entry (for folding the add box once today's is in).
+export async function getGratitudeDays(from: string, to: string): Promise<string[]> {
+  const { data, error } = await db().from("gratitude_entries").select("entry_date").gte("entry_date", from).lte("entry_date", to);
+  if (error) throw new Error(`Couldn't load entries: ${error.message}`);
+  return [...new Set(data.map((d) => d.entry_date as string))];
+}
+
 // Case-insensitive "contains" search across all three items, every month.
 // Returns up to `limit` matches, plus how many match in total.
 export async function searchGratitude(query: string, limit = 25): Promise<{ results: GratitudeEntry[]; total: number }> {

@@ -1,22 +1,37 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import Link from "next/link";
+import { useEffect, useState } from "react";
+import { parentOf } from "@/app/back-actions";
 
-// "← Back" at the top of a page: goes to wherever you came from (usually its category page),
-// or Home if this page was opened directly. Home itself is in the navigation bar on the left.
+// "← Back" at the top of a page: goes up a level, to the category page this page lives in
+// (not just the last page you were on, so flipping months doesn't get in the way).
+// Home if no category links to it. Home itself is in the navigation bar on the left.
+const known = new Map<string, string>(); // page → where Back goes (remembered for this visit)
+
 export default function BackLink({ className }: { className?: string }) {
-  const router = useRouter();
+  const [href, setHref] = useState("/");
+
+  // Looked up in the browser (the page's address isn't known while the page is being built).
+  useEffect(() => {
+    const path = window.location.pathname;
+    let live = true;
+    const cached = known.get(path);
+    (cached ? Promise.resolve(cached) : parentOf(path))
+      .then((h) => {
+        known.set(path, h);
+        if (live) setHref(h);
+      })
+      .catch(() => {}); // stays Home
+    return () => {
+      live = false;
+    };
+  }, []);
+
   return (
-    <button
-      type="button"
-      onClick={() => {
-        if (window.history.length > 1) router.back();
-        else router.push("/");
-      }}
-      // self-start + text-left: hug the left edge on every page (a stretched button would center its text).
-      className={`self-start text-left ${className ?? ""}`}
-    >
+    // self-start + text-left: hug the left edge on every page (a stretched link would center its text).
+    <Link href={href} className={`self-start text-left ${className ?? ""}`}>
       ← Back
-    </button>
+    </Link>
   );
 }

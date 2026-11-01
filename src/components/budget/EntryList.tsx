@@ -41,7 +41,7 @@ export default function EntryList({
     //  1. the heading, which carries the rounded top border and sticks under the month bar
     //  2. the list, with side borders only, running to the bottom of the page
     // Border thickness: change every border-[1.5px] / border-x-[1.5px] below.
-    <div className="mt-12 flex flex-1 flex-col">
+    <div className="mt-8 flex flex-1 flex-col">
       {/* Sticks just under the month bar while you scroll (--sticky-top is the bar's height,
           measured by StickyTop). Its own rounded top border means the top line stays visible
           while it's stuck. The paper background hides rows passing under it. */}
@@ -51,7 +51,8 @@ export default function EntryList({
         ref={headingRef}
         data-stick-under
         className="sticky z-20 bg-paper"
-        style={{ top: "var(--sticky-top, 0px)" }}
+        // Under the month bar and the add box (--budget-add-h is the add box's height on wide screens).
+        style={{ top: "calc(var(--sticky-top, 0px) + var(--budget-add-h, 0px))" }}
       >
         <h2
           id="entries-heading"

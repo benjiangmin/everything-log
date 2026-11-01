@@ -70,8 +70,8 @@ export default async function MonthView({
       <SearchBar />
       </StickyTop>
 
-      <div className="relative z-[25] mt-7 grid gap-10 md:grid-cols-2 md:items-start">        
-        <section aria-label="Spending this month">
+      {/* The running total, then (on its own line) the add box, which sticks under the month bar. */}
+      <section aria-label="Spending this month" className="mt-7">
           <p className="text-sm text-muted">Spent</p>
           <p className="num font-display text-6xl font-semibold leading-none tracking-tight sm:text-7xl">
             {formatMoney(total)}
@@ -84,10 +84,9 @@ export default async function MonthView({
               Nothing logged for {month} yet. Add your first expense.
             </p>
           )}
-        </section>
+      </section>
 
-        <AddEntryForm categories={categories} monthKey={monthKey} isThisMonth={isThisMonth} />
-      </div>
+      <AddEntryForm categories={categories} monthKey={monthKey} isThisMonth={isThisMonth} />
 
       <EntryList entries={entries} categories={categories} focusId={focusId} monthName={month} />
     </>

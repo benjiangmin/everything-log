@@ -1,11 +1,10 @@
 import Link from "next/link";
 import { connection } from "next/server";
-import { getGratitudeForMonth } from "@/lib/gratitude";
-import { currentMonthKey, monthLabel, parseMonthKey, shiftMonth } from "@/lib/month";
+import { getGratitudeDays, getGratitudeForMonth } from "@/lib/gratitude";
+import { currentMonthKey, localNow, monthLabel, parseMonthKey, shiftMonth } from "@/lib/month";
 import MonthPicker from "@/components/ui/MonthPicker";
 import StickyTop from "@/components/ui/StickyTop";
-import GratitudeForm from "./GratitudeForm";
-import GratitudeList from "./GratitudeList";
+import GratitudeWorkspace from "./GratitudeWorkspace";
 import GratitudeSearch from "./GratitudeSearch";
 
 export default async function GratitudeView({
@@ -21,7 +20,14 @@ export default async function GratitudeView({
   // Set when you pick a search result: that entry gets scrolled to and highlighted.
   const focusId = typeof params.focus === "string" ? params.focus : undefined;
 
-  const entries = await getGratitudeForMonth(monthKey);
+  // The server's today might be a day off from yours (time zones), so look at the days around it.
+  const now = localNow();
+  const dayKey = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  const serverToday = dayKey(now);
+  const [entries, recentDays] = await Promise.all([
+    getGratitudeForMonth(monthKey),
+    getGratitudeDays(dayKey(new Date(now.getTime() - 864e5)), dayKey(new Date(now.getTime() + 864e5))),
+  ]);
 
   const { month } = monthLabel(monthKey);
   const prev = shiftMonth(monthKey, -1);
@@ -53,12 +59,17 @@ export default async function GratitudeView({
         <GratitudeSearch />
       </StickyTop>
 
-      {/* Writing box. z-[25] keeps its date picker above the entries but under the month bar. */}
-      <section aria-label="New entry" className="relative z-[25] mt-4 shrink-0 rounded-card bg-surface p-4 sm:px-5">
-        <GratitudeForm defaultDate={isThisMonth ? undefined : `${monthKey}-01`} />
-      </section>
-
-      <GratitudeList entries={entries} monthName={month} daysLogged={daysLogged} focusId={focusId} />
+      {/* Left: the writing box (slides to a slim strip once today's entry is in).
+          Right: the month's entries, which widen to fill the space. */}
+      <GratitudeWorkspace
+        defaultDate={isThisMonth ? undefined : `${monthKey}-01`}
+        daysWithEntries={recentDays}
+        serverToday={serverToday}
+        entries={entries}
+        monthName={month}
+        daysLogged={daysLogged}
+        focusId={focusId}
+      />
     </>
   );
 }

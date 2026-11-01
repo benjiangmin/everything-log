@@ -22,21 +22,22 @@ export default function GratitudeList({
   monthName,
   daysLogged,
   focusId,
+  veiled = false,
 }: {
   entries: GratitudeEntry[];
   monthName: string;
   daysLogged: number;
   focusId?: string; // an entry to scroll to and flash (from a search result)
+  veiled?: boolean; // covered while the add box slides, so you don't see the list reflow
 }) {
   const [scrolled, setScrolled] = useState(false); // shows the fade under the header
 
   return (
-    // The bordered box: closed on all four sides, fills the rest of the screen, and scrolls
-    // inside itself. Border thickness: border-[1.5px]. min-h-[30rem] = never shorter than this (about 3 entries); if the
-    // screen is too short to fit everything, the page scrolls a little instead of squashing the box.
+    // The bordered box on the right: fills the rest of the screen and scrolls inside itself.
+    // Border thickness: border-[1.5px]. Phones: a fixed share of the screen, under the writing box.
     <section
       aria-labelledby="entries-heading"
-      className="relative mt-6 flex min-h-[30rem] flex-1 basis-0 flex-col overflow-hidden rounded-card border-[1.5px] border-ink"
+      className="relative flex h-[70dvh] min-h-[24rem] min-w-0 flex-col overflow-hidden rounded-card border-[1.5px] border-ink lg:h-auto lg:min-h-0 lg:flex-1"
     >
       {/* Mascots, pinned to the box's corners (they stay put while the entries scroll past).
           Fixed sizes, so they look the same whatever the box height. Trimmed by the border.
@@ -93,6 +94,14 @@ export default function GratitudeList({
           </ul>
         )}
       </div>
+
+      {/* The veil (wide screens): covers the list while the add box slides. */}
+      <div
+        aria-hidden="true"
+        className={`pointer-events-none absolute inset-0 z-20 hidden bg-surface transition-opacity ease-out motion-reduce:hidden lg:block ${
+          veiled ? "opacity-100 duration-150" : "opacity-0 duration-300"
+        }`}
+      />
     </section>
   );
 }
