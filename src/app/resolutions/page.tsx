@@ -9,7 +9,7 @@ import ResolutionForm from "@/components/resolutions/ResolutionForm";
 import ResolutionList from "@/components/resolutions/ResolutionList";
 import ResolutionSearch from "@/components/resolutions/ResolutionSearch";
 
-// New year's resolutions: one year at a time (‹ year ›). Each resolution has a "how it went"
+// New year's resolutions: one year at a time (‹ year ›). Each resolution can have a reflection
 // written at the end of the year; each year can have a note above its list.
 export default function ResolutionsPage(props: PageProps<"/resolutions">) {
   return (
@@ -31,7 +31,6 @@ async function Resolutions({ y, focus }: { y?: string; focus?: string }) {
   const thisYear = localNow().getFullYear();
   const year = y && /^\d{4}$/.test(y) ? Number(y) : thisYear;
   const { items, note, lastYearCount } = await getResolutionYear(year);
-  const reflected = items.filter((r) => r.reflection).length;
 
   return (
     <>
@@ -46,7 +45,6 @@ async function Resolutions({ y, focus }: { y?: string; focus?: string }) {
             </h1>
             <p className="text-sm opacity-80">
               {items.length} {items.length === 1 ? "resolution" : "resolutions"}
-              {items.length > 0 && reflected > 0 && ` · ${reflected} looked back on`}
               {year !== thisYear && (
                 <>
                   {" · "}

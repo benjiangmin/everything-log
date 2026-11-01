@@ -7,7 +7,7 @@ export default function ResolutionSearch() {
   return (
     <SearchBox<Resolution>
       endpoint="/api/resolutions/search"
-      placeholder="Search resolutions and how they went"
+      placeholder="Search resolutions and reflections"
       label="Search resolutions"
       hrefFor={(r) => `/resolutions?y=${r.year}&focus=${r.id}`}
       renderHit={(r, q) => (

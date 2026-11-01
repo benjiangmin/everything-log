@@ -1,14 +1,14 @@
 "use client";
 
 import { useEffect, useRef, useState, useTransition, type ReactNode } from "react";
-import { copyLastYear, deleteResolution, moveResolution, saveYearNote, updateResolution } from "@/app/resolutions/actions";
+import { copyLastYear, deleteResolution, saveYearNote, updateResolution } from "@/app/resolutions/actions";
 import type { Resolution } from "@/lib/resolutions";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
 
 const field =
   "w-full rounded-control border border-line bg-paper px-3 py-2.5 text-ink placeholder:text-muted/70 focus:border-ink";
 
-// The year's list: its note (optional) on top, then each resolution with how it went.
+// The year's list: its note (optional) on top, then each resolution (reflection inside).
 export default function ResolutionList({
   year,
   items,
@@ -51,7 +51,7 @@ export default function ResolutionList({
       ) : (
         <ol className="mt-3 space-y-2.5">
           {items.map((r, i) => (
-            <Item key={r.id} item={r} n={i + 1} first={i === 0} last={i === items.length - 1} focused={r.id === focusId} />
+            <Item key={r.id} item={r} n={i + 1} focused={r.id === focusId} />
           ))}
         </ol>
       )}
@@ -122,11 +122,14 @@ function YearNote({ year, note }: { year: number; note: string | null }) {
   );
 }
 
-function Item({ item, n, first, last, focused }: { item: Resolution; n: number; first: boolean; last: boolean; focused: boolean }) {
+// Folded by default: number + resolution. Click it to open the reflection (if there is one).
+function Item({ item, n, focused }: { item: Resolution; n: number; focused: boolean }) {
   const [editing, setEditing] = useState(false);
+  const [open, setOpen] = useState(focused); // a search result opens itself
   const [pending, startTransition] = useTransition();
   const confirm = useConfirm();
   const ref = useRef<HTMLLIElement>(null);
+  const hasReflection = Boolean(item.reflection);
 
   // Arrived from a search result: scroll to it while it flashes.
   useEffect(() => {
@@ -134,7 +137,7 @@ function Item({ item, n, first, last, focused }: { item: Resolution; n: number; 
   }, [focused]);
 
   async function remove() {
-    const ok = await confirm({ title: `Delete "${item.title}"?`, body: "It'll be removed for good, with how it went.", confirmLabel: "Delete" });
+    const ok = await confirm({ title: `Delete "${item.title}"?`, body: "It'll be removed for good, with its reflection.", confirmLabel: "Delete" });
     if (ok) startTransition(() => deleteResolution(item.id));
   }
 
@@ -147,32 +150,38 @@ function Item({ item, n, first, last, focused }: { item: Resolution; n: number; 
         focused ? "flash" : ""
       }`}
     >
-      <span aria-hidden="true" className="num w-6 shrink-0 pt-px text-right font-display text-xl font-semibold leading-snug text-accent">
+      <span aria-hidden="true" className="num w-6 shrink-0 text-right font-display text-xl font-semibold leading-7 text-accent">
         {n}
       </span>
       <div className="min-w-0 flex-1">
-        <p className="break-words font-display text-[17px] font-semibold leading-snug text-ink">{item.title}</p>
-        {item.reflection ? (
-          // How it went: under a thin line, in its own lighter voice.
+        <button
+          type="button"
+          onClick={() => setOpen((o) => !o)}
+          aria-expanded={open}
+          disabled={!hasReflection}
+          className="flex w-full items-start gap-2 text-left disabled:cursor-default"
+        >
+          <span className="min-w-0 flex-1 break-words text-[17px] font-medium leading-7 text-ink/80">{item.title}</span>
+          {hasReflection && (
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              aria-hidden="true"
+              className={`mt-[7px] shrink-0 text-muted/70 transition-transform ${open ? "rotate-180" : ""}`}
+            >
+              <path d="M6 9l6 6 6-6" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          )}
+        </button>
+        {open && hasReflection && (
+          // The reflection: under a thin line, in its own lighter voice.
           <p className="mt-2 whitespace-pre-line break-words border-t border-accent/20 pt-2 leading-relaxed text-ink/75">{item.reflection}</p>
-        ) : (
-          <button
-            type="button"
-            onClick={() => setEditing(true)}
-            className="mt-1 text-sm text-muted/80 underline-offset-4 transition-colors hover:text-ink hover:underline"
-          >
-            How did it go?
-          </button>
         )}
       </div>
 
-      <div className="-my-1 -mr-1 flex shrink-0 flex-col items-center sm:flex-row sm:items-start">
-        <IconButton label="Move up" disabled={pending || first} onClick={() => startTransition(() => moveResolution(item.id, -1))}>
-          <path d="M6 15l6-6 6 6" />
-        </IconButton>
-        <IconButton label="Move down" disabled={pending || last} onClick={() => startTransition(() => moveResolution(item.id, 1))}>
-          <path d="M6 9l6 6 6-6" />
-        </IconButton>
+      <div className="-mr-1 -mt-0.5 flex shrink-0 items-start">
         <IconButton label={`Edit "${item.title}"`} disabled={pending} onClick={() => setEditing(true)}>
           <path d="M4 20h4L19 9l-4-4L4 16v4zM14 6l4 4" />
         </IconButton>
@@ -184,7 +193,7 @@ function Item({ item, n, first, last, focused }: { item: Resolution; n: number; 
   );
 }
 
-// Edit the resolution and write (or change) how it went.
+// Edit the resolution and its reflection.
 function ItemEditor({ item, n, onDone }: { item: Resolution; n: number; onDone: () => void }) {
   const [title, setTitle] = useState(item.title);
   const [reflection, setReflection] = useState(item.reflection ?? "");
@@ -225,8 +234,8 @@ function ItemEditor({ item, n, onDone }: { item: Resolution; n: number; onDone: 
           onChange={(e) => setReflection(e.target.value)}
           rows={4}
           maxLength={5000}
-          placeholder="How did it go? (write this when the year's over)"
-          aria-label="How it went"
+          placeholder="Reflection"
+          aria-label="Reflection"
           style={{ outline: "none" }}
           className={`${field} resize-y leading-relaxed`}
         />

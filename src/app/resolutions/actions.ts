@@ -23,7 +23,7 @@ export async function addResolution(_prev: FormState, formData: FormData): Promi
   return { ok: true, message: null, savedAt: Date.now() };
 }
 
-// Rename a resolution and/or write how it went. Empty reflection = not written yet.
+// Rename a resolution and/or write its reflection. Empty reflection = not written yet.
 export async function updateResolution(id: string, title: string, reflection: string) {
   if (!isUuid(id)) throw new Error("Bad id.");
   const t = title.trim().slice(0, 300);
@@ -41,24 +41,6 @@ export async function deleteResolution(id: string) {
   done();
 }
 
-// Swap a resolution with the one above (-1) or below (+1).
-export async function moveResolution(id: string, dir: -1 | 1) {
-  if (!isUuid(id) || (dir !== -1 && dir !== 1)) return;
-  const me = await db().from("resolutions").select("year, position").eq("id", id).maybeSingle();
-  if (!me.data) return;
-  const q = db().from("resolutions").select("id, position").eq("year", me.data.year);
-  const other = await (dir < 0
-    ? q.lt("position", me.data.position).order("position", { ascending: false })
-    : q.gt("position", me.data.position).order("position")
-  )
-    .limit(1)
-    .maybeSingle();
-  if (!other.data) return;
-  await db().from("resolutions").update({ position: other.data.position }).eq("id", id);
-  await db().from("resolutions").update({ position: me.data.position }).eq("id", other.data.id);
-  done();
-}
-
 // The note above a year's list (empty = no note).
 export async function saveYearNote(year: number, note: string) {
   if (!isYear(year)) throw new Error("Bad year.");
@@ -68,7 +50,7 @@ export async function saveYearNote(year: number, note: string) {
   done();
 }
 
-// Start a year with last year's resolutions (titles only; how they went starts blank).
+// Start a year with last year's resolutions (titles only; reflections start blank).
 export async function copyLastYear(year: number) {
   if (!isYear(year)) throw new Error("Bad year.");
   const already = await db().from("resolutions").select("id", { count: "exact", head: true }).eq("year", year);
