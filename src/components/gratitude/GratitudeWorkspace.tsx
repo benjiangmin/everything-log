@@ -10,7 +10,7 @@ import GratitudeList from "./GratitudeList";
 // (starts at 150ms, takes 450ms) → veil lifts at VEIL_MS.
 const VEIL_MS = 620;
 
-// Left: the writing box. Open by default; once today's three things are in it slides sideways into a
+// Left: the writing box. Its ‹ folds it away any time. Open by default; once today's three things are in it slides sideways into a
 // slim strip (click it to slide back open) and the list on the right widens.
 export default function GratitudeWorkspace({
   defaultDate,
@@ -66,7 +66,7 @@ export default function GratitudeWorkspace({
       >
         {open ? (
           <div key="open" className="panel-in lg:w-[calc(24rem-2.5rem)]">
-            <GratitudeForm defaultDate={defaultDate} onFold={addedToday ? () => setOpen(false) : undefined} />
+            <GratitudeForm defaultDate={defaultDate} onFold={() => setOpen(false)} />
           </div>
         ) : (
           // Folded: a slim strip on wide screens (reads bottom-to-top), a short bar on phones.
@@ -84,10 +84,12 @@ export default function GratitudeWorkspace({
               <span className="lg:sr-only">Write another</span>
             </button>
             <p className="flex items-center gap-1.5 text-sm text-muted lg:rotate-180 lg:[writing-mode:vertical-rl]">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true" className="shrink-0 text-accent lg:hidden">
-                <path d="M5 12.5l4.5 4.5L19 7.5" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-              Today&apos;s three are in
+              {addedToday && (
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true" className="shrink-0 text-accent lg:hidden">
+                  <path d="M5 12.5l4.5 4.5L19 7.5" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              )}
+              {addedToday ? "Today’s three are in" : "Three good things"}
             </p>
           </div>
         )}
