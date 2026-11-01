@@ -8,6 +8,7 @@ import ChristmasSearch from "@/components/christmas/ChristmasSearch";
 import GiftForm from "@/components/christmas/GiftForm";
 import GiftList from "@/components/christmas/GiftList";
 import { money } from "@/components/christmas/money";
+import { localNow } from "@/lib/month";
 
 // Christmas list: one year at a time (‹ year ›), gifts grouped by person, with each person's total
 // and the year's running total.
@@ -28,7 +29,7 @@ export default function ChristmasPage(props: PageProps<"/christmas">) {
 
 async function Christmas({ y, focus }: { y?: string; focus?: string }) {
   await connection(); // always fresh (and needs today's year)
-  const thisYear = new Date().getFullYear();
+  const thisYear = localNow().getFullYear();
   const year = y && /^\d{4}$/.test(y) ? Number(y) : thisYear;
   const { people, total } = await getChristmasYear(year);
   const names = people.map((p) => p.name);

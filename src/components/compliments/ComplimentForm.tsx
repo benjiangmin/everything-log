@@ -4,11 +4,12 @@ import { useActionState, useEffect, useRef, useState } from "react";
 import { addCompliment, updateCompliment, type FormState } from "@/app/compliments/actions";
 import type { Compliment } from "@/lib/compliments";
 import DateWheel from "@/components/ui/DateWheel";
+import { localNow } from "@/lib/month";
 
 const initial: FormState = { ok: false, message: null };
 
 function todayKey() {
-  const d = new Date();
+  const d = localNow();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 

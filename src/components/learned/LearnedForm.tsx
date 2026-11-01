@@ -4,13 +4,14 @@ import { useActionState, useEffect, useRef } from "react";
 import { addLearned, updateLearned, type FormState } from "@/app/learned/actions";
 import type { LearnedEntry } from "@/lib/learned";
 import DateWheel from "@/components/ui/DateWheel";
+import { localNow } from "@/lib/month";
 
 const initial: FormState = { ok: false, message: null };
 const field =
   "w-full rounded-control border border-line bg-paper px-3 py-2.5 text-ink placeholder:text-muted/70 focus:border-ink";
 
 function todayKey() {
-  const d = new Date();
+  const d = localNow();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 

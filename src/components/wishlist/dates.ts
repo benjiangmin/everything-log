@@ -1,3 +1,5 @@
+import { localNow } from "@/lib/month";
+
 // "Dec 5, 2024" for an item's details.
 export function dayLabel(date: string) {
   const [y, m, d] = date.split("-").map(Number);
@@ -6,7 +8,7 @@ export function dayLabel(date: string) {
 
 // Today as "YYYY-MM-DD" (the add box's default date).
 export function todayKey() {
-  const d = new Date();
+  const d = localNow();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 

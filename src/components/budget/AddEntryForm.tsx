@@ -5,11 +5,12 @@ import { addEntry, type FormState } from "@/app/budget/actions";
 import type { Category } from "@/lib/budget";
 import CategoryPicker from "./CategoryPicker";
 import DateWheel from "@/components/ui/DateWheel";
+import { localNow } from "@/lib/month";
 
 const initial: FormState = { ok: false, message: null };
 
 function todayKey() {
-  const d = new Date();
+  const d = localNow();
   const mm = String(d.getMonth() + 1).padStart(2, "0");
   const dd = String(d.getDate()).padStart(2, "0");
   return `${d.getFullYear()}-${mm}-${dd}`;

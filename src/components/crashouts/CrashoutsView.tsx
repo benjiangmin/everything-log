@@ -6,6 +6,7 @@ import StickyTop from "@/components/ui/StickyTop";
 import CrashoutForm from "./CrashoutForm";
 import CrashoutList from "./CrashoutList";
 import CrashoutSearch from "./CrashoutSearch";
+import { localNow } from "@/lib/month";
 
 export default async function CrashoutsView({
   searchParams,
@@ -15,7 +16,7 @@ export default async function CrashoutsView({
   await connection(); // always render per request (needs today's date + fresh data)
   const params = await searchParams;
   const raw = Array.isArray(params.y) ? params.y[0] : params.y;
-  const thisYear = new Date().getFullYear();
+  const thisYear = localNow().getFullYear();
   const year = raw && /^\d{4}$/.test(raw) ? Number(raw) : thisYear;
   const isThisYear = year === thisYear;
   // Set when you pick a search result: that crashout gets opened, scrolled to and highlighted.

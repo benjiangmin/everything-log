@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { connection } from "next/server";
 import { getLearnedDays, getLearnedForMonth } from "@/lib/learned";
-import { currentMonthKey, monthLabel, parseMonthKey, shiftMonth } from "@/lib/month";
+import { currentMonthKey, monthLabel, parseMonthKey, shiftMonth, localNow } from "@/lib/month";
 import MonthPicker from "@/components/ui/MonthPicker";
 import StickyTop from "@/components/ui/StickyTop";
 import LearnedWorkspace from "./LearnedWorkspace";
@@ -20,7 +20,7 @@ export default async function LearnedView({
   const focusId = typeof params.focus === "string" ? params.focus : undefined; // from a search result
 
   // The server's today might be a day off from yours (time zones), so look at the days around it.
-  const now = new Date();
+  const now = localNow();
   const dayKey = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   const serverToday = dayKey(now);
   const [entries, recentDays] = await Promise.all([

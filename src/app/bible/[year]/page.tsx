@@ -8,6 +8,7 @@ import JournalMonthPicker from "@/components/journal/JournalMonthPicker";
 import StickyTop from "@/components/ui/StickyTop";
 import BibleSearch from "@/components/bible/BibleSearch";
 import BibleWorkspace from "@/components/bible/BibleWorkspace";
+import { localNow } from "@/lib/month";
 
 // Bible in a year: one page per year (/bible/2024), Jan–Dec, shown a month at a time.
 // Same layout as the unsuspicious documents.
@@ -32,7 +33,7 @@ async function BibleYear({ year: raw, m, focus }: { year: string; m?: string | s
   const year = Number(raw);
 
   // Which month: from the link, else this month (if it's this year), else the year's newest month.
-  const now = new Date();
+  const now = localNow();
   const asked = Number(Array.isArray(m) ? m[0] : m);
   const month =
     asked >= 1 && asked <= 12 ? asked : now.getFullYear() === year ? now.getMonth() + 1 : ((await getLastBibleMonth(year)) ?? 1);

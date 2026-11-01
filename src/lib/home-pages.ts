@@ -17,6 +17,7 @@ export const PAGES = [
   { href: "/bucket", label: "Bucket list" },
   { href: "/wishlist", label: "Wishlist" },
   { href: "/learned", label: "Something new I've learned" },
+  { href: "/resolutions", label: "New year's resolutions" },
 ] as const;
 
 // Year templates: one page design shared by every year, e.g. /journal/2026.

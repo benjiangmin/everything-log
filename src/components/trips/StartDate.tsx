@@ -3,9 +3,10 @@
 import { useTransition } from "react";
 import { setTripStart } from "@/app/trips/actions";
 import DateWheel from "@/components/ui/DateWheel";
+import { localNow } from "@/lib/month";
 
 function todayKey() {
-  const d = new Date();
+  const d = localNow();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 

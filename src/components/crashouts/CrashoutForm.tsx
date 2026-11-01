@@ -5,6 +5,7 @@ import { addCrashouts } from "@/app/crashouts/actions";
 import DateWheel from "@/components/ui/DateWheel";
 import RichText from "@/components/dreams/RichText";
 import Pictures, { prepare, type NewPicture } from "@/components/dreams/Pictures";
+import { localNow } from "@/lib/month";
 
 // One crashout being written: its text (HTML) and the pictures to upload with it.
 type Draft = { key: number; body: string; added: NewPicture[] };
@@ -13,7 +14,7 @@ let nextKey = 0;
 const emptyDraft = (): Draft => ({ key: nextKey++, body: "", added: [] });
 
 function todayKey() {
-  const d = new Date();
+  const d = localNow();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 

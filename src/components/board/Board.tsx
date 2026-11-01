@@ -16,6 +16,7 @@ import {
   type DragStartEvent,
 } from "@dnd-kit/core";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
+import { localNow } from "@/lib/month";
 
 // A drag-and-drop board shared by the Games, Anime and Goals pages.
 //
@@ -66,7 +67,7 @@ export type BoardConfig<T extends BoardItem> = {
 const MIN_HEIGHT = { split: "md:min-h-[49.5rem]", columns: "md:min-h-[28rem]" };
 
 function todayKey() {
-  const d = new Date();
+  const d = localNow();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 

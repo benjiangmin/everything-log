@@ -9,6 +9,7 @@ import JournalSearch from "@/components/journal/JournalSearch";
 import JournalWorkspace from "@/components/journal/JournalWorkspace";
 import StickyTop from "@/components/ui/StickyTop";
 import YearSetting from "@/components/journal/YearSetting";
+import { localNow } from "@/lib/month";
 
 // One unsuspicious document = one year of journaling. Every year uses this same page (/journal/2026).
 export default function JournalYearPage({ params, searchParams }: PageProps<"/journal/[year]">) {
@@ -35,7 +36,7 @@ async function YearDocument({ year: raw, m, focus }: { year: string; m?: string 
   const start = await getStartMonth(year); // 1 = Jan–Dec, 9 = school year (Sep–Aug)
 
   // Which month: from the link, else this month (if today is inside this document), else its first month.
-  const now = new Date();
+  const now = localNow();
   const todayKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
   const asked = Number(Array.isArray(m) ? m[0] : m);
   const month = asked >= 1 && asked <= 12 ? asked : inDoc(todayKey, year, start) ? now.getMonth() + 1 : start;

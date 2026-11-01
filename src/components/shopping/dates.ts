@@ -1,3 +1,5 @@
+import { localNow } from "@/lib/month";
+
 // "Wed, Jul 22, 2026" for day headings.
 export function dayLabel(date: string) {
   const [y, m, d] = date.split("-").map(Number);
@@ -5,7 +7,7 @@ export function dayLabel(date: string) {
 }
 
 export function todayKey() {
-  const d = new Date();
+  const d = localNow();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 

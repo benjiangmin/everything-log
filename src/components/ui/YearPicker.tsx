@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
+import { localNow } from "@/lib/month";
 
 // The year in the title bar. Click it to pick any year from a grid of 12 (‹ › for more).
 export default function YearPicker({ year }: { year: number }) {
@@ -10,7 +11,7 @@ export default function YearPicker({ year }: { year: number }) {
   const [open, setOpen] = useState(false);
   const [start, setStart] = useState(year - 7); // first year shown in the grid
   const boxRef = useRef<HTMLDivElement>(null);
-  const thisYear = new Date().getFullYear();
+  const thisYear = localNow().getFullYear();
 
   // Close when clicking outside or pressing Escape.
   useEffect(() => {

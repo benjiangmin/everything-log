@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { PickerButton, usePopover, Wheel, WheelPanel } from "./Wheel";
+import { localNow } from "@/lib/month";
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
@@ -31,7 +32,7 @@ export default function DateWheel({
   const [day, setDay] = useState(d0);
   const { open, setOpen, ref } = usePopover();
 
-  const thisYear = new Date().getFullYear();
+  const thisYear = localNow().getFullYear();
   const years = Array.from({ length: 7 }, (_, i) => thisYear - 5 + i);
   const maxDay = daysIn(year, month);
   const safeDay = Math.min(day, maxDay);

@@ -4,13 +4,14 @@ import { useActionState, useEffect, useRef } from "react";
 import { addGratitude, updateGratitude, type FormState } from "@/app/gratitude/actions";
 import type { GratitudeEntry } from "@/lib/gratitude";
 import DateWheel from "@/components/ui/DateWheel";
+import { localNow } from "@/lib/month";
 
 const initial: FormState = { ok: false, message: null };
 const SLOTS = ["first", "second", "third"] as const;
 const PLACEHOLDERS = ["My bed", "The goobest goobster in goobville", "A thousand bucks"];
 
 function todayKey() {
-  const d = new Date();
+  const d = localNow();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 

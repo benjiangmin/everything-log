@@ -7,13 +7,14 @@ import SelectPicker from "@/components/ui/SelectPicker";
 import OptionalDate from "@/components/games/OptionalDate";
 import { GOAL_LABELS, GOAL_ORDER } from "./labels";
 import AddBox from "@/components/board/AddBox";
+import { localNow } from "@/lib/month";
 
 const initial: FormState = { ok: false, message: null };
 const field =
   "w-full rounded-control border border-line bg-paper px-3 py-2.5 text-ink placeholder:text-muted/70 focus:border-ink";
 
 function todayKey() {
-  const d = new Date();
+  const d = localNow();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 

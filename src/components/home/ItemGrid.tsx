@@ -22,6 +22,7 @@ import { useConfirm } from "@/components/ui/ConfirmDialog";
 import SelectPicker from "@/components/ui/SelectPicker";
 import SortableGrid from "./SortableGrid";
 import { AddCard, DeleteButton, Empty, InlineInput, PageHeader, useLocalCopy } from "./bits";
+import { localNow } from "@/lib/month";
 
 type Cat = { id: string; name: string };
 
@@ -219,7 +220,7 @@ function OpensPicker({ href, onChange }: { href: string | null; onChange: (href:
             required
             min={1900}
             max={2100}
-            defaultValue={year ?? new Date().getFullYear()}
+            defaultValue={year ?? localNow().getFullYear()}
             aria-label="Which year does it start in?"
             style={{ outline: "none" }}
             className={`no-spin ${selectClass} focus:border-ink`}
@@ -275,7 +276,7 @@ function OpensPicker({ href, onChange }: { href: string | null; onChange: (href:
             required
             min={1900}
             max={2100}
-            defaultValue={bible ?? new Date().getFullYear()}
+            defaultValue={bible ?? localNow().getFullYear()}
             aria-label="Which year?"
             style={{ outline: "none" }}
             className={`no-spin ${selectClass} focus:border-ink`}
