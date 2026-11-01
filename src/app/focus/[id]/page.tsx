@@ -9,10 +9,10 @@ import AddFocusArea from "@/components/focus/AddFocusArea";
 import FocusAreaList from "@/components/focus/FocusAreaList";
 
 // One unrecreational record (a semester, a winter break…). Every record uses this same page
-// (/focus/<id>): the focus areas, each folded until opened, each with one log per day.
+// (/focus/<id>): focus areas on the left; the chosen one's logs (one per day) on the right.
 export default function FocusPage({ params, searchParams }: PageProps<"/focus/[id]">) {
   return (
-    <main className="mx-auto flex min-h-dvh w-full max-w-4xl flex-col px-4 pb-10 pt-8 sm:pt-10">
+    <main className="mx-auto flex min-h-dvh w-full max-w-6xl flex-col px-4 pb-6 pt-8 sm:pt-10">
       <Link href="/" className="mb-4 inline-block self-start text-sm text-muted underline-offset-4 hover:text-ink hover:underline">
         ← Home
       </Link>
