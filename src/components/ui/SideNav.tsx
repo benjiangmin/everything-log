@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { lock, lockOtherDevices } from "@/app/login/actions";
+import { inboxCount } from "@/app/budget/inbox-actions";
+import InboxPanel from "@/components/budget/InboxPanel";
 import { useEffect, useState, useSyncExternalStore, useTransition, type ReactNode } from "react";
 
 // The navigation bar on the left of every page (not the login page).
@@ -62,6 +64,8 @@ export default function SideNav() {
       <NavButton label="Home" showLabel={labels} href="/" active={pathname === "/"}>
         <path d="M4 11l8-7 8 7v8a1 1 0 0 1-1 1h-4v-6h-6v6H5a1 1 0 0 1-1-1v-8z" />
       </NavButton>
+      {/* Budget only: purchases read from your alert emails, waiting for review. */}
+      {pathname.startsWith("/budget") && <InboxButton showLabel={labels} />}
     </>
   );
 
@@ -111,6 +115,46 @@ export default function SideNav() {
         </div>
       )}
     </div>
+  );
+}
+
+// "New purchases": a tray with a ! when emails have brought in purchases to review.
+// Checks every minute and whenever you come back to the tab.
+function InboxButton({ showLabel }: { showLabel: boolean }) {
+  const [count, setCount] = useState(0);
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    let live = true;
+    const check = () => inboxCount().then((n) => live && setCount(n));
+    check();
+    const timer = setInterval(check, 60_000);
+    window.addEventListener("focus", check);
+    return () => {
+      live = false;
+      clearInterval(timer);
+      window.removeEventListener("focus", check);
+    };
+  }, []);
+
+  return (
+    <>
+      <NavButton
+        label={count ? `New purchases (${count})` : "New purchases"}
+        showLabel={showLabel}
+        onClick={() => setOpen(true)}
+        badge={count > 0}
+      >
+        <path d="M3 13h5l1.5 3h5L16 13h5" />
+        <path d="M5.5 5h13L21 13v5a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-5L5.5 5z" />
+      </NavButton>
+      {open && (
+        <InboxPanel
+          onClose={() => setOpen(false)}
+          onChanged={() => setCount((c) => Math.max(0, c - 1))}
+        />
+      )}
+    </>
   );
 }
 
@@ -218,6 +262,7 @@ function NavButton({
   onClick,
   active,
   submit,
+  badge,
   children,
 }: {
   label: string;
@@ -226,6 +271,7 @@ function NavButton({
   onClick?: () => void;
   active?: boolean;
   submit?: boolean;
+  badge?: boolean; // a little "!" on the icon
   children: ReactNode; // the icon's path(s)
 }) {
   const className = `flex h-10 w-full items-center gap-3 overflow-hidden whitespace-nowrap rounded-control px-[11px] text-sm font-semibold transition-colors ${
@@ -233,9 +279,19 @@ function NavButton({
   }`;
   const inner = (
     <>
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0" aria-hidden="true">
-        {children}
-      </svg>
+      <span className="relative shrink-0">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          {children}
+        </svg>
+        {badge && (
+          <span
+            aria-hidden="true"
+            className="absolute -right-2 -top-2 grid size-[15px] place-items-center rounded-full bg-danger text-[10px] font-bold leading-none text-white ring-2 ring-surface"
+          >
+            !
+          </span>
+        )}
+      </span>
       <span className={`transition-opacity duration-200 ${showLabel ? "opacity-100" : "opacity-0"}`}>{label}</span>
     </>
   );

@@ -6,7 +6,8 @@ import { getLockEpoch } from "@/lib/lock-epoch";
 // This covers pages, saving (server actions), and the search APIs.
 export async function proxy(request: NextRequest) {
   const { pathname, search } = request.nextUrl;
-  if (pathname === "/login") return NextResponse.next();
+  // The login page, and the address Resend delivers emails to (it checks its own signature).
+  if (pathname === "/login" || pathname === "/api/inbound-email") return NextResponse.next();
 
   const password = process.env.SITE_PASSWORD;
   if (!password) {

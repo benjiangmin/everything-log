@@ -239,3 +239,15 @@ body {
     padding-left: 3.5rem;
   }
 }
+
+/* The budget's "New purchases" list sliding in from the right. */
+@keyframes panel-slide {
+  from { transform: translateX(100%); }
+  to   { transform: none; }
+}
+.panel-slide {
+  animation: panel-slide 320ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+@media (prefers-reduced-motion: reduce) {
+  .panel-slide { animation: none; }
+}
