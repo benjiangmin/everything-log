@@ -20,6 +20,7 @@ export const PAGES = [
   { href: "/resolutions", label: "New year's resolutions" },
   { href: "/person", label: "The person" },
   { href: "/prayer", label: "Prayer" },
+  { href: "/subscriptions", label: "Subscriptions" },
 ] as const;
 
 // Year templates: one page design shared by every year, e.g. /journal/2026.
