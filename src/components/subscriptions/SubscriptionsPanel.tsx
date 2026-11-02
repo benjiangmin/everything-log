@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { monthlySubscriptions } from "@/app/subscriptions/actions";
 import type { Subscription } from "@/lib/subscriptions";
-import { dollars, shortDate } from "@/lib/subscription-dates";
+import { billedOn, dollars } from "@/lib/subscription-dates";
 
 // The budget's subscriptions list (from the sidebar): the monthly ones still running, soonest
 // charge first, their total, and a link to the Subscriptions page.
@@ -63,7 +63,7 @@ export default function SubscriptionsPanel({ onClose }: { onClose: () => void })
               <li key={s.id} className="flex items-center gap-3 rounded-control bg-surface px-3 py-2.5">
                 <div className="min-w-0 flex-1">
                   <p className="truncate font-semibold text-ink">{s.name}</p>
-                  <p className="text-xs text-muted">{s.upcoming ? `Next ${shortDate(s.upcoming)}` : "No date"}</p>
+                  <p className="text-xs text-muted">{s.next_charge ? billedOn(s.next_charge, s.cycle, true) : "No date"}</p>
                 </div>
                 <p className="num shrink-0 font-semibold text-ink">{dollars(s.price)}</p>
               </li>

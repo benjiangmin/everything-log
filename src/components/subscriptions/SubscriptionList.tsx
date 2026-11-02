@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { deleteSubscription, setCancelled } from "@/app/subscriptions/actions";
 import type { Subscription } from "@/lib/subscriptions";
-import { dollars, perMonth, shortDate } from "@/lib/subscription-dates";
+import { billedOn, dollars, perMonth } from "@/lib/subscription-dates";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
 import SubscriptionForm from "./SubscriptionForm";
 
@@ -118,7 +118,7 @@ function Item({ sub }: { sub: Subscription }) {
           )}
         </p>
         <p className="mt-0.5 break-words text-xs text-muted">
-          {sub.cancelled ? "Cancelled" : sub.upcoming ? `Next charge ${shortDate(sub.upcoming, sub.cycle === "yearly")}` : "No date"}
+          {sub.cancelled ? "Cancelled" : sub.next_charge ? billedOn(sub.next_charge, sub.cycle) : sub.cycle === "yearly" ? "Yearly" : "Monthly"}
           {sub.note && <> · {sub.note}</>}
         </p>
       </div>

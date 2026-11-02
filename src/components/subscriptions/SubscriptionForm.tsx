@@ -130,7 +130,7 @@ export default function SubscriptionForm({
           ))}
         </div>
         <div className="flex min-w-0 flex-1 items-center">
-          <OptionalDate key={round} name="next_charge" label="Next charge" defaultValue={sub?.next_charge ?? null} block />
+          <OptionalDate key={round} name="next_charge" label="Billing date" defaultValue={sub?.next_charge ?? null} block />
         </div>
       </div>
 

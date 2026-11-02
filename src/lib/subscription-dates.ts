@@ -29,5 +29,24 @@ export function shortDate(key: string, withYear = false) {
   return new Date(y, m - 1, d).toLocaleDateString("en-US", { month: "short", day: "numeric", ...(withYear ? { year: "numeric" } : {}) });
 }
 
+// 1 → "1st", 22 → "22nd", 13 → "13th"
+export function ordinal(n: number) {
+  const tens = n % 100;
+  const suffix = tens >= 11 && tens <= 13 ? "th" : ({ 1: "st", 2: "nd", 3: "rd" } as Record<number, string>)[n % 10] ?? "th";
+  return `${n}${suffix}`;
+}
+
+// When it bills, from its saved date: "Monthly on the 14th" / "Yearly on Mar 5".
+// short: "On the 14th" / "On Mar 5".
+export function billedOn(saved: string, cycle: Cycle, short = false) {
+  const [, m, d] = saved.split("-").map(Number);
+  const when =
+    cycle === "yearly"
+      ? `on ${new Date(2000, m - 1, d).toLocaleDateString("en-US", { month: "short", day: "numeric" })}`
+      : `on the ${ordinal(d)}`;
+  if (short) return when[0].toUpperCase() + when.slice(1);
+  return `${cycle === "yearly" ? "Yearly" : "Monthly"} ${when}`;
+}
+
 export const dollars = (n: number) =>
   n.toLocaleString("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 2 });
