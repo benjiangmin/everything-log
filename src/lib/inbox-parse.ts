@@ -93,13 +93,23 @@ const venmo: Reader = (email, timeZone) => {
 };
 
 // The note written on the payment: the text between the amount and "See transaction".
+// The email can say "You paid Leo Wang" more than once (e.g. hidden preview text up top), so
+// every copy is tried: first the ones that end at the "See transaction" button (the real card),
+// then any that look like a note.
 function venmoMemo(text: string, name: string): string | null {
   const flat = text.replace(/\s+/g, " ");
-  const after = flat.split(new RegExp(`You paid ${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`, "i"))[1];
-  if (!after) return null;
-  const m = after.match(/\$\s?[\d,]+(?:\s?\.?\s?\d{2})?\s*(.*?)\s*(?:See transaction|$)/i);
-  const memo = m?.[1]?.trim();
-  return memo ? memo.slice(0, 100) : null;
+  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const parts = flat.split(new RegExp(`You paid ${escaped}`, "i")).slice(1);
+  const amount = String.raw`^\s*\$\s?[\d,]+(?:\s?\.?\s?\d{2})?\s*`;
+  const strict = new RegExp(`${amount}(.*?)\\s*See transaction`, "i");
+  const loose = new RegExp(`${amount}(.*?)\\s*(?:See transaction|Transaction details|View in Venmo|Payment ID|$)`, "i");
+  for (const pattern of [strict, loose]) {
+    for (const part of parts) {
+      const memo = part.match(pattern)?.[1]?.trim();
+      if (memo && !/^You paid\b/i.test(memo)) return memo.slice(0, 100);
+    }
+  }
+  return null;
 }
 
 const READERS: Reader[] = [discover, venmo];

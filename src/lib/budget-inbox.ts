@@ -58,5 +58,16 @@ export async function getPendingInbox(): Promise<InboxItem[]> {
     .order("received_at", { ascending: false })
     .limit(200);
   if (error) throw new Error(`Couldn't load new purchases: ${error.message}`);
-  return data.map((d) => ({ ...d, amount: d.amount === null ? null : Number(d.amount) }));
+  // Read each waiting email again with today's readers, so a fix (or a new reader) also
+  // applies to ones that came in before it. Nothing is saved until you Add.
+  return data.map((d) => {
+    const item = { ...d, amount: d.amount === null ? null : Number(d.amount) };
+    const parsed = parseEmail(
+      { from: d.from_addr ?? "", subject: d.subject ?? "", text: d.body_text ?? "", receivedAt: new Date(d.received_at) },
+      TIME_ZONE,
+    );
+    return parsed.kind === "purchase"
+      ? { ...item, source: parsed.source, amount: parsed.amount, merchant: parsed.merchant, note: parsed.note, spent_on: parsed.date }
+      : item;
+  });
 }

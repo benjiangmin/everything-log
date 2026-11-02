@@ -109,7 +109,8 @@ function PurchaseCard({
   const [pending, start] = useTransition();
   const [message, setMessage] = useState<string | null>(null);
   const date = item.spent_on ?? item.received_at.slice(0, 10);
-  const note = [item.merchant, item.note].filter(Boolean).join(" · ").slice(0, 120);
+  // Venmo: the note you wrote on the payment (who you paid is shown above). Cards: the merchant.
+  const note = (item.note || item.merchant || "").slice(0, 120);
 
   return (
     <li className={`rounded-card bg-surface p-4 transition-opacity ${pending ? "opacity-50" : ""}`}>
@@ -171,6 +172,14 @@ function PurchaseCard({
           <DismissButton id={item.id} disabled={pending} onDone={onDone} onError={setMessage} />
           {message && <p className="text-sm text-danger">{message}</p>}
         </div>
+
+        {/* The email it came from, in case something was read wrong. */}
+        <details className="-mb-1">
+          <summary className="cursor-pointer text-xs text-muted hover:text-ink">Show email</summary>
+          <p className="mt-2 max-h-48 overflow-y-auto whitespace-pre-wrap break-words rounded-control bg-paper p-3 text-xs text-ink">
+            {item.body_text || "(empty)"}
+          </p>
+        </details>
       </form>
     </li>
   );
