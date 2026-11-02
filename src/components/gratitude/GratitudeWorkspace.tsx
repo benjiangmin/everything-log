@@ -89,7 +89,7 @@ export default function GratitudeWorkspace({
                   <path d="M5 12.5l4.5 4.5L19 7.5" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
               )}
-              {addedToday ? "Today’s three are in" : "Three good things"}
+              {addedToday ? "Update entry for today" : "Fill out entry for today"}
             </p>
           </div>
         )}
