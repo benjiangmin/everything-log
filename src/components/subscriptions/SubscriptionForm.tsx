@@ -80,12 +80,12 @@ export default function SubscriptionForm({
           style={{ outline: "none" }}
           className={`${field} pr-24`}
         />
-        {/* Centered in the 46px box: (46 - 30) / 2 = 8px from the top. */}
+        {/* Centered up and down in the name box, whatever its height. */}
         <button
           type="button"
           onClick={() => setShowLink((v) => !v)}
           aria-expanded={showLink}
-          className={`absolute right-2 top-2 rounded-[9px] border px-2.5 py-1 text-xs font-semibold transition-colors ${
+          className={`absolute right-2 top-1/2 -translate-y-1/2 rounded-[9px] border px-2.5 py-1.5 text-xs leading-none font-semibold transition-colors ${
             showLink ? "border-accent/30 bg-accent/10 text-accent" : "border-dashed border-muted/50 text-muted hover:border-muted hover:text-ink"
           }`}
         >
