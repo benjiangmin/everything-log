@@ -7,6 +7,7 @@ import {
   addBlock,
   addExercise,
   deleteBlock,
+  deletePlan,
   deleteExercise,
   moveBlock,
   moveExercise,
@@ -67,7 +68,7 @@ export default function CalisthenicsView({
         <header className="flex flex-wrap items-center justify-between gap-3 rounded-card bg-accent px-5 py-3.5 text-accent-ink shadow-lg shadow-ink/15">
           <h1 className="font-display text-2xl font-semibold tracking-tight sm:text-3xl">Calisthenics</h1>
           <div className="flex items-center gap-2">
-            {plan && <PlanPicker plan={plan} plans={plans} onNew={() => setAsking(true)} />}
+            {plan && <PlanPicker plan={plan} plans={plans} onNew={() => setAsking(true)} run={run} />}
             {plan?.current && (
               <button
                 type="button"
@@ -166,8 +167,29 @@ export default function CalisthenicsView({
 
 // ---------- Plan picker (Plan #2 ▾ → every plan, + New plan) ----------
 
-function PlanPicker({ plan, plans, onNew }: { plan: Plan; plans: PlanSummary[]; onNew: () => void }) {
+function PlanPicker({ plan, plans, onNew, run }: { plan: Plan; plans: PlanSummary[]; onNew: () => void; run: Run }) {
   const [open, setOpen] = useState(false);
+  const confirm = useConfirm();
+  const router = useRouter();
+
+  // Delete the plan you're looking at. Deleting the current one makes the one before it current.
+  async function remove() {
+    setOpen(false);
+    const older = plans.find((p) => p.number < plan.number);
+    const ok = await confirm({
+      title: `Delete Plan #${plan.number}?`,
+      body:
+        `Every block and exercise in it goes too, for good.` +
+        (plan.current && older ? ` Plan #${older.number} becomes your current plan again.` : ""),
+      confirmLabel: "Delete",
+    });
+    if (!ok) return;
+    run(async () => {
+      const res = await deletePlan(plan.id);
+      if (res.ok) router.push("/calisthenics");
+      return res;
+    });
+  }
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!open) return;
@@ -185,7 +207,7 @@ function PlanPicker({ plan, plans, onNew }: { plan: Plan; plans: PlanSummary[]; 
         className="flex items-center gap-1.5 rounded-control border border-accent-ink/25 px-3 py-1.5 text-sm font-semibold transition-colors hover:bg-accent-ink/10"
       >
         Plan #{plan.number}
-        {plan.name && <span className="max-w-32 truncate font-normal opacity-75">· {plan.name}</span>}
+        {plan.name && <span className="ml-1 max-w-32 truncate font-normal opacity-70">{plan.name}</span>}
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true" className={`transition-transform ${open ? "rotate-180" : ""}`}>
           <path d="M6 9l6 6 6-6" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
@@ -204,7 +226,7 @@ function PlanPicker({ plan, plans, onNew }: { plan: Plan; plans: PlanSummary[]; 
                 >
                   <span className="min-w-0 truncate">
                     Plan #{p.number}
-                    {p.name && <span className="font-normal text-muted"> · {p.name}</span>}
+                    {p.name && <span className="ml-1.5 font-normal text-muted">{p.name}</span>}
                   </span>
                   <span className="shrink-0 text-xs text-muted">
                     {i === 0 ? "current" : new Date(p.created_at).toLocaleDateString("en-US", { month: "short", year: "numeric" })}
@@ -222,6 +244,13 @@ function PlanPicker({ plan, plans, onNew }: { plan: Plan; plans: PlanSummary[]; 
             className="mt-1 w-full rounded-control border border-dashed border-line px-3 py-2 text-left text-sm text-muted transition-colors hover:border-ink hover:text-ink"
           >
             + New plan
+          </button>
+          <button
+            type="button"
+            onClick={remove}
+            className="mt-1 w-full rounded-control px-3 py-2 text-left text-sm text-muted transition-colors hover:bg-danger/10 hover:text-danger"
+          >
+            Delete Plan #{plan.number}
           </button>
         </div>
       )}
@@ -291,6 +320,10 @@ function PlanName({ plan, run }: { plan: Plan; run: Run }) {
 
 // ---------- A day's blocks ----------
 
+// "Every day" and the day's name: the same espresso bar (like the top bar), same padding, so they
+// line up and stand apart from the oat workout cards.
+const HEADING = "flex min-w-0 items-center gap-2 rounded-control bg-accent px-4 py-2.5 text-accent-ink";
+
 function Section({
   title,
   blocks,
@@ -318,9 +351,9 @@ function Section({
   const heading = (
     <>
       {title}
-      {today && <span className="rounded-full bg-accent/15 px-2 py-0.5 text-xs font-semibold text-accent">Today</span>}
+      {today && <span className="rounded-full bg-accent-ink/15 px-2 py-0.5 text-xs font-semibold text-accent-ink">Today</span>}
       {foldable && !shown && blocks.length > 0 && (
-        <span className="truncate text-sm font-normal text-muted">{blocks.map((b) => b.title).join(" · ")}</span>
+        <span className="truncate text-sm font-normal opacity-65">{blocks.map((b) => b.title).join(" · ")}</span>
       )}
     </>
   );
@@ -330,11 +363,11 @@ function Section({
       {/* Sticks just under the box's top edge while this section scrolls past (top = the bar's
           height + the 1rem top edge). The next section's heading takes over after it. */}
       <h2
-        className="sticky z-10 -mx-3 bg-paper px-4 pb-2 pt-1 font-display text-lg font-semibold sm:-mx-5 sm:px-6"
+        className="sticky z-10 -mx-3 bg-paper px-3 pb-2.5 pt-1 font-display text-lg font-semibold sm:-mx-5 sm:px-5"
         style={{ top: "calc(var(--sticky-top, 0px) + 1rem)" }}
       >
         {foldable && !editing ? (
-          <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={shown} className="flex w-full min-w-0 items-baseline gap-2 text-left">
+          <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={shown} className={`${HEADING} w-full text-left`}>
             {heading}
             <svg
               width="14"
@@ -342,13 +375,13 @@ function Section({
               viewBox="0 0 24 24"
               fill="none"
               aria-hidden="true"
-              className={`ml-auto shrink-0 self-center text-muted transition-transform ${shown ? "rotate-180" : ""}`}
+              className={`ml-auto shrink-0 self-center opacity-70 transition-transform ${shown ? "rotate-180" : ""}`}
             >
               <path d="M6 9l6 6 6-6" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
           </button>
         ) : (
-          <span className="flex min-w-0 items-baseline gap-2">{heading}</span>
+          <span className={HEADING}>{heading}</span>
         )}
       </h2>
       {shown && (
@@ -417,10 +450,11 @@ function BlockCard({
           </div>
         </div>
       ) : (
-        <header className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 px-1">
+        <header className="flex flex-wrap items-center gap-x-2 gap-y-0.5 px-1">
           <h3 className="font-display text-lg font-semibold">{block.title}</h3>
           {block.duration && <span className="rounded-full bg-paper px-2 py-0.5 text-xs font-semibold text-muted">{block.duration}</span>}
-          {block.note && <span className="text-sm text-muted">· {block.note}</span>}
+          {/* The note hugs the right side. */}
+          {block.note && <span className="ml-auto text-sm text-muted">{block.note}</span>}
         </header>
       )}
 

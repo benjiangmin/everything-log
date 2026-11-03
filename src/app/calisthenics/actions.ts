@@ -75,6 +75,14 @@ export async function renamePlan(id: string, name: string): Promise<Result> {
   return error ? fail(`Couldn't rename: ${error.message}`) : done();
 }
 
+// Delete a plan with everything in it. If it was the current one, the one before it becomes
+// current again (the current plan is simply the newest).
+export async function deletePlan(id: string): Promise<Result> {
+  if (!isUuid(id)) return fail("Couldn't find that plan.");
+  const { error } = await db().from("calisthenics_plans").delete().eq("id", id); // blocks + exercises go with it
+  return error ? fail(`Couldn't delete: ${error.message}`) : done();
+}
+
 // ---------- Blocks (a day's sections: "Push", "Abs"…) ----------
 
 export async function addBlock(day: string): Promise<Result> {
