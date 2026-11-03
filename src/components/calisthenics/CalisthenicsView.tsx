@@ -121,9 +121,16 @@ export default function CalisthenicsView({
           </button>
         </div>
       ) : (
+        <div className="mt-4 flex flex-1 flex-col">
+        {/* The box's top edge: sticks just under the bar while you scroll, so the box always has a
+            top. The square paper backing hides what scrolls past its rounded corners.
+            data-stick-under: the bar's own fade hides while this is stuck under it. */}
+        <div data-stick-under className="sticky z-20 bg-paper" style={{ top: "var(--sticky-top, 0px)" }}>
+          <div className="h-4 rounded-t-card border-x-[1.5px] border-t-[1.5px] border-ink" />
+        </div>
         <section
           aria-label={`${label} workout`}
-          className={`relative isolate mt-4 flex-1 overflow-clip rounded-card border-[1.5px] border-ink px-3 pb-5 pt-4 transition-opacity sm:px-5 ${
+          className={`relative isolate flex-1 rounded-b-card border-x-[1.5px] border-b-[1.5px] border-ink px-3 pb-5 transition-opacity sm:px-5 ${
             pending ? "opacity-80" : ""
           }`}
         >
@@ -140,9 +147,10 @@ export default function CalisthenicsView({
           {error && <p className="mb-3 rounded-control bg-danger/10 px-4 py-2.5 text-sm text-danger">{error}</p>}
           {canEdit && <PlanName plan={plan} run={run} />}
 
-          <Section title="Every day" blocks={daily} day="daily" editing={canEdit} run={run} empty="Nothing every day." />
-          <Section title={label} blocks={onDay} day={day} editing={canEdit} run={run} empty="Rest day." today={day === today} />
+          <Section title="Every day" blocks={daily} day="daily" editing={canEdit} quick={plan.current} run={run} empty="Nothing every day." foldable />
+          <Section title={label} blocks={onDay} day={day} editing={canEdit} quick={plan.current} run={run} empty="Rest day." today={day === today} />
         </section>
+        </div>
       )}
 
       {asking && plan && (
@@ -288,30 +296,71 @@ function Section({
   blocks,
   day,
   editing,
+  quick,
   run,
   empty,
   today,
+  foldable,
 }: {
   title: string;
   blocks: Block[];
   day: Day;
   editing: boolean;
+  quick: boolean; // the current plan: sets / weight can be changed with a click
   run: Run;
   empty: string;
   today?: boolean;
+  foldable?: boolean; // Every day: folded to its heading until you open it
 }) {
+  const [open, setOpen] = useState(!foldable);
+  const shown = open || editing; // editing always shows everything
+
+  const heading = (
+    <>
+      {title}
+      {today && <span className="rounded-full bg-accent/15 px-2 py-0.5 text-xs font-semibold text-accent">Today</span>}
+      {foldable && !shown && blocks.length > 0 && (
+        <span className="truncate text-sm font-normal text-muted">{blocks.map((b) => b.title).join(" · ")}</span>
+      )}
+    </>
+  );
+
   return (
-    <div className="mb-7 last:mb-0">
-      <h2 className="mb-2 flex items-baseline gap-2 px-1 font-display text-lg font-semibold">
-        {title}
-        {today && <span className="rounded-full bg-accent/15 px-2 py-0.5 text-xs font-semibold text-accent">Today</span>}
+    <div className="mb-5 last:mb-0">
+      {/* Sticks just under the box's top edge while this section scrolls past (top = the bar's
+          height + the 1rem top edge). The next section's heading takes over after it. */}
+      <h2
+        className="sticky z-10 -mx-3 bg-paper px-4 pb-2 pt-1 font-display text-lg font-semibold sm:-mx-5 sm:px-6"
+        style={{ top: "calc(var(--sticky-top, 0px) + 1rem)" }}
+      >
+        {foldable && !editing ? (
+          <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={shown} className="flex w-full min-w-0 items-baseline gap-2 text-left">
+            {heading}
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              aria-hidden="true"
+              className={`ml-auto shrink-0 self-center text-muted transition-transform ${shown ? "rotate-180" : ""}`}
+            >
+              <path d="M6 9l6 6 6-6" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </button>
+        ) : (
+          <span className="flex min-w-0 items-baseline gap-2">{heading}</span>
+        )}
       </h2>
+      {shown && (
+        <>
       {blocks.length === 0 && !editing && <p className="rounded-card border border-dashed border-line px-4 py-4 text-muted">{empty}</p>}
       <div className="space-y-3">
         {blocks.map((b, i) => (
-          <BlockCard key={b.id} block={b} editing={editing} run={run} first={i === 0} last={i === blocks.length - 1} />
+          <BlockCard key={b.id} block={b} editing={editing} quick={quick} run={run} first={i === 0} last={i === blocks.length - 1} />
         ))}
       </div>
+        </>
+      )}
       {editing && (
         <button
           type="button"
@@ -325,7 +374,21 @@ function Section({
   );
 }
 
-function BlockCard({ block, editing, run, first, last }: { block: Block; editing: boolean; run: Run; first: boolean; last: boolean }) {
+function BlockCard({
+  block,
+  editing,
+  quick,
+  run,
+  first,
+  last,
+}: {
+  block: Block;
+  editing: boolean;
+  quick: boolean;
+  run: Run;
+  first: boolean;
+  last: boolean;
+}) {
   const confirm = useConfirm();
   return (
     <article className="rounded-card bg-surface/85 px-3 py-3 sm:px-4">
@@ -363,7 +426,7 @@ function BlockCard({ block, editing, run, first, last }: { block: Block; editing
 
       <ul className="mt-2 divide-y divide-line/80">
         {block.exercises.map((x, i) => (
-          <ExerciseRow key={x.id} ex={x} editing={editing} run={run} first={i === 0} last={i === block.exercises.length - 1} />
+          <ExerciseRow key={x.id} ex={x} editing={editing} quick={quick} run={run} first={i === 0} last={i === block.exercises.length - 1} />
         ))}
       </ul>
       {block.exercises.length === 0 && !editing && <p className="px-1 py-2 text-sm text-muted">No exercises.</p>}
@@ -381,7 +444,21 @@ function BlockCard({ block, editing, run, first, last }: { block: Block; editing
 }
 
 // One exercise: name | sets | weight / notes.
-function ExerciseRow({ ex, editing, run, first, last }: { ex: Exercise; editing: boolean; run: Run; first: boolean; last: boolean }) {
+function ExerciseRow({
+  ex,
+  editing,
+  quick,
+  run,
+  first,
+  last,
+}: {
+  ex: Exercise;
+  editing: boolean;
+  quick: boolean;
+  run: Run;
+  first: boolean;
+  last: boolean;
+}) {
   if (editing) {
     return (
       <li className="flex items-center gap-2 py-1.5">
@@ -405,13 +482,90 @@ function ExerciseRow({ ex, editing, run, first, last }: { ex: Exercise; editing:
   return (
     <li className="grid grid-cols-[minmax(0,1fr)_4.5rem_3.75rem] items-baseline gap-3 px-1 py-2 sm:grid-cols-[minmax(0,1fr)_7rem_7rem]">
       <span className="break-words text-ink">{ex.name}</span>
-      <span className="num text-right font-semibold text-ink">{ex.sets ?? ""}</span>
-      <span className="num text-right text-sm text-muted">{ex.load ?? ""}</span>
+      {quick ? (
+        <>
+          <QuickCell value={ex.sets ?? ""} empty="+ sets" label={`${ex.name} sets`} onSave={(v) => run(() => updateExercise(ex.id, { sets: v }))} className="font-semibold text-ink" />
+          <QuickCell value={ex.load ?? ""} empty="+ weight" label={`${ex.name} weight`} onSave={(v) => run(() => updateExercise(ex.id, { load: v }))} className="text-sm text-muted" />
+        </>
+      ) : (
+        <>
+          <span className="num text-right font-semibold text-ink">{ex.sets ?? ""}</span>
+          <span className="num text-right text-sm text-muted">{ex.load ?? ""}</span>
+        </>
+      )}
     </li>
   );
 }
 
 // ---------- Small pieces ----------
+
+// Sets / weight outside of Edit: hover shows it's clickable (a soft box + pencil), click to type,
+// Enter or click away saves, Esc cancels. Shows the new value right away.
+function QuickCell({
+  value,
+  empty,
+  label,
+  onSave,
+  className,
+}: {
+  value: string;
+  empty: string; // shown on hover when there's nothing yet, e.g. "+ weight"
+  label: string;
+  onSave: (v: string) => void;
+  className: string;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [shown, setShown] = useState(value);
+  // The saved value changed (after a refresh): show that.
+  const [seen, setSeen] = useState(value);
+  if (seen !== value) {
+    setSeen(value);
+    setShown(value);
+  }
+
+  if (editing) {
+    return (
+      <input
+        autoFocus
+        defaultValue={shown}
+        aria-label={label}
+        maxLength={40}
+        onFocus={(e) => e.currentTarget.select()}
+        onBlur={(e) => {
+          const v = e.currentTarget.value.trim();
+          setEditing(false);
+          if (v !== shown) {
+            setShown(v);
+            onSave(v);
+          }
+        }}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") e.currentTarget.blur();
+          if (e.key === "Escape") {
+            e.currentTarget.value = shown;
+            e.currentTarget.blur();
+          }
+        }}
+        style={{ outline: "none" }}
+        className={`num -my-1 w-full min-w-0 rounded-[8px] border border-ink bg-paper px-1.5 py-0.5 text-right ${className}`}
+      />
+    );
+  }
+  return (
+    <button
+      type="button"
+      onClick={() => setEditing(true)}
+      aria-label={`Change ${label}`}
+      title="Click to change"
+      className={`num group/cell -my-1 flex items-center justify-end gap-1 justify-self-end rounded-[8px] border border-transparent px-1.5 py-0.5 text-right transition-colors hover:border-line hover:bg-paper ${className}`}
+    >
+      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" aria-hidden="true" className="shrink-0 text-muted opacity-0 transition-opacity group-hover/cell:opacity-100">
+        <path d="M4 20h4L19 9l-4-4L4 16v4z" stroke="currentColor" strokeWidth="2.4" strokeLinejoin="round" />
+      </svg>
+      {shown || <span className="text-xs font-normal text-muted opacity-0 transition-opacity group-hover/cell:opacity-100">{empty}</span>}
+    </button>
+  );
+}
 
 // A box that saves when you leave it (or press Enter), only if it changed.
 function SaveInput({ value, placeholder, onSave, className = "" }: { value: string; placeholder: string; onSave: (v: string) => void; className?: string }) {

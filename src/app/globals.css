@@ -30,6 +30,9 @@
 
 html {
   color-scheme: light;
+  /* Always leave room for the scrollbar, so pages don't shift sideways when their height changes
+     (e.g. switching to a shorter day in Calisthenics). */
+  scrollbar-gutter: stable;
 }
 
 body {
