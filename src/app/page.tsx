@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import { connection } from "next/server";
 import { getCategories } from "@/lib/home";
+import { getAlertCategoryIds, getAlertHrefs } from "@/lib/alerts";
 import CategoryGrid from "@/components/home/CategoryGrid";
 import HomeGreeting from "@/components/home/HomeGreeting";
 
@@ -19,7 +20,11 @@ export default function Home() {
 
 async function Categories() {
   await connection(); // always fresh, never a cached copy
-  return <CategoryGrid categories={await getCategories()} />;
+  const [categories, alerts] = await Promise.all([
+    getCategories(),
+    getAlertHrefs().then(getAlertCategoryIds).catch(() => []),
+  ]);
+  return <CategoryGrid categories={categories} alerts={alerts} />;
 }
 
 function Skeleton() {

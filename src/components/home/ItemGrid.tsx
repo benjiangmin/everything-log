@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import AlertDot from "./AlertDot";
 import { useState, useTransition } from "react";
 import {
   addItem,
@@ -49,11 +50,13 @@ export default function ItemGrid({
   sections,
   items,
   all,
+  alerts = [],
 }: {
   category: Cat & { description: string | null };
   sections: HomeSection[];
   items: HomeItem[];
   all: Cat[];
+  alerts?: string[]; // pages that need attention (they get a red "!")
 }) {
   const [editing, setEditing] = useState(false);
   const [order, setOrder] = useLocalCopy(items);
@@ -210,7 +213,8 @@ export default function ItemGrid({
                   </div>
                 </div>
               ) : item.href ? (
-                <Link href={item.href} className="block min-h-20 rounded-card bg-surface p-5 transition-colors hover:bg-line/70">
+                <Link href={item.href} className="relative block min-h-20 rounded-card bg-surface p-5 transition-colors hover:bg-line/70">
+                  {alerts.includes(item.href) && <AlertDot label="Needs you" />}
                   <p className="font-display text-lg font-semibold">{item.name}</p>
                   {item.blurb && <p className="mt-1 text-sm text-muted">{item.blurb}</p>}
                 </Link>

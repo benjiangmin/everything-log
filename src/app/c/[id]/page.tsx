@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import { getCategory } from "@/lib/home";
+import { getAlertHrefs } from "@/lib/alerts";
 import ItemGrid from "@/components/home/ItemGrid";
 
 // A category's own page (e.g. /c/<id> for "Logs"), listing what's inside it.
@@ -17,9 +18,9 @@ export default function CategoryPage({ params }: PageProps<"/c/[id]">) {
 }
 
 async function Items({ id }: { id: string }) {
-  const data = await getCategory(id);
+  const [data, alerts] = await Promise.all([getCategory(id), getAlertHrefs().catch(() => [])]);
   if (!data) notFound();
-  return <ItemGrid category={data.category} sections={data.sections} items={data.items} all={data.all} />;
+  return <ItemGrid category={data.category} sections={data.sections} items={data.items} all={data.all} alerts={alerts} />;
 }
 
 function Skeleton() {

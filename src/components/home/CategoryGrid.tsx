@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import AlertDot from "./AlertDot";
 import { useState, useTransition } from "react";
 import { addCategory, deleteCategory, renameCategory, reorderCategories } from "@/app/home-actions";
 import type { HomeCategory } from "@/lib/home";
@@ -10,7 +11,8 @@ import { AddCard, DeleteButton, Empty, InlineInput, PageHeader, useLocalCopy } f
 
 // The home page: one card per category. Click a card to open it.
 // "Edit" turns on dragging, renaming, deleting and adding.
-export default function CategoryGrid({ categories }: { categories: HomeCategory[] }) {
+// alerts: the categories with something inside that needs attention (they get a red "!").
+export default function CategoryGrid({ categories, alerts = [] }: { categories: HomeCategory[]; alerts?: string[] }) {
   const [editing, setEditing] = useState(false);
   const [order, setOrder] = useLocalCopy(categories);
   const [, startTransition] = useTransition();
@@ -66,8 +68,9 @@ export default function CategoryGrid({ categories }: { categories: HomeCategory[
               ) : (
                 <Link
                   href={`/c/${c.id}`}
-                  className="group flex min-h-20 items-center justify-between gap-3 rounded-card bg-surface p-5 transition-colors hover:bg-line/70"
+                  className="group relative flex min-h-20 items-center justify-between gap-3 rounded-card bg-surface p-5 transition-colors hover:bg-line/70"
                 >
+                  {alerts.includes(c.id) && <AlertDot label="Something in here needs you" />}
                   <div className="min-w-0">
                     <p className="truncate font-display text-lg font-semibold">{c.name}</p>
                     <p className="mt-0.5 text-sm text-muted">
