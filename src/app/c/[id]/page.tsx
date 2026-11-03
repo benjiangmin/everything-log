@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 import { notFound } from "next/navigation";
+import { connection } from "next/server";
 import { getCategory } from "@/lib/home";
 import { getAlertHrefs } from "@/lib/alerts";
 import ItemGrid from "@/components/home/ItemGrid";
@@ -18,6 +19,7 @@ export default function CategoryPage({ params }: PageProps<"/c/[id]">) {
 }
 
 async function Items({ id }: { id: string }) {
+  await connection(); // always fresh (the red "!" depends on the time and your latest entries)
   const [data, alerts] = await Promise.all([getCategory(id), getAlertHrefs().catch(() => [])]);
   if (!data) notFound();
   return <ItemGrid category={data.category} sections={data.sections} items={data.items} all={data.all} alerts={alerts} />;
