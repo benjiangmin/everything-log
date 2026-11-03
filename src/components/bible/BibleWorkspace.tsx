@@ -9,6 +9,7 @@ import RichText from "@/components/dreams/RichText";
 import { useToday } from "@/components/journal/useToday";
 import { VEIL_EVENT } from "@/components/journal/veil";
 import { planFor } from "@/lib/bible-plan";
+import Mascot from "@/components/ui/Mascot";
 
 const pad = (n: number) => String(n).padStart(2, "0");
 const AUTOSAVE_MS = 1200; // today's entry saves this long after you stop typing
@@ -402,8 +403,10 @@ function EntryList({
   return (
     <section
       aria-labelledby="entries-heading"
-      className="relative flex h-[75dvh] min-h-[24rem] min-w-0 flex-col overflow-hidden rounded-card border-[1.5px] border-ink lg:h-auto lg:min-h-0 lg:flex-1"
+      className="relative isolate flex h-[75dvh] min-h-[24rem] min-w-0 flex-col overflow-hidden rounded-card border-[1.5px] border-ink lg:h-auto lg:min-h-0 lg:flex-1"
     >
+      {/* Mascot: pinned to the box's bottom-right corner (see Mascot.tsx to tweak). */}
+      <Mascot name="arceus" corner="right" />
       <div className="relative z-10 flex shrink-0 items-baseline justify-between gap-3 bg-paper px-5 pb-3 pt-4 sm:px-6">
         <h2 id="entries-heading" className="font-display text-xl font-semibold">
           {monthName} <span className="num font-normal text-muted">{year}</span>

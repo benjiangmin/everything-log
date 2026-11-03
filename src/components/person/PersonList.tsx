@@ -5,6 +5,7 @@ import { deletePersonItem, setPersonPinned } from "@/app/person/actions";
 import type { PersonItem } from "@/lib/person";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
 import PersonForm from "./PersonForm";
+import Mascot from "@/components/ui/Mascot";
 
 // The black-bordered box: pinned things on top, then everything else (oldest first).
 // Fills the rest of the screen and scrolls inside itself. Phones: a fixed share of the screen.
@@ -16,11 +17,11 @@ export default function PersonList({ items, focusId }: { items: PersonItem[]; fo
   return (
     <section
       aria-label="The person"
-      className="relative mb-6 mt-5 flex h-[70dvh] min-h-[20rem] flex-col overflow-hidden rounded-card border-[1.5px] border-ink md:h-auto md:flex-1 md:basis-0"
+      className="relative isolate mb-6 mt-5 flex h-[70dvh] min-h-[20rem] flex-col overflow-hidden rounded-card border-[1.5px] border-ink md:h-auto md:flex-1 md:basis-0"
     >
-      {/* Mascots go here, pinned to the box's bottom corners (behind the cards, trimmed by the border), e.g.
-          <img src="/name.png" alt="" aria-hidden="true"
-               className="pointer-events-none absolute -bottom-4 -left-6 z-0 w-32 select-none opacity-60 sm:w-40" /> */}
+      {/* Mascots: pinned to the box's bottom corners (see Mascot.tsx to tweak). */}
+      <Mascot name="luvdisc" corner="left" />
+      <Mascot name="mesprit" corner="right" />
 
       {/* Fade at the top once the list has scrolled. */}
       <div

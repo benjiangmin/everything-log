@@ -6,6 +6,7 @@ import type { ShoppingItem } from "@/lib/shopping";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
 import ShoppingForm from "./ShoppingForm";
 import { dayLabel, showPrice, todayKey } from "./dates";
+import Mascot from "@/components/ui/Mascot";
 
 const VEIL_MS = 620; // same slide timing as the unsuspicious documents' writing box
 
@@ -69,7 +70,7 @@ export default function ShoppingBoard({ toBuy, bought, focusId }: { toBuy: Shopp
       <section
         aria-label="Bought"
         style={{ "--panel-w": open ? "calc(50% - 0.75rem)" : "4.5rem" } as CSSProperties}
-        className={`relative flex shrink-0 flex-col overflow-hidden rounded-card transition-[width] delay-150 duration-[450ms] ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none lg:w-[var(--panel-w)] ${
+        className={`relative isolate flex shrink-0 flex-col overflow-hidden rounded-card transition-[width] delay-150 duration-[450ms] ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none lg:w-[var(--panel-w)] ${
           open ? "h-[65dvh] min-h-[20rem] border-[1.5px] border-ink lg:h-auto" : "bg-surface"
         }`}
       >
@@ -92,6 +93,7 @@ export default function ShoppingBoard({ toBuy, bought, focusId }: { toBuy: Shopp
           </div>
         ) : (
           <div className="panel-in flex min-h-0 flex-1 flex-col">
+            <Mascot name="meowth-alolan" corner="right" />
             <BoxHeader title="Bought" count={bought.length}>
               <button
                 type="button"
@@ -167,10 +169,9 @@ function ListBox({
   children: ReactNode;
 }) {
   return (
-    <section aria-label={title} className={`relative flex min-w-0 flex-col overflow-hidden rounded-card border-[1.5px] border-ink ${className}`}>
-      {/* Mascots go here, pinned to the box (behind the items, trimmed by the border), e.g.
-          <img src="/name.png" alt="" aria-hidden="true"
-               className="pointer-events-none absolute -bottom-4 -left-6 z-0 w-32 select-none opacity-60 sm:w-40" /> */}
+    <section aria-label={title} className={`relative isolate flex min-w-0 flex-col overflow-hidden rounded-card border-[1.5px] border-ink ${className}`}>
+      {/* Mascot: the list's bottom-left corner (Alolan Meowth sits in the Bought box). See Mascot.tsx to tweak. */}
+      <Mascot name="meowth" corner="left" />
       <BoxHeader title={title} count={count} />
       <Scroller empty={count === 0 ? empty : null}>{children}</Scroller>
       {/* The veil (wide screens): covers this list while the Bought panel slides. */}

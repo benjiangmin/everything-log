@@ -6,6 +6,7 @@ import type { Subscription } from "@/lib/subscriptions";
 import { billedOn, dollars, perMonth } from "@/lib/subscription-dates";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
 import SubscriptionForm from "./SubscriptionForm";
+import Mascot from "@/components/ui/Mascot";
 
 // Every subscription in a bordered box that scrolls inside itself: running ones first (soonest
 // charge on top), then the cancelled ones, faded.
@@ -20,11 +21,11 @@ export default function SubscriptionList({ subs, veiled = false }: { subs: Subsc
   return (
     <section
       aria-label="Subscriptions"
-      className="relative flex h-[70dvh] min-h-[24rem] min-w-0 flex-col overflow-hidden rounded-card border-[1.5px] border-ink lg:h-auto lg:min-h-0 lg:flex-1"
+      className="relative isolate flex h-[70dvh] min-h-[24rem] min-w-0 flex-col overflow-hidden rounded-card border-[1.5px] border-ink lg:h-auto lg:min-h-0 lg:flex-1"
     >
-      {/* Mascots go here, pinned to the box (behind the list, trimmed by the border), e.g.
-          <img src="/name.png" alt="" aria-hidden="true"
-               className="pointer-events-none absolute -bottom-4 -right-6 w-32 select-none opacity-60 sm:w-40" /> */}
+      {/* Mascots: pinned to the box's bottom corners (see Mascot.tsx to tweak). */}
+      <Mascot name="klang" corner="left" />
+      <Mascot name="klinklang" corner="right" />
 
       {/* Totals: always visible at the top of the box. */}
       <div className="relative z-10 flex shrink-0 flex-wrap items-baseline justify-between gap-x-6 gap-y-1 bg-paper px-5 pb-3 pt-4 sm:px-6">

@@ -37,7 +37,7 @@ export default function GratitudeList({
     // Border thickness: border-[1.5px]. Phones: a fixed share of the screen, under the writing box.
     <section
       aria-labelledby="entries-heading"
-      className="relative flex h-[70dvh] min-h-[24rem] min-w-0 flex-col overflow-hidden rounded-card border-[1.5px] border-ink lg:h-auto lg:min-h-0 lg:flex-1"
+      className="relative isolate flex h-[70dvh] min-h-[24rem] min-w-0 flex-col overflow-hidden rounded-card border-[1.5px] border-ink lg:h-auto lg:min-h-0 lg:flex-1"
     >
       {/* Mascots, pinned to the box's corners (they stay put while the entries scroll past).
           Fixed sizes, so they look the same whatever the box height. Trimmed by the border.
@@ -48,14 +48,14 @@ export default function GratitudeList({
         src="/shaymin-sky.png"
         alt=""
         aria-hidden="true"
-        className="pointer-events-none absolute -right-10 top-16 w-36 select-none opacity-70 -rotate-6 sm:w-44"
+        className="pointer-events-none absolute -bottom-4 -right-8 -z-10 w-36 select-none opacity-70 -rotate-6 sm:w-44"
       />
       {/* eslint-disable-next-line @next/next/no-img-element -- decorative */}
       <img
         src="/shaymin-land.png"
         alt=""
         aria-hidden="true"
-        className="pointer-events-none absolute -bottom-6 -left-10 w-40 select-none opacity-70 rotate-3 -scale-x-100 sm:w-48"
+        className="pointer-events-none absolute -bottom-6 -left-10 -z-10 w-40 select-none opacity-70 rotate-3 -scale-x-100 sm:w-48"
       />
 
       {/* Header: always visible at the top of the box. */}

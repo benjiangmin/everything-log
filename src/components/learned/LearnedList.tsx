@@ -5,6 +5,7 @@ import { deleteLearned } from "@/app/learned/actions";
 import type { LearnedEntry } from "@/lib/learned";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
 import LearnedForm from "./LearnedForm";
+import Mascot from "@/components/ui/Mascot";
 
 // "2024-03-05" → { day: "5", weekday: "Tue", short: "Mar 5" }
 function dateParts(date: string) {
@@ -47,11 +48,11 @@ export default function LearnedList({
   return (
     <section
       aria-labelledby="learned-heading"
-      className="relative flex h-[70dvh] min-h-[24rem] min-w-0 flex-col overflow-hidden rounded-card border-[1.5px] border-ink lg:h-auto lg:min-h-0 lg:flex-1"
+      className="relative isolate flex h-[70dvh] min-h-[24rem] min-w-0 flex-col overflow-hidden rounded-card border-[1.5px] border-ink lg:h-auto lg:min-h-0 lg:flex-1"
     >
-      {/* Mascots go here, pinned to the box (behind the entries, trimmed by the border), e.g.
-          <img src="/name.png" alt="" aria-hidden="true"
-               className="pointer-events-none absolute -bottom-4 -right-6 w-32 select-none opacity-60 sm:w-40" /> */}
+      {/* Mascots: pinned to the box's bottom corners (see Mascot.tsx to tweak). */}
+      <Mascot name="aipom" corner="left" />
+      <Mascot name="combee" corner="right" />
       <div className="relative z-10 flex shrink-0 items-baseline justify-between gap-3 bg-paper px-5 pb-3 pt-4 sm:px-6">
         <h2 id="learned-heading" className="font-display text-xl font-semibold">
           {monthName} <span className="num font-normal text-muted">{year}</span>

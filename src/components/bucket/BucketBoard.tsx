@@ -8,6 +8,7 @@ import type { BucketItem } from "@/lib/bucket";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
 import { useIsStuck } from "@/components/ui/useIsStuck";
 import BucketForm from "./BucketForm";
+import Mascot from "@/components/ui/Mascot";
 
 const VEIL_MS = 620;
 // The box's smallest height on wide screens. Raise/lower to show more/fewer items before scrolling.
@@ -61,10 +62,11 @@ export default function BucketBoard({ todo, done, focusId }: { todo: BucketItem[
   const width = (side: "todo" | "done"): string => (mode === "both" ? "50%" : mode === side ? "calc(100% - 4.5rem)" : "4.5rem");
 
   return (
-    <section aria-label="Bucket list" className={`relative mt-5 flex flex-col lg:flex-1 lg:basis-0 lg:flex-row ${MIN_8}`}>
-      {/* The mascot goes here, pinned to the box (behind the items), e.g.
-          <img src="/name.png" alt="" aria-hidden="true"
-               className="pointer-events-none absolute -bottom-4 -right-6 z-0 w-36 select-none opacity-60 sm:w-44" /> */}
+    <section aria-label="Bucket list" className={`relative isolate mt-5 flex flex-col overflow-clip rounded-card lg:flex-1 lg:basis-0 lg:flex-row ${MIN_8}`}>
+      {/* Mascots: pinned to the board's bottom corners, behind the items; they stay put while
+          the lists scroll (see Mascot.tsx to tweak). */}
+      <Mascot name="dragonite" corner="left" />
+      <Mascot name="lapras" corner="right" />
       <Column
         title="Not yet"
         items={todo}

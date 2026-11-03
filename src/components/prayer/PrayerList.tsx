@@ -5,6 +5,7 @@ import { deletePrayer } from "@/app/prayer/actions";
 import type { Prayer } from "@/lib/prayers";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
 import PrayerForm from "./PrayerForm";
+import Mascot from "@/components/ui/Mascot";
 
 function longDate(date: string) {
   const [y, m, d] = date.split("-").map(Number);
@@ -31,11 +32,10 @@ export default function PrayerList({ prayers, focusId }: { prayers: Prayer[]; fo
   return (
     <section
       aria-label="Prayers"
-      className="relative flex h-[70dvh] min-h-[24rem] min-w-0 flex-col overflow-hidden rounded-card border-[1.5px] border-ink lg:h-auto lg:min-h-0 lg:flex-1"
+      className="relative isolate flex h-[70dvh] min-h-[24rem] min-w-0 flex-col overflow-hidden rounded-card border-[1.5px] border-ink lg:h-auto lg:min-h-0 lg:flex-1"
     >
-      {/* Mascots go here, pinned to the box (behind the prayers, trimmed by the border), e.g.
-          <img src="/name.png" alt="" aria-hidden="true"
-               className="pointer-events-none absolute -bottom-4 -right-6 w-32 select-none opacity-60 sm:w-40" /> */}
+      {/* Mascot: pinned to the box's bottom-right corner (see Mascot.tsx to tweak). */}
+      <Mascot name="darmanitan-zen" corner="right" />
       <div
         aria-hidden="true"
         className={`pointer-events-none absolute inset-x-0 top-0 z-10 h-5 bg-gradient-to-b from-paper to-transparent transition-opacity duration-200 ${

@@ -7,6 +7,7 @@ import { useConfirm } from "@/components/ui/ConfirmDialog";
 import { useIsStuck } from "@/components/ui/useIsStuck";
 import GiftForm from "./GiftForm";
 import { money } from "./money";
+import Mascot from "@/components/ui/Mascot";
 
 const NEXT: Record<GiftStatus, GiftStatus> = { todo: "bought", bought: "arrived", arrived: "todo" };
 const LABEL: Record<GiftStatus, string> = { todo: "To buy", bought: "Bought", arrived: "Arrived" };
@@ -47,10 +48,9 @@ export default function GiftList({ year, people, names, focusId }: { year: numbe
         />
       </div>
 
-      <div className="relative rounded-b-card border-x-[1.5px] border-b-[1.5px] border-ink px-3 pb-3 sm:px-4 sm:pb-4">
-        {/* Mascots go here, pinned to the box (behind the cards, trimmed by the border), e.g.
-            <img src="/name.png" alt="" aria-hidden="true"
-                 className="pointer-events-none absolute -bottom-4 -right-6 z-0 w-36 select-none opacity-60 sm:w-44" /> */}
+      <div className="relative isolate overflow-clip rounded-b-card border-x-[1.5px] border-b-[1.5px] border-ink px-3 pb-3 sm:px-4 sm:pb-4">
+        {/* Mascot: Delibird in the bottom-left corner, turned to face in (see Mascot.tsx to tweak). */}
+        <Mascot name="delibird" corner="left" className="-scale-x-100" />
         {people.length === 0 ? (
           <p className="rounded-card border border-dashed border-line px-5 py-8 text-center text-muted">No gifts for {year} yet. Add one above.</p>
         ) : (

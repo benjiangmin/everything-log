@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, useTransition, type ReactNode } from "reac
 import { copyLastYear, deleteResolution, saveYearNote, updateResolution } from "@/app/resolutions/actions";
 import type { Resolution } from "@/lib/resolutions";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
+import Mascot from "@/components/ui/Mascot";
 
 const field =
   "w-full rounded-control border border-line bg-paper px-3 py-2.5 text-ink placeholder:text-muted/70 focus:border-ink";
@@ -27,11 +28,10 @@ export default function ResolutionList({
   return (
     <section
       aria-label={`${year} resolutions`}
-      className="relative mt-5 flex min-h-[24rem] flex-col rounded-card border-[1.5px] border-ink px-3 pb-4 pt-4 sm:px-5"
+      className="relative isolate mt-5 flex min-h-[24rem] flex-col overflow-clip rounded-card border-[1.5px] border-ink px-3 pb-4 pt-4 sm:px-5"
     >
-      {/* Mascots go here, pinned to the box (behind the list, trimmed by the border), e.g.
-          <img src="/name.png" alt="" aria-hidden="true"
-               className="pointer-events-none absolute -bottom-4 -right-6 w-32 select-none opacity-60 sm:w-40" /> */}
+      {/* Mascot: Ho-Oh, in the middle of the box's bottom edge (see Mascot.tsx to tweak). */}
+      <Mascot name="ho-oh" corner="center" className="w-44 sm:w-56" />
       <YearNote key={note ?? ""} year={year} note={note} />
 
       {items.length === 0 ? (

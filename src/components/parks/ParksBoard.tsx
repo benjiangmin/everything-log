@@ -8,6 +8,7 @@ import type { Park } from "@/lib/parks";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
 import { useIsStuck } from "@/components/ui/useIsStuck";
 import ParkForm from "./ParkForm";
+import Mascot from "@/components/ui/Mascot";
 
 const VEIL_MS = 620;
 // The box's smallest height on wide screens: the column title (~3.5rem) + 8 cards (88px each with
@@ -69,11 +70,12 @@ export default function ParksBoard({ visited, notYet, focusId }: { visited: Park
       // Height: fills the rest of the screen, but never less than ~8 cards (MIN_8). On phones each
       // column is its own fixed height instead. The black border is drawn by the pieces inside
       // (see EDGES), so the pinned titles keep the top edge and every line meets exactly.
-      className={`relative mt-5 flex flex-col lg:flex-1 lg:basis-0 lg:flex-row ${MIN_8}`}
+      className={`relative isolate mt-5 flex flex-col overflow-clip rounded-card lg:flex-1 lg:basis-0 lg:flex-row ${MIN_8}`}
     >
-      {/* The mascot goes here, pinned to the box (behind the parks, trimmed by the border), e.g.
-          <img src="/name.png" alt="" aria-hidden="true"
-               className="pointer-events-none absolute -bottom-4 -right-6 z-0 w-36 select-none opacity-60 sm:w-44" /> */}
+      {/* Mascots: pinned to the board's bottom corners, behind the parks; they stay put while
+          the lists scroll (see Mascot.tsx to tweak). */}
+      <Mascot name="tapu-bulu" corner="left" />
+      <Mascot name="torterra" corner="right" />
       <Column
         title="Visited"
         parks={visited}

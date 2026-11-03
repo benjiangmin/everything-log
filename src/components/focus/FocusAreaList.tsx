@@ -8,6 +8,7 @@ import DateWheel from "@/components/ui/DateWheel";
 import { useToday } from "@/components/journal/useToday";
 import { localNow } from "@/lib/month";
 import AddFocusArea from "./AddFocusArea";
+import Mascot from "@/components/ui/Mascot";
 
 const field =
   "w-full rounded-control border border-line bg-paper px-3 py-2.5 text-ink placeholder:text-muted/70 focus:border-ink";
@@ -88,8 +89,11 @@ export default function FocusAreaList({ recordId, areas, focusId }: { recordId: 
       {/* ---------- Right: the chosen focus area's logs ---------- */}
       <section
         aria-label={area ? `${area.name} logs` : "Logs"}
-        className="relative flex h-[75dvh] min-h-[24rem] min-w-0 flex-col overflow-hidden rounded-card border-[1.5px] border-ink lg:h-auto lg:min-h-0 lg:flex-1"
+        className="relative isolate flex h-[75dvh] min-h-[24rem] min-w-0 flex-col overflow-hidden rounded-card border-[1.5px] border-ink lg:h-auto lg:min-h-0 lg:flex-1"
       >
+        {/* Mascots: pinned to the box's bottom corners (see Mascot.tsx to tweak). */}
+        <Mascot name="sawk" corner="left" />
+        <Mascot name="throh" corner="right" />
         {area ? (
           <AreaPanel key={area.id} area={area} focusId={focusId} />
         ) : (
