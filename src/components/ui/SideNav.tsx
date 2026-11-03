@@ -6,6 +6,7 @@ import { lock, lockOtherDevices } from "@/app/login/actions";
 import { inboxCount } from "@/app/budget/inbox-actions";
 import InboxPanel from "@/components/budget/InboxPanel";
 import SubscriptionsPanel from "@/components/subscriptions/SubscriptionsPanel";
+import AppSearchPanel from "@/components/home/AppSearchPanel";
 import { useEffect, useState, useSyncExternalStore, useTransition, type ReactNode } from "react";
 
 // The navigation bar on the left of every page (not the login page).
@@ -66,6 +67,8 @@ export default function SideNav() {
         <path d="M4 11l8-7 8 7v8a1 1 0 0 1-1 1h-4v-6h-6v6H5a1 1 0 0 1-1-1v-8z" />
       </NavButton>
       {/* Budget only: purchases read from your alert emails, waiting for review. */}
+      {/* Home only: search every app. */}
+      {pathname === "/" && <SearchButton showLabel={labels} />}
       {pathname.startsWith("/budget") && (
         <>
           <InboxButton showLabel={labels} />
@@ -160,6 +163,30 @@ function InboxButton({ showLabel }: { showLabel: boolean }) {
           onChanged={() => setCount((c) => Math.max(0, c - 1))}
         />
       )}
+    </>
+  );
+}
+
+// Home only: search every app (also Ctrl/⌘ + K).
+function SearchButton({ showLabel }: { showLabel: boolean }) {
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setOpen(true);
+      }
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, []);
+  return (
+    <>
+      <NavButton label="Search apps" showLabel={showLabel} onClick={() => setOpen(true)}>
+        <circle cx="11" cy="11" r="7" />
+        <path d="M20 20l-3.5-3.5" />
+      </NavButton>
+      {open && <AppSearchPanel onClose={() => setOpen(false)} />}
     </>
   );
 }
