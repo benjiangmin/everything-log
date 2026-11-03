@@ -148,8 +148,9 @@ export default function CalisthenicsView({
           {error && <p className="mb-3 rounded-control bg-danger/10 px-4 py-2.5 text-sm text-danger">{error}</p>}
           {canEdit && <PlanName plan={plan} run={run} />}
 
+          {/* Every day (folds), then the picked day's blocks. The day tabs already say which day. */}
           <Section title="Every day" blocks={daily} day="daily" editing={canEdit} quick={plan.current} run={run} empty="Nothing every day." foldable />
-          <Section title={label} blocks={onDay} day={day} editing={canEdit} quick={plan.current} run={run} empty="Rest day." today={day === today} />
+          <Section blocks={onDay} day={day} editing={canEdit} quick={plan.current} run={run} empty="Rest day." />
         </section>
         </div>
       )}
@@ -320,9 +321,10 @@ function PlanName({ plan, run }: { plan: Plan; run: Run }) {
 
 // ---------- A day's blocks ----------
 
-// "Every day" and the day's name: the same espresso bar (like the top bar), same padding, so they
-// line up and stand apart from the oat workout cards.
-const HEADING = "flex min-w-0 items-center gap-2 rounded-control bg-accent px-4 py-2.5 text-accent-ink";
+// The Every day bar: a slightly darker oat than the workout cards.
+// Same insides as a workout card's header (the card's px-3 / sm:px-4 + the header's px-1, and its
+// py-3), so "Every day" lines up exactly with "Pull".
+const HEADING = "flex min-w-0 items-center gap-2 rounded-control bg-line/70 px-4 py-3 text-ink sm:px-5";
 
 function Section({
   title,
@@ -332,17 +334,15 @@ function Section({
   quick,
   run,
   empty,
-  today,
   foldable,
 }: {
-  title: string;
+  title?: string; // no title: just the blocks
   blocks: Block[];
   day: Day;
   editing: boolean;
   quick: boolean; // the current plan: sets / weight can be changed with a click
   run: Run;
   empty: string;
-  today?: boolean;
   foldable?: boolean; // Every day: folded to its heading until you open it
 }) {
   const [open, setOpen] = useState(!foldable);
@@ -351,7 +351,6 @@ function Section({
   const heading = (
     <>
       {title}
-      {today && <span className="rounded-full bg-accent-ink/15 px-2 py-0.5 text-xs font-semibold text-accent-ink">Today</span>}
       {foldable && !shown && blocks.length > 0 && (
         <span className="truncate text-sm font-normal opacity-65">{blocks.map((b) => b.title).join(" · ")}</span>
       )}
@@ -359,9 +358,10 @@ function Section({
   );
 
   return (
-    <div className="mb-5 last:mb-0">
+    <div className={`${foldable && !shown ? "mb-1" : "mb-4"} last:mb-0`}>
       {/* Sticks just under the box's top edge while this section scrolls past (top = the bar's
-          height + the 1rem top edge). The next section's heading takes over after it. */}
+          height + the 1rem top edge). */}
+      {title && (
       <h2
         className="sticky z-10 -mx-3 bg-paper px-3 pb-2.5 pt-1 font-display text-lg font-semibold sm:-mx-5 sm:px-5"
         style={{ top: "calc(var(--sticky-top, 0px) + 1rem)" }}
@@ -384,6 +384,7 @@ function Section({
           <span className={HEADING}>{heading}</span>
         )}
       </h2>
+      )}
       {shown && (
         <>
       {blocks.length === 0 && !editing && <p className="rounded-card border border-dashed border-line px-4 py-4 text-muted">{empty}</p>}
@@ -403,6 +404,8 @@ function Section({
           + Add a block{day === "daily" ? " (every day)" : ""}
         </button>
       )}
+      {/* Open Every day: a thick line between the daily blocks and the day's (like Gratitude's). */}
+      {foldable && shown && <hr className="mt-5 border-0 border-t-[3px] border-ink/30" />}
     </div>
   );
 }
