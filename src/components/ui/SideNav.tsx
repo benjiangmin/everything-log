@@ -53,6 +53,20 @@ export default function SideNav() {
   const open = useSyncExternalStore(subscribe, readOpen, () => false); // wide screens
   const [drawer, setDrawer] = useState(false); // phones
 
+  // Ctrl/Cmd+F: jump to this app's search bar instead of the browser's find (if the page has one).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== "f" || e.shiftKey || e.altKey) return;
+      const box = Array.from(document.querySelectorAll<HTMLInputElement>("input[data-find]")).find((el) => el.offsetParent !== null);
+      if (!box) return;
+      e.preventDefault();
+      box.focus();
+      box.select();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, []);
+
   // Phones: close the drawer after moving somewhere, or with Escape.
   const [seenPath, setSeenPath] = useState(pathname);
   if (pathname !== seenPath) {
@@ -236,7 +250,7 @@ function SearchButton({ showLabel }: { showLabel: boolean }) {
   const [open, setOpen] = useState(false);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+      if ((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && ["k", "f"].includes(e.key.toLowerCase())) {
         e.preventDefault();
         setOpen(true);
       }

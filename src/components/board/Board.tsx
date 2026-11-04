@@ -61,12 +61,11 @@ export type BoardConfig<T extends BoardItem> = {
   mascots?: Partial<Record<Status, { src: string; className: string }>>;
 };
 
-// The shortest the board gets on wide screens, so each area shows ~6 cards before it scrolls inside:
-// an area = title (3.25rem) + 6 cards (40px each + 8px gaps ≈ 18.25rem) ≈ 21.5rem; the bottom row ≈ 6.5rem.
-//   split   (Games, Anime): two areas stacked on the right → 2 × 21.5 + 6.5 = 49.5rem
-//   columns (Goals):        one area per column            →     21.5 + 6.5 = 28rem
-// Raise/lower these to show more/fewer cards.
-const MIN_HEIGHT = { split: "md:min-h-[49.5rem]", columns: "md:min-h-[28rem]" };
+// The shortest the board gets on wide screens: an area's title (3.25rem) + ~5 cards, + the bottom
+// row (≈ 6.5rem) ≈ 28rem. But never taller than the screen under the pinned title + search
+// (--sticky-top), so once you scroll down the whole box, top border included, stays in view.
+// (2.75rem = the gap above the box + the page's bottom padding.)
+const MIN_HEIGHT = "md:min-h-[min(28rem,calc(100dvh-var(--sticky-top,0px)-2.75rem))] md:max-h-[calc(100dvh-var(--sticky-top,0px)-2.75rem)]";
 
 function todayKey() {
   const d = localNow();
@@ -95,6 +94,25 @@ export default function Board<T extends BoardItem>({
 }) {
   const [board, setBoard] = useLocalCopy(items);
   const [dragging, setDragging] = useState<T | null>(null);
+  // The right side (split layout): only one of its two areas is open at a time.
+  const [rightOpen, setRightOpen] = useState<Status>(() => (items.stopped.some((x) => x.id === focusId) ? "stopped" : "playing"));
+  const [veiled, setVeiled] = useState(false);
+  // Click either title: opens that one, or (if it's already open) switches back to the other.
+  // Same feel as the other apps' sliding boxes: a veil fades in (150ms), the areas swap under it,
+  // then it fades out (300ms).
+  function toggleRight(s: Status) {
+    if (veiled) return; // mid-swap
+    const next: Status = rightOpen === s ? (s === "playing" ? "stopped" : "playing") : s;
+    setVeiled(true);
+    setTimeout(() => setRightOpen(next), 150);
+    setTimeout(() => setVeiled(false), 190);
+  }
+  const [seenFocus, setSeenFocus] = useState(focusId);
+  if (focusId !== seenFocus) {
+    setSeenFocus(focusId);
+    if (board.stopped.some((x) => x.id === focusId)) setRightOpen("stopped");
+    else if (board.playing.some((x) => x.id === focusId)) setRightOpen("playing");
+  }
   const [, startTransition] = useTransition();
 
   // Mouse: drag after moving 6px (a click still opens the card). Touch: press and hold briefly
@@ -134,14 +152,11 @@ export default function Board<T extends BoardItem>({
   return (
     <DndContext id={config.id} sensors={sensors} onDragStart={onDragStart} onDragEnd={onDragEnd} onDragCancel={() => setDragging(null)}>
       {/* The black box. Wide screens: fills the rest of the screen and never grows with the number of
-          items. Short screens: the box never gets shorter than "every area fits ~6 cards" (MIN_HEIGHT
-          below), so the page scrolls instead. */}
+          items. Short screens: see MIN_HEIGHT. */}
       <section
         aria-label={ALL.filter((s) => s !== bottom).map((s) => config.labels[s]).join(", ")}
         data-board
-        className={`mt-5 flex flex-col overflow-hidden rounded-card border-[1.5px] border-ink md:flex-1 md:basis-0 ${
-          config.columns ? MIN_HEIGHT.columns : MIN_HEIGHT.split
-        }`}
+        className={`mt-5 flex flex-col overflow-hidden rounded-card border-[1.5px] border-ink md:flex-1 md:basis-0 ${MIN_HEIGHT}`}
       >
         {/* Completed takes the left 2/3 (both rows); the other two stack on the right.
             Width split: md:grid-cols-[2fr_1fr]. */}
@@ -155,16 +170,34 @@ export default function Board<T extends BoardItem>({
             ))}
           </div>
         ) : (
-          <div className={`grid flex-1 grid-cols-[minmax(0,1fr)] divide-y divide-line md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] md:grid-rows-2 md:divide-y-0 min-h-0`}>
-            <Area status="completed" label={config.labels.completed} count={board.completed.length} mascot={config.mascots?.completed} className="md:row-span-2 md:border-r md:border-line" wide={!config.cover}>
+          <div className={`grid flex-1 grid-cols-[minmax(0,1fr)] divide-y divide-line md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] md:divide-y-0 min-h-0`}>
+            <Area status="completed" label={config.labels.completed} count={board.completed.length} mascot={config.mascots?.completed} className="md:border-r md:border-line" wide={!config.cover}>
               {board.completed.map((it) => card(it))}
             </Area>
-            <Area status="playing" label={config.labels.playing} count={board.playing.length} mascot={config.mascots?.playing}>
-              {board.playing.map((it) => card(it))}
-            </Area>
-            <Area status="stopped" label={config.labels.stopped} count={board.stopped.length} mascot={config.mascots?.stopped} className="md:border-t md:border-line">
-              {board.stopped.map((it) => card(it))}
-            </Area>
+            {/* Right side: one area open at a time. Watching open → Dropped's title sits at the bottom.
+                Dropped open → its title moves up under Watching's, and fills the rest. */}
+            <div className="relative flex min-h-0 flex-col">
+              {(["playing", "stopped"] as const).map((s) => (
+                <Area
+                  key={s}
+                  status={s}
+                  label={config.labels[s]}
+                  count={board[s].length}
+                  mascot={config.mascots?.[s]}
+                  className={s === "stopped" ? "border-t border-line" : ""}
+                  collapsed={rightOpen !== s}
+                  onToggle={() => toggleRight(s)}
+                >
+                  {board[s].map((it) => card(it))}
+                </Area>
+              ))}
+              <div
+                aria-hidden="true"
+                className={`pointer-events-none absolute inset-0 z-20 bg-paper transition-opacity ease-out motion-reduce:hidden ${
+                  veiled ? "opacity-100 duration-150" : "opacity-0 duration-300"
+                }`}
+              />
+            </div>
           </div>
         )}
         <BottomRow status={bottom} label={config.labels[bottom]} count={board[bottom].length} empty={config.emptyBottomRow}>
@@ -191,6 +224,8 @@ function Area({
   mascot,
   className = "",
   wide,
+  collapsed,
+  onToggle,
   children,
 }: {
   status: Status;
@@ -199,6 +234,8 @@ function Area({
   mascot?: { src: string; className: string };
   className?: string;
   wide?: boolean; // Completed: cards in two columns on wide screens (boards without covers)
+  collapsed?: boolean; // the right side's accordion: just the title, click it to open
+  onToggle?: () => void;
   children: ReactNode[];
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: status });
@@ -206,14 +243,48 @@ function Area({
 
   return (
     // overflow-hidden: trims the mascot at the area's edges.
-    <div ref={setNodeRef} className={`relative flex min-h-0 flex-col overflow-hidden transition-colors ${isOver ? "bg-surface/60" : ""} ${className}`}>
-      {mascot && (
+    <div
+      ref={setNodeRef}
+      className={`relative flex flex-col overflow-hidden transition-colors ${collapsed ? "shrink-0" : "min-h-0 flex-1"} ${
+        isOver ? "bg-surface/60" : ""
+      } ${className}`}
+    >
+      {mascot && !collapsed && (
         // eslint-disable-next-line @next/next/no-img-element -- decorative
         <img src={mascot.src} alt="" aria-hidden="true" className={`pointer-events-none absolute z-0 select-none opacity-60 ${mascot.className}`} />
       )}
-      <div className="relative z-10 flex shrink-0 items-baseline justify-between gap-3 px-4 pb-2 pt-4">
-        <h2 className="font-display text-lg font-semibold">{label}</h2>
-        <p className="text-sm text-muted">{count}</p>
+      <div className={`relative z-10 flex shrink-0 items-baseline justify-between gap-3 px-4 pt-4 ${collapsed ? "pb-4" : "pb-2"}`}>
+        {onToggle ? (
+          // Accordion title: the whole row opens this area (and closes the other).
+          <h2 className={`-mx-4 -mt-4 flex flex-1 ${collapsed ? "-mb-4" : "-mb-2"}`}>
+          <button
+            type="button"
+            onClick={onToggle}
+            aria-expanded={!collapsed}
+            className={`group flex flex-1 items-baseline justify-between gap-3 px-4 pt-4 text-left ${collapsed ? "pb-4" : "pb-2"}`}
+          >
+            <span className="flex items-baseline gap-2">
+              <span className="font-display text-lg font-semibold">{label}</span>
+              <svg
+                width="11"
+                height="11"
+                viewBox="0 0 24 24"
+                fill="none"
+                aria-hidden="true"
+                className={`self-center text-muted transition-transform duration-200 group-hover:text-ink ${collapsed ? "-rotate-90" : ""}`}
+              >
+                <path d="M6 9l6 6 6-6" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </span>
+            <span className="text-sm text-muted">{count}</span>
+          </button>
+          </h2>
+        ) : (
+          <>
+            <h2 className="font-display text-lg font-semibold">{label}</h2>
+            <p className="text-sm text-muted">{count}</p>
+          </>
+        )}
         {/* Fade under the title once the area has scrolled. Height: h-5. */}
         <div
           aria-hidden="true"
@@ -223,14 +294,16 @@ function Area({
         />
       </div>
       {/* Phones: each area is capped and scrolls. Wider screens: fills its part of the box. */}
-      <div
-        onScroll={(e) => setScrolled(e.currentTarget.scrollTop > 0)}
-        className={`relative z-[1] max-h-[55dvh] min-h-0 flex-1 overflow-y-auto px-3 pb-3 md:max-h-none ${
-          wide ? "grid content-start items-start gap-2 lg:grid-cols-2" : "space-y-2"
-        }`}
-      >
-        {children.length === 0 ? <p className="px-1 py-6 text-center text-sm text-muted lg:col-span-2">Drag one here</p> : children}
-      </div>
+      {!collapsed && (
+        <div
+          onScroll={(e) => setScrolled(e.currentTarget.scrollTop > 0)}
+          className={`relative z-[1] max-h-[55dvh] min-h-0 flex-1 overflow-y-auto px-3 pb-3 md:max-h-none ${
+            wide ? "grid content-start items-start gap-2 lg:grid-cols-2" : "space-y-2"
+          }`}
+        >
+          {children.length === 0 ? <p className="px-1 py-6 text-center text-sm text-muted lg:col-span-2">Drag one here</p> : children}
+        </div>
+      )}
     </div>
   );
 }
@@ -506,7 +579,6 @@ function CardFace<T extends BoardItem>({
               {body && (
                 <div className="mt-1.5 break-words border-t border-line pt-1.5 text-sm leading-relaxed text-ink/80">{body}</div>
               )}
-              {!detail && !body && <p className="text-xs text-muted">No notes yet.</p>}
             </div>
           )}
         </div>

@@ -96,6 +96,7 @@ export default function SearchBar() {
         <path d="M20 20l-4-4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
       </svg>
       <input
+        data-find // Ctrl/Cmd+F jumps here (see SideNav)
         type="text"
         value={query}
         onChange={(e) => {
