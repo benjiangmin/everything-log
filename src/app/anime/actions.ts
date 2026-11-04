@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/supabase";
 import { safeCover, safeSourceId } from "@/lib/catalog";
+import { duplicateMessage } from "@/lib/duplicates";
 
 // NOTE: the whole site sits behind the password lock (src/proxy.ts).
 
@@ -30,6 +31,8 @@ async function nextPosition() {
 export async function addAnime(_prev: FormState, formData: FormData): Promise<FormState> {
   const parsed = read(formData);
   if ("error" in parsed) return { ok: false, message: parsed.error ?? null };
+  const dup = await duplicateMessage("anime", parsed.values);
+  if (dup) return { ok: false, message: dup };
   const res = await db().from("anime").insert({ ...parsed.values, position: await nextPosition() });
   if (res.error) return { ok: false, message: `Couldn't save: ${res.error.message}` };
   revalidatePath("/anime");
@@ -41,6 +44,8 @@ export async function updateAnime(_prev: FormState, formData: FormData): Promise
   if (!isUuid(id)) return { ok: false, message: "Couldn't find that one." };
   const parsed = read(formData);
   if ("error" in parsed) return { ok: false, message: parsed.error ?? null };
+  const dup = await duplicateMessage("anime", parsed.values, id);
+  if (dup) return { ok: false, message: dup };
   const res = await db().from("anime").update(parsed.values).eq("id", id);
   if (res.error) return { ok: false, message: `Couldn't save: ${res.error.message}` };
   revalidatePath("/anime");

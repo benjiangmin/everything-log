@@ -156,7 +156,7 @@ export default function Board<T extends BoardItem>({
           </div>
         ) : (
           <div className={`grid flex-1 grid-cols-[minmax(0,1fr)] divide-y divide-line md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] md:grid-rows-2 md:divide-y-0 min-h-0`}>
-            <Area status="completed" label={config.labels.completed} count={board.completed.length} mascot={config.mascots?.completed} className="md:row-span-2 md:border-r md:border-line" wide>
+            <Area status="completed" label={config.labels.completed} count={board.completed.length} mascot={config.mascots?.completed} className="md:row-span-2 md:border-r md:border-line" wide={!config.cover}>
               {board.completed.map((it) => card(it))}
             </Area>
             <Area status="playing" label={config.labels.playing} count={board.playing.length} mascot={config.mascots?.playing}>
@@ -198,7 +198,7 @@ function Area({
   count: number;
   mascot?: { src: string; className: string };
   className?: string;
-  wide?: boolean; // Completed: cards in two columns on wide screens
+  wide?: boolean; // Completed: cards in two columns on wide screens (boards without covers)
   children: ReactNode[];
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: status });
@@ -436,6 +436,8 @@ function CardFace<T extends BoardItem>({
   const cover = config.cover ? (config.cover(item) ?? "") : null; // null = this board has no covers
   // What shows under the title when open: the board's own body (Goals: why + proof), or the note.
   const body: ReactNode = config.body ? config.body(item) : item.note;
+  // Boards with covers (Anime / Games): bigger cards, one per line.
+  const row = cover !== null ? "min-h-12" : "min-h-7";
 
   const actions = (
     <div className="flex justify-center gap-0.5">
@@ -450,9 +452,9 @@ function CardFace<T extends BoardItem>({
 
   return (
     // bg-surface/80 = slightly see-through, so the mascots show faintly behind. Use bg-surface for solid.
-    // Card height: py-1.5 (top/bottom padding) + one line of text.
+    // Card height: py-1.5 (top/bottom padding) + one line of text (covers: py-2 + the cover).
     <div
-      className={`rounded-card bg-surface/80 px-3 py-1.5 ${focused ? "flash" : ""} ${
+      className={`rounded-card bg-surface/80 px-3 ${cover !== null ? "py-2" : "py-1.5"} ${focused ? "flash" : ""} ${
         lifted ? "rotate-2 cursor-grabbing bg-surface shadow-xl shadow-ink/25 ring-1 ring-line" : ""
       }`}
     >
@@ -466,7 +468,7 @@ function CardFace<T extends BoardItem>({
               open ? "border-line" : "border-transparent"
             }`}
           >
-            <div className="flex min-h-7 items-center">
+            <div className={`flex ${row} items-center`}>
               {date ? <span className="num text-xs text-muted">{date}</span> : <span className="text-xs text-muted/60">—</span>}
             </div>
             {open && <div className="mt-1">{actions}</div>}
@@ -474,10 +476,16 @@ function CardFace<T extends BoardItem>({
         )}
 
         <div className="min-w-0 flex-1">
-          <div className={`flex min-h-7 gap-2 ${open ? "items-start" : "items-center"}`}>
+          <div className={`flex ${row} ${cover !== null ? "gap-3" : "gap-2"} ${open ? "items-start" : "items-center"}`}>
             {/* The cover: a small tile on a closed card, bigger when open. */}
             {cover !== null && <Cover src={cover} title={item.title} big={open} />}
-            <p className={`min-w-0 flex-1 text-[15px] font-medium text-ink ${open ? "break-words pt-1" : "truncate"}`}>{item.title}</p>
+            <p
+              className={`min-w-0 flex-1 font-medium text-ink ${cover !== null ? "text-base" : "text-[15px]"} ${
+                open ? `break-words ${cover !== null ? "pt-1.5" : "pt-1"}` : "truncate"
+              }`}
+            >
+              {item.title}
+            </p>
             {tag && (
               <span className="shrink-0 rounded-full bg-paper px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-muted">
                 {tag}
@@ -512,12 +520,13 @@ function CardFace<T extends BoardItem>({
 
 // A cover picture, or (for your own titles) a plain tile with the first letter.
 function Cover({ src, title, big }: { src: string; title: string; big: boolean }) {
-  const size = big ? "h-[4.5rem] w-[3.25rem] rounded-[6px]" : "h-7 w-5 rounded-[4px]";
+  // Closed: h-12 (48px). Open: h-24 (96px). Covers are about 3:4.
+  const size = big ? "h-24 w-[4.5rem] rounded-[7px]" : "h-12 w-9 rounded-[5px]";
   return src ? (
     // eslint-disable-next-line @next/next/no-img-element -- remote cover (AniList / IGDB)
     <img src={src} alt="" draggable={false} className={`${size} shrink-0 bg-line object-cover`} />
   ) : (
-    <span aria-hidden="true" className={`${size} grid shrink-0 place-items-center bg-line/80 font-display text-[11px] font-semibold text-muted`}>
+    <span aria-hidden="true" className={`${size} grid shrink-0 place-items-center bg-line/80 font-display ${big ? "text-2xl" : "text-base"} font-semibold text-muted`}>
       {title.trim()[0]?.toUpperCase()}
     </span>
   );

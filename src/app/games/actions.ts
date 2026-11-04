@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/supabase";
 import { safeCover, safeSourceId } from "@/lib/catalog";
+import { duplicateMessage } from "@/lib/duplicates";
 
 // NOTE: the whole site sits behind the password lock (src/proxy.ts).
 
@@ -32,6 +33,8 @@ function read(formData: FormData) {
 export async function addGame(_prev: FormState, formData: FormData): Promise<FormState> {
   const parsed = read(formData);
   if ("error" in parsed) return { ok: false, message: parsed.error ?? null };
+  const dup = await duplicateMessage("games", parsed.values);
+  if (dup) return { ok: false, message: dup };
   const top = await db().from("games").select("position").order("position", { ascending: false }).limit(1).maybeSingle();
   const res = await db().from("games").insert({ ...parsed.values, position: (top.data?.position ?? -1) + 1 });
   if (res.error) return { ok: false, message: `Couldn't save: ${res.error.message}` };
@@ -44,6 +47,8 @@ export async function updateGame(_prev: FormState, formData: FormData): Promise<
   if (!isUuid(id)) return { ok: false, message: "Couldn't find that game." };
   const parsed = read(formData);
   if ("error" in parsed) return { ok: false, message: parsed.error ?? null };
+  const dup = await duplicateMessage("games", parsed.values, id);
+  if (dup) return { ok: false, message: dup };
   const res = await db().from("games").update(parsed.values).eq("id", id);
   if (res.error) return { ok: false, message: `Couldn't save: ${res.error.message}` };
   revalidatePath("/games");

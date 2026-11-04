@@ -10,6 +10,7 @@ export type Match = {
   cover_url: string | null;
   year: number | null;
   movie?: boolean; // anime only
+  have?: string; // already on your list: where ("Completed", "Plan to watch"…)
 };
 
 // Only pictures from these two places are saved (the form could be tampered with).

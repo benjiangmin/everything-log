@@ -72,14 +72,15 @@ export default function TitleLookup({
         setMatches([]);
         setNote(res.message);
       }
-      setActive(0);
+      // Highlight the first one you can pick (not one already on your list).
+      setActive(res.ok ? Math.max(0, res.matches.findIndex((m) => !m.have || m.source_id === defaultSource)) : 0);
       setOpen(true);
     }, 300);
     return () => {
       live = false;
       clearTimeout(t);
     };
-  }, [text, kind, picked]);
+  }, [text, kind, picked, defaultSource]);
 
   // Clicking elsewhere closes the list.
   useEffect(() => {
@@ -95,6 +96,9 @@ export default function TitleLookup({
     setOpen(false);
     onPick?.(m);
   }
+
+  // Already on your list (the one you're editing doesn't count): shown, but can't be picked.
+  const taken = (m: Match) => Boolean(m.have) && m.source_id !== defaultSource;
 
   // Still the picked title? Then its cover goes with it; otherwise it's your own title.
   const match = picked && picked.title === text ? picked : null;
@@ -129,7 +133,7 @@ export default function TitleLookup({
               setActive((a) => Math.max(a - 1, 0));
             } else if (e.key === "Enter") {
               e.preventDefault();
-              pick(matches[active]);
+              if (!taken(matches[active])) pick(matches[active]);
             } else if (e.key === "Escape") setOpen(false);
           }}
           placeholder={placeholder}
@@ -152,9 +156,12 @@ export default function TitleLookup({
                   <button
                     type="button"
                     onMouseDown={(e) => e.preventDefault()} // keep focus in the box
+                    disabled={taken(m)}
                     onClick={() => pick(m)}
                     onMouseMove={() => setActive(i)}
-                    className={`flex w-full items-center gap-3 rounded-control px-2 py-1.5 text-left ${i === active ? "bg-surface" : ""}`}
+                    className={`flex w-full items-center gap-3 rounded-control px-2 py-1.5 text-left ${
+                      taken(m) ? "cursor-default [&>img]:opacity-45 [&>span:first-of-type]:opacity-55" : i === active ? "bg-surface" : ""
+                    }`}
                   >
                     {m.cover_url ? (
                       // eslint-disable-next-line @next/next/no-img-element -- remote cover thumbnail
@@ -168,6 +175,9 @@ export default function TitleLookup({
                         {[m.year, m.movie ? "Movie" : null].filter(Boolean).join(" · ") || " "}
                       </span>
                     </span>
+                    {taken(m) && (
+                      <span className="shrink-0 rounded-full bg-surface px-2 py-0.5 text-[11px] font-semibold text-ink/70">Already in {m.have}</span>
+                    )}
                   </button>
                 </li>
               ))}

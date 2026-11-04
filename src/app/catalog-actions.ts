@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/supabase";
+import { whereOnList } from "@/lib/duplicates";
 import {
   aniListSeasons,
   igdbReady,
@@ -29,9 +30,11 @@ export async function lookupTitles(kind: Kind, q: string): Promise<Lookup> {
   const query = q.trim();
   if (query.length < 2) return { ok: true, matches: [] };
   try {
-    if (kind === "anime") return { ok: true, matches: await searchAniList(query) };
-    if (!igdbReady()) return { ok: false, message: notReady };
-    return { ok: true, matches: await searchIGDB(query) };
+    if (kind === "game" && !igdbReady()) return { ok: false, message: notReady };
+    const matches = kind === "anime" ? await searchAniList(query) : await searchIGDB(query);
+    // Already on your list? The dropdown says where (and won't let you add it again).
+    const have = await whereOnList(table(kind), matches.map((m) => m.source_id));
+    return { ok: true, matches: matches.map((m) => (have.has(m.source_id) ? { ...m, have: have.get(m.source_id) } : m)) };
   } catch (e) {
     return { ok: false, message: `Couldn't search: ${(e as Error).message}` };
   }
