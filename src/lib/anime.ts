@@ -2,16 +2,28 @@ import "server-only";
 import { db } from "./supabase";
 
 export type AnimeStatus = "playing" | "completed" | "stopped" | "backlog";
-export type Anime = { id: string; title: string; status: AnimeStatus; is_movie: boolean; note: string | null; position: number };
+export type Anime = {
+  id: string;
+  title: string;
+  status: AnimeStatus;
+  is_movie: boolean;
+  note: string | null;
+  position: number;
+  cover_url: string | null; // from AniList
+  source_id: string | null;
+};
 
-const COLUMNS = "id, title, status, is_movie, note, position";
+const BASE = "id, title, status, is_movie, note, position";
+const COLUMNS = `${BASE}, cover_url, source_id`;
 
 // Newest added first; Plan to watch keeps its queue order (oldest first).
 export const animeSort = (status: string) =>
   status === "backlog" ? (a: Anime, b: Anime) => a.position - b.position : (a: Anime, b: Anime) => b.position - a.position;
 
 export async function getAnime(): Promise<Record<AnimeStatus, Anime[]>> {
-  const { data, error } = await db().from("anime").select(COLUMNS);
+  let res = await db().from("anime").select(COLUMNS);
+  if (res.error) res = await db().from("anime").select(BASE); // supabase/covers.sql not run yet
+  const { data, error } = res;
   if (error) throw new Error(`Couldn't load anime: ${error.message}`);
   const out: Record<AnimeStatus, Anime[]> = { playing: [], completed: [], stopped: [], backlog: [] };
   for (const a of data as Anime[]) out[a.status]?.push(a);

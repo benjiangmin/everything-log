@@ -13,6 +13,7 @@ const config: BoardConfig<Game> = {
   labels: { completed: "Completed", playing: "In progress", stopped: "Stopped playing", backlog: "Backlog" },
   emptyBottomRow: "Nothing in the backlog. Drag a game here to save it for later.",
   sort: (status) => sorterFor(status),
+  cover: (g) => g.cover_url ?? null,
   // Left date "8/11/26": when you started (in progress), otherwise when it ended.
   leftDate: (g) => {
     const d = g.status === "playing" ? (g.started_on ?? g.finished_on) : (g.finished_on ?? g.started_on);

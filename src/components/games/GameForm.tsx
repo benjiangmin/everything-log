@@ -6,6 +6,7 @@ import type { Game, GameStatus } from "@/lib/games";
 import SelectPicker from "@/components/ui/SelectPicker";
 import OptionalDate from "./OptionalDate";
 import AddBox from "@/components/board/AddBox";
+import TitleLookup from "@/components/board/TitleLookup";
 
 const initial: FormState = { ok: false, message: null };
 
@@ -32,24 +33,23 @@ export default function GameForm({ game, onDone, compact }: { game?: Game; onDon
     if (!state.ok) return;
     if (editing) return onDone?.();
     const form = formRef.current;
-    for (const name of ["title", "note"]) {
-      const el = form?.elements.namedItem(name) as HTMLInputElement | null;
-      if (el) el.value = "";
-    }
+    const el = form?.elements.namedItem("note") as HTMLInputElement | null;
+    if (el) el.value = "";
     titleRef.current?.focus();
   }, [state.ok, state.savedAt, editing, onDone]);
 
+  // Type to search IGDB: picking one fills in its standard title + cover.
   const title = (
-    <input
-      ref={titleRef}
-      name="title"
-      required
+    <TitleLookup
+      kind="game"
+      inputRef={titleRef}
+      resetKey={editing ? undefined : state.savedAt}
+      defaultTitle={game?.title}
+      defaultCover={game?.cover_url}
+      defaultSource={game?.source_id}
       maxLength={120}
-      defaultValue={game?.title}
       placeholder="Game"
-      aria-label="Game"
-      style={{ outline: "none" }}
-      className={`${field} min-w-0 flex-1`}
+      className={`${field} min-w-0`}
     />
   );
   const picker = (

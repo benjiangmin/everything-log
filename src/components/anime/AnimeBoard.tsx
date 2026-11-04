@@ -17,6 +17,7 @@ const config: BoardConfig<Anime> = {
   emptyBottomRow: "Nothing planned. Drag something here to watch later.",
   sort,
   tag: (a) => (a.is_movie ? "Movie" : null),
+  cover: (a) => a.cover_url ?? null,
   moved: (a, to) => ({ ...a, status: to, position: to === "backlog" ? Number.MAX_SAFE_INTEGER : a.position }),
   onMove: (a, to) => moveAnime(a.id, to),
   onDelete: (a) => deleteAnime(a.id),

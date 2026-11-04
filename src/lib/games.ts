@@ -13,12 +13,17 @@ export type Game = {
   finished_on: string | null;
   note: string | null;
   position: number;
+  cover_url: string | null; // from IGDB
+  source_id: string | null;
 };
 
-const COLUMNS = "id, title, status, started_on, finished_on, note, position";
+const BASE = "id, title, status, started_on, finished_on, note, position";
+const COLUMNS = `${BASE}, cover_url, source_id`;
 
 export async function getGames(): Promise<Record<GameStatus, Game[]>> {
-  const { data, error } = await db().from("games").select(COLUMNS);
+  let res = await db().from("games").select(COLUMNS);
+  if (res.error) res = await db().from("games").select(BASE); // supabase/covers.sql not run yet
+  const { data, error } = res;
   if (error) throw new Error(`Couldn't load games: ${error.message}`);
   const out: Record<GameStatus, Game[]> = { playing: [], completed: [], stopped: [], backlog: [] };
   for (const g of data as Game[]) out[g.status]?.push(g);

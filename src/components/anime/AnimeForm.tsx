@@ -6,6 +6,7 @@ import type { Anime, AnimeStatus } from "@/lib/anime";
 import SelectPicker from "@/components/ui/SelectPicker";
 import { ANIME_LABELS } from "./labels";
 import AddBox from "@/components/board/AddBox";
+import TitleLookup from "@/components/board/TitleLookup";
 
 const initial: FormState = { ok: false, message: null };
 const field =
@@ -17,6 +18,7 @@ export default function AnimeForm({ anime, onDone, compact }: { anime?: Anime; o
   const editing = Boolean(anime);
   const [state, action, pending] = useActionState(editing ? updateAnime : addAnime, initial);
   const [status, setStatus] = useState<AnimeStatus>(anime?.status ?? "playing");
+  const [isMovie, setIsMovie] = useState(anime?.is_movie ?? false); // ticks itself when you pick a movie
   const formRef = useRef<HTMLFormElement>(null);
   const titleRef = useRef<HTMLInputElement>(null);
 
@@ -24,24 +26,31 @@ export default function AnimeForm({ anime, onDone, compact }: { anime?: Anime; o
     if (!state.ok) return;
     if (editing) return onDone?.();
     const form = formRef.current;
-    for (const name of ["title", "note"]) {
-      const el = form?.elements.namedItem(name) as HTMLInputElement | null;
-      if (el) el.value = "";
-    }
+    const el = form?.elements.namedItem("note") as HTMLInputElement | null;
+    if (el) el.value = "";
     titleRef.current?.focus();
   }, [state.ok, state.savedAt, editing, onDone]);
 
+  // After adding, the Movie toggle switches back off.
+  const [seenSave, setSeenSave] = useState(state.savedAt);
+  if (state.savedAt !== seenSave) {
+    setSeenSave(state.savedAt);
+    if (state.ok && !editing) setIsMovie(false);
+  }
+
+  // Type to search AniList: picking one fills in its English title + cover (and ticks Movie).
   const title = (
-    <input
-      ref={titleRef}
-      name="title"
-      required
+    <TitleLookup
+      kind="anime"
+      inputRef={titleRef}
+      resetKey={editing ? undefined : state.savedAt}
+      defaultTitle={anime?.title}
+      defaultCover={anime?.cover_url}
+      defaultSource={anime?.source_id}
       maxLength={150}
-      defaultValue={anime?.title}
       placeholder="Anime"
-      aria-label="Anime"
-      style={{ outline: "none" }}
-      className={`${field} min-w-0 flex-1`}
+      onPick={(m) => setIsMovie(Boolean(m.movie))}
+      className={`${field} min-w-0`}
     />
   );
   const picker = (
@@ -67,7 +76,7 @@ export default function AnimeForm({ anime, onDone, compact }: { anime?: Anime; o
   );
   const movie = (
     <label className="flex cursor-pointer items-center gap-2 px-1 text-sm text-muted">
-      <input type="checkbox" name="is_movie" defaultChecked={anime?.is_movie} className="size-4 accent-[var(--accent)]" />
+      <input type="checkbox" name="is_movie" checked={isMovie} onChange={(e) => setIsMovie(e.target.checked)} className="size-4 accent-[var(--accent)]" />
       It&apos;s a movie
     </label>
   );
@@ -83,7 +92,7 @@ export default function AnimeForm({ anime, onDone, compact }: { anime?: Anime; o
           message={state.message}
           narrowSide
           // Keyed on the last save, so it switches back off after adding.
-          side={<MovieToggle key={state.savedAt ?? 0} />}
+          side={<MovieToggle isMovie={isMovie} setIsMovie={setIsMovie} />}
           rows={
             <>
               {/* No status picker when adding: New anime start in Watching (drag it on the board to change). */}
@@ -133,8 +142,7 @@ export default function AnimeForm({ anime, onDone, compact }: { anime?: Anime; o
 }
 
 // The add box's Movie switch: a small tile with a film icon. On = filled coffee.
-function MovieToggle() {
-  const [isMovie, setIsMovie] = useState(false);
+function MovieToggle({ isMovie, setIsMovie }: { isMovie: boolean; setIsMovie: (f: (m: boolean) => boolean) => void }) {
   return (
     <>
       {isMovie && <input type="hidden" name="is_movie" value="on" />}

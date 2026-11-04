@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/supabase";
+import { safeCover, safeSourceId } from "@/lib/catalog";
 
 // NOTE: the whole site sits behind the password lock (src/proxy.ts).
 
@@ -23,7 +24,9 @@ function read(formData: FormData) {
   if (!title) return { error: "What's the game called?" } as const;
   if (!STATUSES.includes(status)) return { error: "Pick a status." } as const;
   if (started_on && finished_on && finished_on < started_on) return { error: "The end date is before the start." } as const;
-  return { values: { title, status, started_on, finished_on, note: clean("note", 500) || null } } as const;
+  // Picked from IGDB: its cover + id come along (empty for your own titles).
+  const cover = { cover_url: safeCover(formData.get("cover_url")), source_id: safeSourceId(formData.get("source_id")) };
+  return { values: { title, status, started_on, finished_on, note: clean("note", 500) || null, ...cover } } as const;
 }
 
 export async function addGame(_prev: FormState, formData: FormData): Promise<FormState> {

@@ -46,6 +46,8 @@ export type BoardConfig<T extends BoardItem> = {
   detail?: (item: T) => string;
   // Optional: a small label after the title (e.g. "Movie").
   tag?: (item: T) => string | null;
+  // Optional: the cover picture (Games / Anime). Boards with covers show a plain tile when there's none.
+  cover?: (item: T) => string | null;
   // What changes when a card is dropped somewhere else (shown right away, before the server answers).
   moved: (item: T, to: Status, today: string) => T;
   onMove: (item: T, to: Status, today: string) => Promise<void>;
@@ -431,6 +433,7 @@ function CardFace<T extends BoardItem>({
   const date = config.leftDate?.(item) ?? null;
   const detail = config.detail?.(item) ?? "";
   const tag = config.tag?.(item) ?? null;
+  const cover = config.cover ? (config.cover(item) ?? "") : null; // null = this board has no covers
   // What shows under the title when open: the board's own body (Goals: why + proof), or the note.
   const body: ReactNode = config.body ? config.body(item) : item.note;
 
@@ -471,8 +474,10 @@ function CardFace<T extends BoardItem>({
         )}
 
         <div className="min-w-0 flex-1">
-          <div className="flex min-h-7 items-center gap-2">
-            <p className={`min-w-0 flex-1 text-[15px] font-medium text-ink ${open ? "break-words" : "truncate"}`}>{item.title}</p>
+          <div className={`flex min-h-7 gap-2 ${open ? "items-start" : "items-center"}`}>
+            {/* The cover: a small tile on a closed card, bigger when open. */}
+            {cover !== null && <Cover src={cover} title={item.title} big={open} />}
+            <p className={`min-w-0 flex-1 text-[15px] font-medium text-ink ${open ? "break-words pt-1" : "truncate"}`}>{item.title}</p>
             {tag && (
               <span className="shrink-0 rounded-full bg-paper px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-muted">
                 {tag}
@@ -502,6 +507,19 @@ function CardFace<T extends BoardItem>({
         {!hasDates && open && <div className="flex shrink-0 items-start border-l border-line pl-2 pt-0.5">{actions}</div>}
       </div>
     </div>
+  );
+}
+
+// A cover picture, or (for your own titles) a plain tile with the first letter.
+function Cover({ src, title, big }: { src: string; title: string; big: boolean }) {
+  const size = big ? "h-[4.5rem] w-[3.25rem] rounded-[6px]" : "h-7 w-5 rounded-[4px]";
+  return src ? (
+    // eslint-disable-next-line @next/next/no-img-element -- remote cover (AniList / IGDB)
+    <img src={src} alt="" draggable={false} className={`${size} shrink-0 bg-line object-cover`} />
+  ) : (
+    <span aria-hidden="true" className={`${size} grid shrink-0 place-items-center bg-line/80 font-display text-[11px] font-semibold text-muted`}>
+      {title.trim()[0]?.toUpperCase()}
+    </span>
   );
 }
 

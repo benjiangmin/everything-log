@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/supabase";
+import { safeCover, safeSourceId } from "@/lib/catalog";
 
 // NOTE: the whole site sits behind the password lock (src/proxy.ts).
 
@@ -16,7 +17,9 @@ function read(formData: FormData) {
   const status = clean("status", 20);
   if (!title) return { error: "What's it called?" } as const;
   if (!STATUSES.includes(status)) return { error: "Pick a status." } as const;
-  return { values: { title, status, is_movie: formData.get("is_movie") === "on", note: clean("note", 500) || null } } as const;
+  // Picked from AniList: its cover + id come along (empty for your own titles).
+  const cover = { cover_url: safeCover(formData.get("cover_url")), source_id: safeSourceId(formData.get("source_id")) };
+  return { values: { title, status, is_movie: formData.get("is_movie") === "on", note: clean("note", 500) || null, ...cover } } as const;
 }
 
 async function nextPosition() {
