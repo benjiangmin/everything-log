@@ -10,6 +10,8 @@ import AppSearchPanel from "@/components/home/AppSearchPanel";
 import { inboxCount as lettersInboxCount } from "@/app/letters/actions";
 import LettersInboxPanel from "@/components/letters/LettersInboxPanel";
 import SealedLettersPanel from "@/components/letters/SealedLettersPanel";
+import FindCoversPanel from "@/components/board/FindCoversPanel";
+import SeasonsPanel from "@/components/board/SeasonsPanel";
 import { useEffect, useState, useSyncExternalStore, useTransition, type ReactNode } from "react";
 
 // The navigation bar on the left of every page (not the login page).
@@ -79,6 +81,14 @@ export default function SideNav() {
       )}
       {/* Home only: search every app. */}
       {pathname === "/" && <SearchButton showLabel={labels} />}
+      {/* Anime / Games only: match older titles to their standard name + cover. */}
+      {pathname === "/anime" && (
+        <>
+          <FindCoversButton kind="anime" showLabel={labels} />
+          <SeasonsButton showLabel={labels} />
+        </>
+      )}
+      {pathname === "/games" && <FindCoversButton kind="game" showLabel={labels} />}
       {pathname.startsWith("/budget") && (
         <>
           <InboxButton showLabel={labels} />
@@ -241,6 +251,33 @@ function SearchButton({ showLabel }: { showLabel: boolean }) {
         <path d="M20 20l-3.5-3.5" />
       </NavButton>
       {open && <AppSearchPanel onClose={() => setOpen(false)} />}
+    </>
+  );
+}
+
+function FindCoversButton({ kind, showLabel }: { kind: "anime" | "game"; showLabel: boolean }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <NavButton label="Find covers" showLabel={showLabel} onClick={() => setOpen(true)}>
+        <rect x="3" y="4" width="18" height="16" rx="2" />
+        <circle cx="9" cy="10" r="2" />
+        <path d="M21 16l-5-5-9 9" />
+      </NavButton>
+      {open && <FindCoversPanel kind={kind} onClose={() => setOpen(false)} />}
+    </>
+  );
+}
+
+function SeasonsButton({ showLabel }: { showLabel: boolean }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <NavButton label="Add seasons" showLabel={showLabel} onClick={() => setOpen(true)}>
+        <rect x="7" y="3" width="13" height="15" rx="2" />
+        <path d="M4 7v11a3 3 0 0 0 3 3h9" />
+      </NavButton>
+      {open && <SeasonsPanel onClose={() => setOpen(false)} />}
     </>
   );
 }
