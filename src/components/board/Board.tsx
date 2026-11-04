@@ -200,7 +200,7 @@ export default function Board<T extends BoardItem>({
       <section
         aria-label={ALL.filter((s) => s !== bottom).map((s) => config.labels[s]).join(", ")}
         data-board
-        className={`relative mt-5 flex flex-col rounded-card border-[1.5px] border-ink md:flex-1 md:basis-0 ${config.cover ? MIN_HEIGHT.covers : MIN_HEIGHT.plain}`}
+        className={`relative isolate mt-5 flex flex-col rounded-card border-[1.5px] border-ink md:flex-1 md:basis-0 ${config.cover ? MIN_HEIGHT.covers : MIN_HEIGHT.plain}`}
       >
         {/* Shorter screens, where the page scrolls: the box's top edge (rounded corners and all) stays
             pinned under the title + search, with each area's title just below it. At rest it sits
@@ -513,6 +513,7 @@ function Card<T extends BoardItem>({
       {floating && open && !isDragging && (
         <FloatingPanel
           anchor={ref}
+          follow={focused}
           wide={editing || poster}
           // While editing, clicking elsewhere doesn't close it (so you don't lose your changes).
           onClose={() => {
@@ -531,11 +532,13 @@ function Card<T extends BoardItem>({
 function FloatingPanel({
   anchor,
   wide,
+  follow = false,
   onClose,
   children,
 }: {
   anchor: React.RefObject<HTMLElement | null>;
   wide?: boolean;
+  follow?: boolean; // opened from search: follow the card while its list scrolls to it
   onClose: () => void;
   children: ReactNode;
 }) {
@@ -546,33 +549,72 @@ function FloatingPanel({
   });
   const [pos, setPos] = useState<{ left: number; width: number; top?: number; bottom?: number } | null>(null);
 
+  const placeRef = useRef<() => void>(() => {});
+
   useLayoutEffect(() => {
+    const stickyTop = () => parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--sticky-top")) || 0;
+    // Where the card can be seen: inside the list it scrolls in, on screen, below the pinned bar.
+    const visibleArea = () => {
+      const list = anchor.current?.closest(".overflow-y-auto, .overflow-x-auto")?.getBoundingClientRect();
+      return {
+        top: Math.max(list?.top ?? 0, stickyTop()),
+        bottom: Math.min(list?.bottom ?? window.innerHeight, window.innerHeight),
+        left: Math.max(list?.left ?? 0, 0),
+        right: Math.min(list?.right ?? window.innerWidth, window.innerWidth),
+      };
+    };
     const place = () => {
       const r = anchor.current?.getBoundingClientRect();
       if (!r) return;
       const width = Math.max(r.width, wide ? 360 : 260);
       const left = Math.min(Math.max(8, r.left + r.width / 2 - width / 2), window.innerWidth - width - 8);
-      // Above the card if there's room (bottom row), otherwise below it (posters near the top).
-      const roomAbove = r.top - (parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--sticky-top")) || 0);
-      if (roomAbove > 280 || roomAbove > window.innerHeight - r.bottom) setPos({ left, bottom: window.innerHeight - r.top + 6, width });
-      else setPos({ left, top: r.bottom + 6, width });
+      // Above the card if it fits there (bottom row), otherwise below it; if neither fits, the
+      // side with more room. Uses the panel's real height once it's drawn.
+      const h = panelRef.current?.offsetHeight ?? 170;
+      const above = r.top - stickyTop() - 12;
+      const below = window.innerHeight - r.bottom - 12;
+      const up = above >= h ? true : below >= h ? false : above > below;
+      setPos(up ? { left, bottom: window.innerHeight - r.top + 6, width } : { left, top: r.bottom + 6, width });
     };
+    placeRef.current = place;
     place();
-    // Scrolling (the page, or the list it's in) closes it. Except for the first moment after it
-    // opens: picked from search, the list scrolls itself to the card, and the panel follows along.
+
+    // Scrolling: the panel follows the card a little, but closes once the card has moved away
+    // (more than ~40px) or out of view. Picked from search, it only follows for the first moment
+    // (while the list scrolls itself to the card).
+    const settleMs = follow ? 900 : 0;
     const openedAt = Date.now();
+    let base: DOMRect | null = null;
     const onScroll = (e: Event) => {
       if (panelRef.current?.contains(e.target as Node)) return; // scrolling inside the panel itself
-      if (Date.now() - openedAt < 900) place();
-      else closeRef.current();
+      const r = anchor.current?.getBoundingClientRect();
+      if (!r) return;
+      if (Date.now() - openedAt < settleMs) return place();
+      base ??= r;
+      const v = visibleArea();
+      const gone = r.bottom < v.top + 24 || r.top > v.bottom - 24 || r.right < v.left + 24 || r.left > v.right - 24;
+      if (gone || Math.abs(r.top - base.top) > 40 || Math.abs(r.left - base.left) > 40) closeRef.current();
+      else place();
     };
+    // Where the card sits once things settle: the starting point for "moved away".
+    if (!settleMs) base = anchor.current?.getBoundingClientRect() ?? null;
+    const settle = setTimeout(() => {
+      base = anchor.current?.getBoundingClientRect() ?? null;
+    }, settleMs);
     window.addEventListener("resize", place);
     window.addEventListener("scroll", onScroll, true); // true: also when the row / list scrolls
     return () => {
+      clearTimeout(settle);
       window.removeEventListener("resize", place);
       window.removeEventListener("scroll", onScroll, true);
     };
-  }, [anchor, wide]);
+  }, [anchor, wide, follow]);
+
+  // Once drawn, place it again with its real height (so it never hides under the pinned bar).
+  const drawn = pos !== null;
+  useLayoutEffect(() => {
+    if (drawn) placeRef.current();
+  }, [drawn]);
 
   useEffect(() => {
     const onDown = (e: MouseEvent) => {
