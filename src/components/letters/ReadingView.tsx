@@ -6,7 +6,18 @@ import type { Letter } from "@/lib/letters";
 import { longDate } from "./dates";
 
 // A letter, opened: a sheet of paper in the middle of the screen. Unread ones get "Mark as read".
-export default function ReadingView({ letter, onClose, onRead }: { letter: Letter; onClose: () => void; onRead?: () => void }) {
+// dramatic: it unfolds in front of you with a warm glow (right after breaking the seal).
+export default function ReadingView({
+  letter,
+  onClose,
+  onRead,
+  dramatic,
+}: {
+  letter: Letter;
+  onClose: () => void;
+  onRead?: () => void;
+  dramatic?: boolean;
+}) {
   const [pending, start] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
@@ -17,9 +28,16 @@ export default function ReadingView({ letter, onClose, onRead }: { letter: Lette
   }, [onClose]);
 
   return (
-    <div className="fixed inset-0 z-[80] grid place-items-center p-4">
-      <button type="button" aria-label="Close" onClick={onClose} className="absolute inset-0 bg-ink/40" />
-      <article className="panel-pop relative flex max-h-[85dvh] w-full max-w-2xl flex-col rounded-card bg-paper shadow-2xl shadow-ink/30">
+    <div className="fixed inset-0 z-[80] grid place-items-center p-4" style={dramatic ? { perspective: "1200px" } : undefined}>
+      <button type="button" aria-label="Close" onClick={onClose} className={`absolute inset-0 ${dramatic ? "bg-ink/50" : "bg-ink/40"}`} />
+      {dramatic && (
+        <div
+          aria-hidden="true"
+          className="letter-glow pointer-events-none absolute left-1/2 top-1/2 size-[44rem] -translate-x-1/2 -translate-y-1/2 rounded-full"
+          style={{ background: "radial-gradient(circle, rgba(250,236,210,0.85) 0%, rgba(250,236,210,0.25) 40%, transparent 70%)" }}
+        />
+      )}
+      <article className={`${dramatic ? "letter-reveal" : "panel-pop"} relative flex max-h-[85dvh] w-full max-w-2xl flex-col rounded-card bg-paper shadow-2xl shadow-ink/30`}>
         <header className="flex items-start gap-3 border-b border-line px-6 pb-4 pt-5">
           <div className="min-w-0 flex-1">
             <h2 className="break-words font-display text-2xl font-semibold leading-tight">{letter.subject}</h2>

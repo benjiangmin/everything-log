@@ -46,7 +46,7 @@ export default function LetterForm({
       <input type="hidden" name="body" value={body} />
       {!editing && (
         <div className="flex items-center justify-between gap-3">
-          <h2 className="font-display text-lg font-semibold">Dear future me…</h2>
+          <h2 className="font-display text-lg font-semibold">Dear future me,</h2>
           {onFold && (
             <button
               type="button"

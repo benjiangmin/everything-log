@@ -4,6 +4,7 @@ import { useEffect, useState, useTransition } from "react";
 import { inboxLetters, openLetter } from "@/app/letters/actions";
 import type { Envelope, Letter } from "@/lib/letters";
 import ReadingView from "./ReadingView";
+import SealedEnvelope from "./SealedEnvelope";
 import { longDate } from "./dates";
 
 // The letters inbox (from the sidebar): slides in from the right. Arrived letters you haven't read,
@@ -11,8 +12,9 @@ import { longDate } from "./dates";
 export default function LettersInboxPanel({ onClose, onRead }: { onClose: () => void; onRead: () => void }) {
   const [letters, setLetters] = useState<Envelope[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [sealed, setSealed] = useState<Envelope | null>(null); // the envelope you're tapping open
+  const [loaded, setLoaded] = useState<Letter | null>(null); // its words, fetched while you tap
   const [reading, setReading] = useState<Letter | null>(null);
-  const [opening, setOpening] = useState<string | null>(null);
   const [, start] = useTransition();
 
   useEffect(() => {
@@ -28,19 +30,23 @@ export default function LettersInboxPanel({ onClose, onRead }: { onClose: () => 
   }, []);
 
   useEffect(() => {
-    if (reading) return; // Escape closes the letter first
+    if (reading || sealed) return; // Escape closes the letter / envelope first
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [onClose, reading]);
+  }, [onClose, reading, sealed]);
 
-  function open(id: string) {
-    setOpening(id);
+  // Show the sealed envelope right away, and fetch the words while you tap it open.
+  function open(e: Envelope) {
+    setSealed(e);
+    setLoaded(null);
     start(async () => {
-      const res = await openLetter(id);
-      setOpening(null);
-      if (res.ok) setReading(res.letter);
-      else setError(res.message);
+      const res = await openLetter(e.id);
+      if (res.ok) setLoaded(res.letter);
+      else {
+        setSealed(null);
+        setError(res.message);
+      }
     });
   }
 
@@ -78,8 +84,7 @@ export default function LettersInboxPanel({ onClose, onRead }: { onClose: () => 
               <li key={e.id}>
                 <button
                   type="button"
-                  onClick={() => open(e.id)}
-                  disabled={opening === e.id}
+                  onClick={() => open(e)}
                   className="group flex w-full items-center gap-3.5 rounded-card bg-accent px-4 py-3.5 text-left text-accent-ink shadow-md shadow-ink/15 transition-transform hover:-translate-y-0.5 disabled:opacity-70"
                 >
                   <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="shrink-0">
@@ -92,7 +97,7 @@ export default function LettersInboxPanel({ onClose, onRead }: { onClose: () => 
                       {e.written_on ? `From ${longDate(e.written_on)}` : "From the past"} · arrived {longDate(e.deliver_on)}
                     </span>
                   </span>
-                  <span className="shrink-0 text-sm font-semibold opacity-80">{opening === e.id ? "…" : "Open"}</span>
+                  <span className="shrink-0 text-sm font-semibold opacity-80">Open</span>
                 </button>
               </li>
             ))}
@@ -100,9 +105,22 @@ export default function LettersInboxPanel({ onClose, onRead }: { onClose: () => 
         </div>
       </aside>
 
+      {sealed && (
+        <SealedEnvelope
+          envelope={sealed}
+          ready={loaded?.id === sealed.id}
+          onClose={() => setSealed(null)}
+          onOpened={() => {
+            setReading(loaded);
+            setSealed(null);
+          }}
+        />
+      )}
+
       {reading && (
         <ReadingView
           letter={reading}
+          dramatic
           onClose={() => setReading(null)}
           onRead={() => {
             setLetters((l) => l && l.filter((x) => x.id !== reading.id));
