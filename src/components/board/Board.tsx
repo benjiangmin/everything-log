@@ -61,11 +61,18 @@ export type BoardConfig<T extends BoardItem> = {
   mascots?: Partial<Record<Status, { src: string; className: string }>>;
 };
 
-// The shortest the board gets on wide screens: an area's title (3.25rem) + ~5 cards, + the bottom
-// row (≈ 6.5rem) ≈ 28rem. But never taller than the screen under the pinned title + search
-// (--sticky-top), so once you scroll down the whole box, top border included, stays in view.
-// (2.75rem = the gap above the box + the page's bottom padding.)
-const MIN_HEIGHT = "md:min-h-[min(28rem,calc(100dvh-var(--sticky-top,0px)-2.75rem))] md:max-h-[calc(100dvh-var(--sticky-top,0px)-2.75rem)]";
+// The shortest the board gets on wide screens: room for at least 8 cards in every area, measured:
+//   an open area = title 52px + 8 cards (64px each + 8px gaps = 568px) + 12px padding = 632px
+//   right side   = the open area + the closed one's title (60px) + a line = 693px
+//   + the bottom row (125px) + the box's borders ≈ 821px → 51.5rem
+// Up to that size, the box also stays within the screen under the pinned title + search
+// (--sticky-top; 2.75rem = the gap above the box + the page's bottom padding), so once you scroll
+// down its top border stays in view. On screens too short for both, the 8 cards win.
+// Boards without covers (Goals) have small cards: ~28rem is plenty, always within the screen.
+const MIN_HEIGHT = {
+  covers: "md:min-h-[51.5rem] md:max-h-[max(51.5rem,calc(100dvh-var(--sticky-top,0px)-2.75rem))]",
+  plain: "md:min-h-[min(28rem,calc(100dvh-var(--sticky-top,0px)-2.75rem))] md:max-h-[calc(100dvh-var(--sticky-top,0px)-2.75rem)]",
+};
 
 function todayKey() {
   const d = localNow();
@@ -156,7 +163,7 @@ export default function Board<T extends BoardItem>({
       <section
         aria-label={ALL.filter((s) => s !== bottom).map((s) => config.labels[s]).join(", ")}
         data-board
-        className={`mt-5 flex flex-col overflow-hidden rounded-card border-[1.5px] border-ink md:flex-1 md:basis-0 ${MIN_HEIGHT}`}
+        className={`mt-5 flex flex-col overflow-hidden rounded-card border-[1.5px] border-ink md:flex-1 md:basis-0 ${config.cover ? MIN_HEIGHT.covers : MIN_HEIGHT.plain}`}
       >
         {/* Completed takes the left 2/3 (both rows); the other two stack on the right.
             Width split: md:grid-cols-[2fr_1fr]. */}
@@ -171,7 +178,7 @@ export default function Board<T extends BoardItem>({
           </div>
         ) : (
           <div className={`grid flex-1 grid-cols-[minmax(0,1fr)] divide-y divide-line md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] md:divide-y-0 min-h-0`}>
-            <Area status="completed" label={config.labels.completed} count={board.completed.length} mascot={config.mascots?.completed} className="md:border-r md:border-line" wide={!config.cover}>
+            <Area status="completed" label={config.labels.completed} count={board.completed.length} mascot={config.mascots?.completed} className="md:border-r md:border-line" wide={!config.cover} roomy={Boolean(config.cover)}>
               {board.completed.map((it) => card(it))}
             </Area>
             {/* Right side: one area open at a time. Watching open → Dropped's title sits at the bottom.
@@ -180,6 +187,7 @@ export default function Board<T extends BoardItem>({
               {(["playing", "stopped"] as const).map((s) => (
                 <Area
                   key={s}
+                  roomy={Boolean(config.cover)}
                   status={s}
                   label={config.labels[s]}
                   count={board[s].length}
@@ -226,6 +234,7 @@ function Area({
   wide,
   collapsed,
   onToggle,
+  roomy,
   children,
 }: {
   status: Status;
@@ -236,6 +245,7 @@ function Area({
   wide?: boolean; // Completed: cards in two columns on wide screens (boards without covers)
   collapsed?: boolean; // the right side's accordion: just the title, click it to open
   onToggle?: () => void;
+  roomy?: boolean; // big cover cards: phones keep room for 8
   children: ReactNode[];
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: status });
@@ -293,11 +303,11 @@ function Area({
           }`}
         />
       </div>
-      {/* Phones: each area is capped and scrolls. Wider screens: fills its part of the box. */}
+      {/* Phones: each area is capped (still room for 8 cards: 39.5rem) and scrolls. Wider screens: fills its part of the box. */}
       {!collapsed && (
         <div
           onScroll={(e) => setScrolled(e.currentTarget.scrollTop > 0)}
-          className={`relative z-[1] max-h-[55dvh] min-h-0 flex-1 overflow-y-auto px-3 pb-3 md:max-h-none ${
+          className={`relative z-[1] ${roomy ? "max-h-[max(55dvh,39.5rem)]" : "max-h-[55dvh]"} min-h-0 flex-1 overflow-y-auto px-3 pb-3 md:max-h-none ${
             wide ? "grid content-start items-start gap-2 lg:grid-cols-2" : "space-y-2"
           }`}
         >
