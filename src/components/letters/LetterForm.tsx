@@ -5,7 +5,7 @@ import { addLetter, updateLetter, type FormState } from "@/app/letters/actions";
 import type { Letter } from "@/lib/letters";
 import RichText from "@/components/dreams/RichText";
 import DateWheel from "@/components/ui/DateWheel";
-import { longDate, yearAfter } from "./dates";
+import { longDate } from "./dates";
 
 const initial: FormState = { ok: false, message: null };
 const field =
@@ -84,7 +84,7 @@ export default function LetterForm({
         </div>
         <label>
           <span className="mb-1 block text-sm text-muted">Arrives</span>
-          <DateWheel name="deliver_on" defaultValue={letter?.deliver_on ?? yearAfter(today)} years={[-5, 30]} />
+          <DateWheel name="deliver_on" defaultValue={letter?.deliver_on ?? today} years={[-5, 30]} />
         </label>
       </div>
 
