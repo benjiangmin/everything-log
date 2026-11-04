@@ -3,20 +3,63 @@
 import Link from "next/link";
 import AlertDot from "./AlertDot";
 import { useState, useTransition } from "react";
-import { addCategory, deleteCategory, renameCategory, reorderCategories } from "@/app/home-actions";
-import type { HomeCategory } from "@/lib/home";
+import {
+  addCategory,
+  addHomeSection,
+  deleteCategory,
+  deleteHomeSection,
+  renameCategory,
+  renameHomeSection,
+  saveHomeLayout,
+  setHomeDescription,
+} from "@/app/home-actions";
+import type { HomeCategory, HomeSection } from "@/lib/home";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
-import SortableGrid from "./SortableGrid";
+import SectionBoard, { type Group } from "./SectionBoard";
 import { AddCard, DeleteButton, Empty, InlineInput, PageHeader, useLocalCopy } from "./bits";
 
-// The home page: one card per category. Click a card to open it.
-// "Edit" turns on dragging, renaming, deleting and adding.
+// The home page: a memo under "Home", then one card per category, split into sections
+// (subcategories) the same way a category's own page is. Click a card to open it.
+// "Edit" turns on the memo, dragging (categories and whole sections), renaming, deleting and adding.
 // alerts: the categories with something inside that needs attention (they get a red "!").
-export default function CategoryGrid({ categories, alerts = [] }: { categories: HomeCategory[]; alerts?: string[] }) {
+export default function CategoryGrid({
+  categories,
+  sections,
+  description: savedDescription,
+  alerts = [],
+}: {
+  categories: HomeCategory[];
+  sections: HomeSection[];
+  description: string | null;
+  alerts?: string[];
+}) {
   const [editing, setEditing] = useState(false);
   const [order, setOrder] = useLocalCopy(categories);
+  const [secs, setSecs] = useLocalCopy(sections);
+  const [description, setDescription] = useLocalCopy(savedDescription);
   const [, startTransition] = useTransition();
   const confirm = useConfirm();
+
+  const byId = new Map(order.map((c) => [c.id, c]));
+  // "No section" first, then each section, each with its categories in order.
+  const groups: Group[] = [
+    { id: null, name: "", itemIds: order.filter((c) => !c.section_id || !secs.some((s) => s.id === c.section_id)).map((c) => c.id) },
+    ...secs.map((s) => ({ id: s.id, name: s.name, itemIds: order.filter((c) => c.section_id === s.id).map((c) => c.id) })),
+  ];
+
+  // After a drag: rebuild the local order from the groups, then save the whole layout.
+  function saveLayout(next: Group[]) {
+    const flat = next.flatMap((g) => g.itemIds.map((id) => ({ ...byId.get(id)!, section_id: g.id })));
+    const nextSecs = next.slice(1).map((g) => secs.find((s) => s.id === g.id)!);
+    setOrder(flat);
+    setSecs(nextSecs);
+    startTransition(() =>
+      saveHomeLayout(
+        nextSecs.map((s) => s.id),
+        flat.map((c) => ({ id: c.id, section_id: c.section_id })),
+      ),
+    );
+  }
 
   async function remove(c: HomeCategory) {
     const ok = await confirm({
@@ -32,26 +75,68 @@ export default function CategoryGrid({ categories, alerts = [] }: { categories: 
     startTransition(() => deleteCategory(c.id));
   }
 
+  async function removeSection(section: HomeSection) {
+    const count = order.filter((c) => c.section_id === section.id).length;
+    const ok = await confirm({
+      title: `Delete the "${section.name}" subcategory?`,
+      body: count ? `Its ${count} ${count === 1 ? "category moves" : "categories move"} back to the top (nothing else is deleted).` : undefined,
+      confirmLabel: "Delete",
+    });
+    if (!ok) return;
+    setSecs((ss) => ss.filter((x) => x.id !== section.id));
+    setOrder((o) => o.map((c) => (c.section_id === section.id ? { ...c, section_id: null } : c)));
+    startTransition(() => deleteHomeSection(section.id));
+  }
+
   return (
     <>
-      <PageHeader title="Home" editing={editing} onToggle={() => setEditing((e) => !e)} />
+      <PageHeader
+        title="Home"
+        editing={editing}
+        onToggle={() => setEditing((e) => !e)}
+        description={description}
+        onDescription={(d) => {
+          setDescription(d || null);
+          startTransition(() => setHomeDescription(d));
+        }}
+      />
 
       <div className="mt-8">
-        {order.length === 0 && !editing ? (
+        {order.length === 0 && secs.length === 0 && !editing ? (
           <Empty>No categories yet. Press Edit to add one.</Empty>
         ) : (
-          <SortableGrid
-            id="home-categories"
-            items={order}
+          <SectionBoard
+            dndId="home-categories"
+            groups={groups}
             editing={editing}
-            onReorder={(next) => {
-              setOrder(next);
-              startTransition(() => reorderCategories(next.map((c) => c.id)));
+            onChange={saveLayout}
+            renderAdd={(sectionId) => (
+              <AddCard key={`add-${sectionId ?? "none"}`} label="Add category" onAdd={(name) => startTransition(() => addCategory(name, sectionId))} />
+            )}
+            after={<AddCard label="Add subcategory" onAdd={(name) => startTransition(() => addHomeSection(name))} />}
+            renderSectionHead={(g, handle) => {
+              const section = secs.find((s) => s.id === g.id)!;
+              return editing ? (
+                <div className="flex items-center gap-1 border-b border-line pb-1.5">
+                  {handle}
+                  <InlineInput
+                    value={section.name}
+                    label="Subcategory name"
+                    onSave={(name) => {
+                      setSecs((ss) => ss.map((x) => (x.id === section.id ? { ...x, name } : x)));
+                      startTransition(() => renameHomeSection(section.id, name));
+                    }}
+                    className="flex-1 font-display text-xl font-semibold"
+                  />
+                  <DeleteButton label={`Delete the ${section.name} subcategory`} onClick={() => removeSection(section)} />
+                </div>
+              ) : (
+                <h2 className="border-b border-line pb-2 font-display text-xl font-semibold text-ink/80">{section.name}</h2>
+              );
             }}
-            className="grid gap-3 sm:grid-cols-2"
-            after={editing && <AddCard label="Add category" onAdd={(name) => startTransition(() => addCategory(name))} />}
-            render={(c, handle) =>
-              editing ? (
+            renderItem={(id, handle) => {
+              const c = byId.get(id)!;
+              return editing ? (
                 <div className="flex min-h-20 items-center gap-1 rounded-card bg-surface py-3 pl-2 pr-2">
                   {handle}
                   <InlineInput
@@ -81,8 +166,8 @@ export default function CategoryGrid({ categories, alerts = [] }: { categories: 
                     →
                   </span>
                 </Link>
-              )
-            }
+              );
+            }}
           />
         )}
       </div>

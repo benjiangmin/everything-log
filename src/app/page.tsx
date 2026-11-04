@@ -1,6 +1,6 @@
 import { Suspense } from "react";
 import { connection } from "next/server";
-import { getCategories } from "@/lib/home";
+import { getCategories, getHomeLayout } from "@/lib/home";
 import { getAlertCategoryIds, getAlertHrefs } from "@/lib/alerts";
 import CategoryGrid from "@/components/home/CategoryGrid";
 import HomeGreeting from "@/components/home/HomeGreeting";
@@ -20,11 +20,12 @@ export default function Home() {
 
 async function Categories() {
   await connection(); // always fresh, never a cached copy
-  const [categories, alerts] = await Promise.all([
+  const [categories, layout, alerts] = await Promise.all([
     getCategories(),
+    getHomeLayout(),
     getAlertHrefs().then(getAlertCategoryIds).catch(() => []),
   ]);
-  return <CategoryGrid categories={categories} alerts={alerts} />;
+  return <CategoryGrid categories={categories} sections={layout.sections} description={layout.description} alerts={alerts} />;
 }
 
 function Skeleton() {

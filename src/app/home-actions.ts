@@ -42,8 +42,61 @@ async function saveOrder(table: "home_categories" | "home_items", ids: string[])
 
 /* Categories */
 
-export async function addCategory(name: string) {
-  await run("add the category", db().from("home_categories").insert({ name: cleanName(name), position: await endOf("home_categories") }));
+// sectionId: which home section it goes in (null = no section).
+export async function addCategory(name: string, sectionId: string | null = null) {
+  await run(
+    "add the category",
+    db()
+      .from("home_categories")
+      .insert({
+        name: cleanName(name),
+        position: await endOf("home_categories"),
+        ...(sectionId ? { section_id: checkId(sectionId) } : {}),
+      }),
+  );
+  done();
+}
+
+/* The home screen itself: its memo and its sections */
+
+// The short line under "Home". Empty = none.
+export async function setHomeDescription(description: string) {
+  const d = description.trim().slice(0, 200) || null;
+  await run("save the description", db().from("home_settings").upsert({ id: 1, description: d }));
+  done();
+}
+
+export async function addHomeSection(name: string) {
+  const { count } = await db().from("home_category_sections").select("id", { count: "exact", head: true });
+  await run("add the section", db().from("home_category_sections").insert({ name: cleanName(name), position: count ?? 0 }));
+  done();
+}
+
+export async function renameHomeSection(id: string, name: string) {
+  await run("rename", db().from("home_category_sections").update({ name: cleanName(name) }).eq("id", checkId(id)));
+  done();
+}
+
+// Its categories stay, back in "no section".
+export async function deleteHomeSection(id: string) {
+  await run("delete", db().from("home_category_sections").delete().eq("id", checkId(id)));
+  done();
+}
+
+// Save the home screen's whole layout after a drag: the sections' order, and every category's
+// section and order.
+export async function saveHomeLayout(sectionIds: string[], categories: { id: string; section_id: string | null }[]) {
+  const results = await Promise.all([
+    ...sectionIds.map((id, i) => db().from("home_category_sections").update({ position: i }).eq("id", checkId(id))),
+    ...categories.map((c, i) =>
+      db()
+        .from("home_categories")
+        .update({ position: i, section_id: c.section_id === null ? null : checkId(c.section_id) })
+        .eq("id", checkId(c.id)),
+    ),
+  ]);
+  const failed = results.find((r) => r.error);
+  if (failed?.error) throw new Error(`Couldn't save the order: ${failed.error.message}`);
   done();
 }
 
