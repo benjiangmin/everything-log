@@ -197,17 +197,17 @@ export default function Board<T extends BoardItem>({
     <DndContext id={config.id} sensors={sensors} onDragStart={onDragStart} onDragEnd={onDragEnd} onDragCancel={() => setDragging(null)}>
       {/* The black box. Wide screens: fills the rest of the screen and never grows with the number of
           items. Short screens: see MIN_HEIGHT. */}
-      <section
-        aria-label={ALL.filter((s) => s !== bottom).map((s) => config.labels[s]).join(", ")}
-        data-board
-        className={`relative isolate mt-5 flex flex-col rounded-card border-[1.5px] border-ink md:flex-1 md:basis-0 ${config.cover ? MIN_HEIGHT.covers : MIN_HEIGHT.plain}`}
-      >
+      {/* The box's wrapper: sizes the box, and holds the pinned top edge right on top of it.
+          isolate: everything in here stays under the add box's dropdown. */}
+      <div className={`relative isolate mt-5 flex flex-col md:flex-1 md:basis-0 ${config.cover ? MIN_HEIGHT.covers : MIN_HEIGHT.plain}`}>
         {/* Shorter screens, where the page scrolls: the box's top edge (rounded corners and all) stays
             pinned under the title + search, with each area's title just below it. At rest it sits
-            exactly on top of the real border, so you can't tell it's there. Each corner piece first
-            paints the page color over the box's straight side border, then draws the curve. */}
-        <div aria-hidden="true" className="pointer-events-none sticky top-[var(--sticky-top,0px)] z-30 hidden h-0 md:block">
-          <div className="absolute -left-[1.5px] -right-[1.5px] -top-[1.5px] h-[18px]">
+            exactly on the real border (same width, same edges, same line), so you can't tell it's
+            there. Each corner piece paints the page color over the box's straight side border,
+            then draws the curve. */}
+        {/* data-stick-under: once it's pinned, the title bar's fade steps aside so the edge stays crisp. */}
+        <div aria-hidden="true" data-stick-under className="pointer-events-none sticky top-[var(--sticky-top,0px)] z-30 hidden h-0 md:block">
+          <div className="absolute inset-x-0 top-0 h-[18px]">
             <div className="absolute left-0 top-0 size-[18px] bg-paper">
               <div className="size-full rounded-tl-card border-l-[1.5px] border-t-[1.5px] border-ink bg-paper" />
             </div>
@@ -217,6 +217,11 @@ export default function Board<T extends BoardItem>({
             </div>
           </div>
         </div>
+      <section
+        aria-label={ALL.filter((s) => s !== bottom).map((s) => config.labels[s]).join(", ")}
+        data-board
+        className="relative flex flex-col rounded-card border-[1.5px] border-ink md:min-h-0 md:flex-1"
+      >
         {/* Completed takes the left 2/3 (both rows); the other two stack on the right.
             Width split: md:grid-cols-[2fr_1fr]. */}
         {config.columns ? (
@@ -279,6 +284,7 @@ export default function Board<T extends BoardItem>({
           ))}
         </BottomRow>
       </section>
+      </div>
 
       {/* The card that follows your cursor while dragging (drawn on top of everything). */}
       <DragOverlay dropAnimation={{ duration: 180, easing: "cubic-bezier(0.22, 1, 0.36, 1)" }}>
@@ -457,7 +463,6 @@ function Card<T extends BoardItem>({
   const ref = useRef<HTMLDivElement | null>(null);
   const { setNodeRef, attributes, listeners, isDragging } = useDraggable({ id: item.id, data: { item }, disabled: editing });
   const poster = useContext(PosterView);
-  if (poster) floating = true; // a poster stays a poster; its details float next to it
 
   // Picked from search while already on this page: open it.
   const [openedFor, setOpenedFor] = useState(focused);
@@ -475,6 +480,50 @@ function Card<T extends BoardItem>({
   async function remove() {
     const ok = await confirm({ title: `Delete "${item.title}"?`, body: "It'll be removed for good.", confirmLabel: "Delete" });
     if (ok) startTransition(() => config.onDelete(item));
+  }
+
+  // Boards with covers (Games / Anime): clicking opens the details on the right (DetailsPanel).
+  if (config.cover) {
+    return (
+      <div
+        ref={(el) => {
+          ref.current = el;
+          setNodeRef(el);
+        }}
+        {...attributes}
+        {...listeners}
+        onClick={() => setOpen(true)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") setOpen(true);
+          else listeners?.onKeyDown?.(e);
+        }}
+        aria-expanded={open}
+        aria-label={`${item.title}, ${config.labels[item.status]}. Press Enter to open, Space to drag.`}
+        className={`cursor-grab touch-manipulation select-none rounded-card transition-opacity focus-visible:ring-2 focus-visible:ring-accent active:cursor-grabbing ${
+          isDragging ? "opacity-30" : ""
+        } ${pending ? "opacity-40" : ""}`}
+        style={{ outline: "none" }}
+      >
+        {poster ? (
+          <PosterFace item={item} config={config} focused={focused} active={open} />
+        ) : (
+          <CardFace item={item} config={config} focused={focused} active={open} />
+        )}
+        {open && (
+          <DetailsPanel
+            item={item}
+            config={config}
+            editing={editing}
+            onEdit={setEditing}
+            onDelete={remove}
+            onClose={() => {
+              setOpen(false);
+              setEditing(false);
+            }}
+          />
+        )}
+      </div>
+    );
   }
 
   const editor = <div className="rounded-card bg-surface p-3 ring-1 ring-line">{config.editor(item, () => setEditing(false))}</div>;
@@ -502,19 +551,15 @@ function Card<T extends BoardItem>({
       // While dragging, the floating copy moves; this one stays as a faint placeholder.
       className={`cursor-grab touch-manipulation select-none rounded-card transition-opacity focus-visible:ring-2 focus-visible:ring-accent active:cursor-grabbing ${
         isDragging ? "opacity-30" : ""
-      } ${pending ? "opacity-40" : ""} ${floating && open && !poster ? "ring-2 ring-accent/40" : ""}`}
+      } ${pending ? "opacity-40" : ""} ${floating && open ? "ring-2 ring-accent/40" : ""}`}
       style={{ outline: "none" }}
     >
-      {poster ? (
-        <PosterFace item={item} config={config} focused={focused} active={open} />
-      ) : (
-        <CardFace item={item} config={config} open={showOpenInPlace} focused={focused} onEdit={() => setEditing(true)} onDelete={remove} />
-      )}
+      <CardFace item={item} config={config} open={showOpenInPlace} focused={focused} onEdit={() => setEditing(true)} onDelete={remove} />
       {floating && open && !isDragging && (
         <FloatingPanel
           anchor={ref}
           follow={focused}
-          wide={editing || poster}
+          wide={editing}
           // While editing, clicking elsewhere doesn't close it (so you don't lose your changes).
           onClose={() => {
             if (!editing) setOpen(false);
@@ -654,6 +699,7 @@ function CardFace<T extends BoardItem>({
   open = false,
   focused = false,
   lifted = false,
+  active = false,
   onEdit,
   onDelete,
 }: {
@@ -662,6 +708,7 @@ function CardFace<T extends BoardItem>({
   open?: boolean;
   focused?: boolean;
   lifted?: boolean;
+  active?: boolean; // its details panel is open (Games / Anime)
   onEdit?: () => void;
   onDelete?: () => void;
 }) {
@@ -692,7 +739,7 @@ function CardFace<T extends BoardItem>({
     <div
       className={`rounded-card bg-surface/80 px-3 ${cover !== null ? "py-2" : "py-1.5"} ${focused ? "flash" : ""} ${
         lifted ? "rotate-2 cursor-grabbing bg-surface shadow-xl shadow-ink/25 ring-1 ring-line" : ""
-      }`}
+      } ${active ? "ring-2 ring-accent" : ""}`}
     >
       <div className="flex items-stretch gap-2.5">
         {/* Left (boards with dates): the date, centered over edit/delete when open.
@@ -750,6 +797,133 @@ function CardFace<T extends BoardItem>({
         {!hasDates && open && <div className="flex shrink-0 items-start border-l border-line pl-2 pt-0.5">{actions}</div>}
       </div>
     </div>
+  );
+}
+
+// Games / Anime: an entry's details, sliding in from the right (like the sidebar's panels).
+// The cover up top, then the title, where it is, the dates, the note; Edit swaps in the form.
+function DetailsPanel<T extends BoardItem>({
+  item,
+  config,
+  editing,
+  onEdit,
+  onDelete,
+  onClose,
+}: {
+  item: T;
+  config: BoardConfig<T>;
+  editing: boolean;
+  onEdit: (on: boolean) => void;
+  onDelete: () => void;
+  onClose: () => void;
+}) {
+  const src = config.cover?.(item) ?? "";
+  const detail = config.detail?.(item) ?? "";
+  const tag = config.tag?.(item) ?? null;
+  const body: ReactNode = config.body ? config.body(item) : item.note;
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && !document.querySelector("dialog[open]")) onClose();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  // Drawn on top of the page. Its events mustn't reach the card behind it (they'd start a drag).
+  const stop = (e: React.SyntheticEvent) => e.stopPropagation();
+  return createPortal(
+    <div className="fixed inset-0 z-[70]" onClick={stop} onPointerDown={stop} onMouseDown={stop} onTouchStart={stop} onKeyDown={stop}>
+      <button type="button" aria-label="Close" onClick={onClose} className="absolute inset-0 cursor-default bg-ink/30" />
+      <aside
+        aria-label={item.title}
+        className="panel-slide absolute inset-y-0 right-0 flex w-full max-w-md flex-col overflow-hidden bg-paper shadow-2xl shadow-ink/30"
+      >
+        {/* The art, with a soft blurred copy of it filling the space behind. */}
+        <div className="relative shrink-0 overflow-hidden border-b border-line">
+          {src && (
+            // eslint-disable-next-line @next/next/no-img-element -- decorative backdrop
+            <img src={bigCover(src)} alt="" aria-hidden="true" className="absolute inset-0 size-full scale-125 object-cover opacity-35 blur-2xl" />
+          )}
+          <div className="relative flex items-end gap-4 px-5 pb-5 pt-12">
+            <div className="w-32 shrink-0 overflow-hidden rounded-[10px] shadow-lg shadow-ink/30">
+              {src ? (
+                // eslint-disable-next-line @next/next/no-img-element -- remote cover (AniList / IGDB)
+                <img
+                  src={bigCover(src)}
+                  alt=""
+                  onError={(e) => {
+                    if (e.currentTarget.src !== src) e.currentTarget.src = src;
+                  }}
+                  className="aspect-[3/4] w-full object-cover"
+                />
+              ) : (
+                <div className="grid aspect-[3/4] place-items-center bg-gradient-to-br from-line to-accent/25">
+                  <span className="font-display text-5xl font-semibold text-accent/60">{item.title.trim()[0]?.toUpperCase()}</span>
+                </div>
+              )}
+            </div>
+            <div className="min-w-0 flex-1 pb-1">
+              <p className="flex flex-wrap gap-1.5">
+                <span className="rounded-full bg-paper/90 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-ink">
+                  {config.labels[item.status]}
+                </span>
+                {tag && (
+                  <span className="rounded-full bg-paper/90 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-muted">{tag}</span>
+                )}
+              </p>
+              <h2 className="mt-2 break-words font-display text-2xl font-semibold leading-tight text-ink">{item.title}</h2>
+              {detail && <p className="num mt-1 text-sm text-muted">{detail}</p>}
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close"
+            className="absolute right-3 top-3 grid size-9 place-items-center rounded-control bg-paper/80 text-muted transition-colors hover:bg-paper hover:text-ink"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M6 6l12 12M18 6L6 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+            </svg>
+          </button>
+        </div>
+
+        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5 [scrollbar-width:thin]">
+          {editing ? (
+            config.editor(item, () => onEdit(false))
+          ) : (
+            <>
+              {body ? (
+                <div className="break-words rounded-card bg-surface px-4 py-3 text-[15px] leading-relaxed text-ink/85">{body}</div>
+              ) : (
+                <p className="text-sm text-muted">No note.</p>
+              )}
+              <div className="mt-5 flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => onEdit(true)}
+                  className="flex items-center gap-1.5 rounded-control bg-accent px-4 py-2 font-semibold text-accent-ink transition-opacity hover:opacity-90"
+                >
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <path d="M4 20h4L19 9l-4-4L4 16v4zM14 6l4 4" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                  Edit
+                </button>
+                <button
+                  type="button"
+                  onClick={onDelete}
+                  className="rounded-control px-3 py-2 text-sm text-muted transition-colors hover:bg-surface hover:text-danger"
+                >
+                  Delete
+                </button>
+              </div>
+              <p className="mt-6 text-xs text-muted">Drag the card on the board to move it to another list.</p>
+            </>
+          )}
+        </div>
+      </aside>
+    </div>,
+    document.body,
   );
 }
 

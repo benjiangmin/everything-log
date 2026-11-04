@@ -37,7 +37,7 @@ export default function StickyTop({ className, children }: { className?: string;
       if (!el) return;
       const barBottom = el.getBoundingClientRect().bottom;
       const somethingStuckUnder = Array.from(document.querySelectorAll("[data-stick-under]")).some(
-        (s) => s.getBoundingClientRect().top <= barBottom + 1,
+        (s) => s.getClientRects().length > 0 && s.getBoundingClientRect().top <= barBottom + 1, // (skips hidden ones)
       );
       setFade(window.scrollY > 0 && !somethingStuckUnder);
     };
