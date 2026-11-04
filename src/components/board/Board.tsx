@@ -540,6 +540,10 @@ function FloatingPanel({
   children: ReactNode;
 }) {
   const panelRef = useRef<HTMLDivElement>(null);
+  const closeRef = useRef(onClose);
+  useEffect(() => {
+    closeRef.current = onClose;
+  });
   const [pos, setPos] = useState<{ left: number; width: number; top?: number; bottom?: number } | null>(null);
 
   useLayoutEffect(() => {
@@ -554,11 +558,19 @@ function FloatingPanel({
       else setPos({ left, top: r.bottom + 6, width });
     };
     place();
+    // Scrolling (the page, or the list it's in) closes it. Except for the first moment after it
+    // opens: picked from search, the list scrolls itself to the card, and the panel follows along.
+    const openedAt = Date.now();
+    const onScroll = (e: Event) => {
+      if (panelRef.current?.contains(e.target as Node)) return; // scrolling inside the panel itself
+      if (Date.now() - openedAt < 900) place();
+      else closeRef.current();
+    };
     window.addEventListener("resize", place);
-    window.addEventListener("scroll", place, true); // true: also when the row itself scrolls
+    window.addEventListener("scroll", onScroll, true); // true: also when the row / list scrolls
     return () => {
       window.removeEventListener("resize", place);
-      window.removeEventListener("scroll", place, true);
+      window.removeEventListener("scroll", onScroll, true);
     };
   }, [anchor, wide]);
 
@@ -721,7 +733,7 @@ function PosterFace<T extends BoardItem>({
   const meta = [date, tag].filter(Boolean).join(" · ");
 
   return (
-    <div className={`group rounded-[10px] ${focused ? "flash" : ""}`}>
+    <div className="group">
       <div
         className={`relative aspect-[3/4] overflow-hidden rounded-[10px] bg-line shadow-sm shadow-ink/15 transition duration-200 ease-out ${
           lifted
@@ -758,8 +770,9 @@ function PosterFace<T extends BoardItem>({
           </span>
         )}
       </div>
+      {/* Picked from search: the title flashes (its details open beside it, see Card). */}
       <p className="mt-1.5 line-clamp-2 px-0.5 text-[13px] font-medium leading-snug text-ink" title={item.title}>
-        {item.title}
+        <span className={`-mx-1 box-decoration-clone rounded-[5px] px-1 ${focused ? "flash" : ""}`}>{item.title}</span>
       </p>
       {meta && <p className="num px-0.5 text-[11px] uppercase tracking-wide text-muted">{meta}</p>}
     </div>
