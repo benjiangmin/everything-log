@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useRef, useState, useTransition, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, useTransition, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import {
   DndContext,
@@ -61,15 +61,18 @@ export type BoardConfig<T extends BoardItem> = {
   mascots?: Partial<Record<Status, { src: string; className: string }>>;
 };
 
-// Wide screens: the box is never taller than the screen under the pinned title + search
+// The shortest the board gets on wide screens: room for at least 8 cards in every area, measured:
+//   an open area = title 52px + 8 cards (64px each + 8px gaps = 568px) + 12px padding = 632px
+//   right side   = the open area + the closed one's title (60px) + a line = 693px
+//   + the bottom row (125px) + the box's borders ≈ 821px → 51.5rem
+// Up to that size, the box also stays within the screen under the pinned title + search
 // (--sticky-top; 2.75rem = the gap above the box + the page's bottom padding), so once you scroll
-// down, its top border is always in view. It's at least 28rem (or the whole space, if less).
-const MIN_HEIGHT =
-  "md:min-h-[min(28rem,calc(100dvh-var(--sticky-top,0px)-2.75rem))] md:max-h-[calc(100dvh-var(--sticky-top,0px)-2.75rem)]";
-// Boards with covers (Games / Anime): exactly that tall, so scrolling down to it fills the screen,
-// and always room for 8 cards in every area: on shorter screens the covers (and so the cards)
-// shrink to fit. See .board-covers in globals.css for the sum.
-const COVER_HEIGHT = "md:h-[calc(100dvh-var(--sticky-top,0px)-2.75rem)] md:shrink-0";
+// down its top border stays in view. On screens too short for both, the 8 cards win.
+// Boards without covers (Goals) have small cards: ~28rem is plenty, always within the screen.
+const MIN_HEIGHT = {
+  covers: "md:min-h-[51.5rem] md:max-h-[max(51.5rem,calc(100dvh-var(--sticky-top,0px)-2.75rem))]",
+  plain: "md:min-h-[min(28rem,calc(100dvh-var(--sticky-top,0px)-2.75rem))] md:max-h-[calc(100dvh-var(--sticky-top,0px)-2.75rem)]",
+};
 
 function todayKey() {
   const d = localNow();
@@ -87,6 +90,40 @@ function useLocalCopy<V>(value: V) {
   return [local, setLocal] as const;
 }
 
+// ---------- Posters vs list (boards with covers) ----------
+// Posters: the cover art up front, in a grid; click one for its details. List: one row each.
+// Remembered per board in this browser.
+type View = "posters" | "list";
+const viewKey = (id: string) => `board-view:${id}`;
+const viewListeners = new Set<() => void>();
+function readView(id: string): View {
+  try {
+    return localStorage.getItem(viewKey(id)) === "list" ? "list" : "posters";
+  } catch {
+    return "posters";
+  }
+}
+function writeView(id: string, v: View) {
+  try {
+    localStorage.setItem(viewKey(id), v);
+  } catch {
+    /* private window: just this visit */
+  }
+  viewListeners.forEach((l) => l());
+}
+const subscribeView = (l: () => void) => {
+  viewListeners.add(l);
+  return () => viewListeners.delete(l);
+};
+const PosterView = createContext(false);
+
+// Sharper art for posters. AniList's file folders are one size off from their names:
+// small = "medium" (~100px wide), medium = "large" (~230px), large = "extraLarge" (~460px).
+// IGDB: cover_big_2x (~530px wide).
+export function bigCover(url: string) {
+  return url.replace(/\/cover\/(small|medium)\//, "/cover/large/").replace("/t_cover_small_2x/", "/t_cover_big_2x/");
+}
+
 export default function Board<T extends BoardItem>({
   items,
   focusId,
@@ -98,6 +135,8 @@ export default function Board<T extends BoardItem>({
 }) {
   const [board, setBoard] = useLocalCopy(items);
   const [dragging, setDragging] = useState<T | null>(null);
+  const storedView = useSyncExternalStore(subscribeView, () => readView(config.id), () => "posters" as View);
+  const posters = Boolean(config.cover) && storedView === "posters";
   // The right side (split layout): only one of its two areas is open at a time.
   const [rightOpen, setRightOpen] = useState<Status>(() => (items.stopped.some((x) => x.id === focusId) ? "stopped" : "playing"));
   const [veiled, setVeiled] = useState(false);
@@ -154,14 +193,30 @@ export default function Board<T extends BoardItem>({
   );
 
   return (
+    <PosterView.Provider value={posters}>
     <DndContext id={config.id} sensors={sensors} onDragStart={onDragStart} onDragEnd={onDragEnd} onDragCancel={() => setDragging(null)}>
       {/* The black box. Wide screens: fills the rest of the screen and never grows with the number of
           items. Short screens: see MIN_HEIGHT. */}
       <section
         aria-label={ALL.filter((s) => s !== bottom).map((s) => config.labels[s]).join(", ")}
         data-board
-        className={`mt-5 flex flex-col overflow-hidden rounded-card border-[1.5px] border-ink ${config.cover ? `board-covers ${COVER_HEIGHT}` : `md:flex-1 md:basis-0 ${MIN_HEIGHT}`}`}
+        className={`relative mt-5 flex flex-col rounded-card border-[1.5px] border-ink md:flex-1 md:basis-0 ${config.cover ? MIN_HEIGHT.covers : MIN_HEIGHT.plain}`}
       >
+        {/* Shorter screens, where the page scrolls: the box's top edge (rounded corners and all) stays
+            pinned under the title + search, with each area's title just below it. At rest it sits
+            exactly on top of the real border, so you can't tell it's there. Each corner piece first
+            paints the page color over the box's straight side border, then draws the curve. */}
+        <div aria-hidden="true" className="pointer-events-none sticky top-[var(--sticky-top,0px)] z-30 hidden h-0 md:block">
+          <div className="absolute -left-[1.5px] -right-[1.5px] -top-[1.5px] h-[18px]">
+            <div className="absolute left-0 top-0 size-[18px] bg-paper">
+              <div className="size-full rounded-tl-card border-l-[1.5px] border-t-[1.5px] border-ink bg-paper" />
+            </div>
+            <div className="absolute inset-x-[18px] top-0 border-t-[1.5px] border-ink" />
+            <div className="absolute right-0 top-0 size-[18px] bg-paper">
+              <div className="size-full rounded-tr-card border-r-[1.5px] border-t-[1.5px] border-ink bg-paper" />
+            </div>
+          </div>
+        </div>
         {/* Completed takes the left 2/3 (both rows); the other two stack on the right.
             Width split: md:grid-cols-[2fr_1fr]. */}
         {config.columns ? (
@@ -175,7 +230,17 @@ export default function Board<T extends BoardItem>({
           </div>
         ) : (
           <div className={`grid flex-1 grid-cols-[minmax(0,1fr)] divide-y divide-line md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] md:divide-y-0 min-h-0`}>
-            <Area status="completed" label={config.labels.completed} count={board.completed.length} mascot={config.mascots?.completed} className="md:border-r md:border-line" wide={!config.cover} roomy={Boolean(config.cover)}>
+            <Area
+              status="completed"
+              label={config.labels.completed}
+              count={board.completed.length}
+              mascot={config.mascots?.completed}
+              className="md:border-r md:border-line"
+              wide={!config.cover}
+              roomy={Boolean(config.cover)}
+              poster={posters ? "big" : undefined}
+              extra={config.cover ? <ViewToggle view={posters ? "posters" : "list"} onChange={(v) => writeView(config.id, v)} /> : null}
+            >
               {board.completed.map((it) => card(it))}
             </Area>
             {/* Right side: one area open at a time. Watching open → Dropped's title sits at the bottom.
@@ -185,6 +250,7 @@ export default function Board<T extends BoardItem>({
                 <Area
                   key={s}
                   roomy={Boolean(config.cover)}
+                  poster={posters ? "small" : undefined}
                   status={s}
                   label={config.labels[s]}
                   count={board[s].length}
@@ -207,7 +273,7 @@ export default function Board<T extends BoardItem>({
         )}
         <BottomRow status={bottom} label={config.labels[bottom]} count={board[bottom].length} empty={config.emptyBottomRow}>
           {board[bottom].map((item) => (
-            <div key={item.id} className="w-60 shrink-0">
+            <div key={item.id} className={`shrink-0 ${posters ? "w-24" : "w-60"}`}>
               {card(item, true)}
             </div>
           ))}
@@ -216,9 +282,18 @@ export default function Board<T extends BoardItem>({
 
       {/* The card that follows your cursor while dragging (drawn on top of everything). */}
       <DragOverlay dropAnimation={{ duration: 180, easing: "cubic-bezier(0.22, 1, 0.36, 1)" }}>
-        {dragging ? <CardFace item={dragging} config={config} lifted /> : null}
+        {dragging ? (
+          posters ? (
+            <div className="w-28 rotate-3">
+              <PosterFace item={dragging} config={config} lifted />
+            </div>
+          ) : (
+            <CardFace item={dragging} config={config} lifted />
+          )
+        ) : null}
       </DragOverlay>
     </DndContext>
+    </PosterView.Provider>
   );
 }
 
@@ -232,6 +307,8 @@ function Area({
   collapsed,
   onToggle,
   roomy,
+  poster,
+  extra,
   children,
 }: {
   status: Status;
@@ -243,16 +320,18 @@ function Area({
   collapsed?: boolean; // the right side's accordion: just the title, click it to open
   onToggle?: () => void;
   roomy?: boolean; // big cover cards: phones keep room for 8
+  poster?: "big" | "small"; // poster grid: Completed (wider tiles) / the right side
+  extra?: ReactNode; // shown before the count (Completed: Posters / List)
   children: ReactNode[];
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: status });
   const [scrolled, setScrolled] = useState(false); // shows the fade under the title
 
   return (
-    // overflow-hidden: trims the mascot at the area's edges.
+    // overflow-clip: trims the mascot at the area's edges (and, unlike overflow-hidden, lets the title stick).
     <div
       ref={setNodeRef}
-      className={`relative flex flex-col overflow-hidden transition-colors ${collapsed ? "shrink-0" : "min-h-0 flex-1"} ${
+      className={`relative flex flex-col overflow-clip transition-colors ${collapsed ? "shrink-0" : "min-h-0 flex-1"} ${
         isOver ? "bg-surface/60" : ""
       } ${className}`}
     >
@@ -260,7 +339,12 @@ function Area({
         // eslint-disable-next-line @next/next/no-img-element -- decorative
         <img src={mascot.src} alt="" aria-hidden="true" className={`pointer-events-none absolute z-0 select-none opacity-60 ${mascot.className}`} />
       )}
-      <div className={`relative z-10 flex shrink-0 items-baseline justify-between gap-3 px-4 pt-4 ${collapsed ? "pb-4" : "pb-2"}`}>
+      {/* The title. Wide screens: sticks under the pinned title + search while the page scrolls. */}
+      <div
+        className={`relative z-10 flex shrink-0 items-baseline justify-between gap-3 px-4 pt-4 md:sticky md:bg-paper md:top-[var(--sticky-top,0px)] ${
+          collapsed ? "pb-4" : "pb-2"
+        }`}
+      >
         {onToggle ? (
           // Accordion title: the whole row opens this area (and closes the other).
           <h2 className={`-mx-4 -mt-4 flex flex-1 ${collapsed ? "-mb-4" : "-mb-2"}`}>
@@ -289,7 +373,10 @@ function Area({
         ) : (
           <>
             <h2 className="font-display text-lg font-semibold">{label}</h2>
-            <p className="text-sm text-muted">{count}</p>
+            <div className="flex items-center gap-3">
+              {extra}
+              <p className="text-sm text-muted">{count}</p>
+            </div>
           </>
         )}
         {/* Fade under the title once the area has scrolled. Height: h-5. */}
@@ -305,10 +392,16 @@ function Area({
         <div
           onScroll={(e) => setScrolled(e.currentTarget.scrollTop > 0)}
           className={`relative z-[1] ${roomy ? "max-h-[max(55dvh,39.5rem)]" : "max-h-[55dvh]"} min-h-0 flex-1 overflow-y-auto px-3 pb-3 md:max-h-none ${
-            wide ? "grid content-start items-start gap-2 lg:grid-cols-2" : "space-y-2"
+            poster === "big"
+            ? "grid content-start items-start gap-x-3 gap-y-4 [grid-template-columns:repeat(auto-fill,minmax(6rem,1fr))] md:[grid-template-columns:repeat(auto-fill,minmax(6.75rem,1fr))]"
+            : poster === "small"
+              ? "grid content-start items-start gap-x-3 gap-y-4 [grid-template-columns:repeat(auto-fill,minmax(5.5rem,1fr))]"
+              : wide
+                ? "grid content-start items-start gap-2 lg:grid-cols-2"
+                : "space-y-2"
           }`}
         >
-          {children.length === 0 ? <p className="px-1 py-6 text-center text-sm text-muted lg:col-span-2">Drag one here</p> : children}
+          {children.length === 0 ? <p className="col-span-full px-1 py-6 text-center text-sm text-muted">Drag one here</p> : children}
         </div>
       )}
     </div>
@@ -363,6 +456,8 @@ function Card<T extends BoardItem>({
   const confirm = useConfirm();
   const ref = useRef<HTMLDivElement | null>(null);
   const { setNodeRef, attributes, listeners, isDragging } = useDraggable({ id: item.id, data: { item }, disabled: editing });
+  const poster = useContext(PosterView);
+  if (poster) floating = true; // a poster stays a poster; its details float next to it
 
   // Picked from search while already on this page: open it.
   const [openedFor, setOpenedFor] = useState(focused);
@@ -407,14 +502,18 @@ function Card<T extends BoardItem>({
       // While dragging, the floating copy moves; this one stays as a faint placeholder.
       className={`cursor-grab touch-manipulation select-none rounded-card transition-opacity focus-visible:ring-2 focus-visible:ring-accent active:cursor-grabbing ${
         isDragging ? "opacity-30" : ""
-      } ${pending ? "opacity-40" : ""} ${floating && open ? "ring-2 ring-accent/40" : ""}`}
+      } ${pending ? "opacity-40" : ""} ${floating && open && !poster ? "ring-2 ring-accent/40" : ""}`}
       style={{ outline: "none" }}
     >
-      <CardFace item={item} config={config} open={showOpenInPlace} focused={focused} onEdit={() => setEditing(true)} onDelete={remove} />
+      {poster ? (
+        <PosterFace item={item} config={config} focused={focused} active={open} />
+      ) : (
+        <CardFace item={item} config={config} open={showOpenInPlace} focused={focused} onEdit={() => setEditing(true)} onDelete={remove} />
+      )}
       {floating && open && !isDragging && (
         <FloatingPanel
           anchor={ref}
-          wide={editing}
+          wide={editing || poster}
           // While editing, clicking elsewhere doesn't close it (so you don't lose your changes).
           onClose={() => {
             if (!editing) setOpen(false);
@@ -441,15 +540,18 @@ function FloatingPanel({
   children: ReactNode;
 }) {
   const panelRef = useRef<HTMLDivElement>(null);
-  const [pos, setPos] = useState<{ left: number; bottom: number; width: number } | null>(null);
+  const [pos, setPos] = useState<{ left: number; width: number; top?: number; bottom?: number } | null>(null);
 
   useLayoutEffect(() => {
     const place = () => {
       const r = anchor.current?.getBoundingClientRect();
       if (!r) return;
       const width = Math.max(r.width, wide ? 360 : 260);
-      const left = Math.min(Math.max(8, r.left), window.innerWidth - width - 8);
-      setPos({ left, bottom: window.innerHeight - r.top + 6, width });
+      const left = Math.min(Math.max(8, r.left + r.width / 2 - width / 2), window.innerWidth - width - 8);
+      // Above the card if there's room (bottom row), otherwise below it (posters near the top).
+      const roomAbove = r.top - (parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--sticky-top")) || 0);
+      if (roomAbove > 280 || roomAbove > window.innerHeight - r.bottom) setPos({ left, bottom: window.innerHeight - r.top + 6, width });
+      else setPos({ left, top: r.bottom + 6, width });
     };
     place();
     window.addEventListener("resize", place);
@@ -484,7 +586,7 @@ function FloatingPanel({
       onPointerDown={(e) => e.stopPropagation()}
       onMouseDown={(e) => e.stopPropagation()}
       className="panel-pop fixed z-50 rounded-card bg-surface shadow-xl shadow-ink/20 ring-1 ring-line"
-      style={{ left: pos.left, bottom: pos.bottom, width: pos.width }}
+      style={{ left: pos.left, bottom: pos.bottom, top: pos.top, width: pos.width }}
     >
       {children}
     </div>,
@@ -517,7 +619,7 @@ function CardFace<T extends BoardItem>({
   // What shows under the title when open: the board's own body (Goals: why + proof), or the note.
   const body: ReactNode = config.body ? config.body(item) : item.note;
   // Boards with covers (Anime / Games): bigger cards, one per line.
-  const row = cover !== null ? "min-h-[var(--cover-h,3rem)]" : "min-h-7";
+  const row = cover !== null ? "min-h-12" : "min-h-7";
 
   const actions = (
     <div className="flex justify-center gap-0.5">
@@ -597,14 +699,111 @@ function CardFace<T extends BoardItem>({
   );
 }
 
+// A poster: the cover art, big, with the title (and date / tag / note mark) under it.
+// Click it for the details (dates, note, edit, delete) in a panel beside it.
+function PosterFace<T extends BoardItem>({
+  item,
+  config,
+  focused = false,
+  active = false,
+  lifted = false,
+}: {
+  item: T;
+  config: BoardConfig<T>;
+  focused?: boolean;
+  active?: boolean; // its details are open
+  lifted?: boolean; // being dragged
+}) {
+  const src = config.cover?.(item) ?? "";
+  const date = config.leftDate?.(item) ?? null;
+  const tag = config.tag?.(item) ?? null;
+  const hasNote = Boolean(config.body ? config.body(item) : item.note);
+  const meta = [date, tag].filter(Boolean).join(" · ");
+
+  return (
+    <div className={`group rounded-[10px] ${focused ? "flash" : ""}`}>
+      <div
+        className={`relative aspect-[3/4] overflow-hidden rounded-[10px] bg-line shadow-sm shadow-ink/15 transition duration-200 ease-out ${
+          lifted
+            ? "shadow-xl shadow-ink/30 ring-1 ring-line"
+            : active
+              ? "-translate-y-1 shadow-lg shadow-ink/25 ring-2 ring-accent"
+              : "group-hover:-translate-y-1 group-hover:shadow-lg group-hover:shadow-ink/25"
+        }`}
+      >
+        {src ? (
+          // eslint-disable-next-line @next/next/no-img-element -- remote cover (AniList / IGDB)
+          <img
+            src={bigCover(src)}
+            alt=""
+            draggable={false}
+            loading="lazy"
+            // If the big version isn't there, fall back to the saved one.
+            onError={(e) => {
+              if (e.currentTarget.src !== src) e.currentTarget.src = src;
+            }}
+            className="size-full object-cover"
+          />
+        ) : (
+          // Your own title (no art): a warm tile with its initial.
+          <div className="grid size-full place-items-center bg-gradient-to-br from-line to-accent/25">
+            <span className="font-display text-4xl font-semibold text-accent/60">{item.title.trim()[0]?.toUpperCase()}</span>
+          </div>
+        )}
+        {hasNote && (
+          <span title="Has a note" className="absolute right-1.5 top-1.5 grid size-6 place-items-center rounded-full bg-paper/90 text-muted shadow-sm">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-label="Has a note">
+              <path d="M5 5h14v10H9l-4 4V5z" stroke="currentColor" strokeWidth="2.2" strokeLinejoin="round" />
+            </svg>
+          </span>
+        )}
+      </div>
+      <p className="mt-1.5 line-clamp-2 px-0.5 text-[13px] font-medium leading-snug text-ink" title={item.title}>
+        {item.title}
+      </p>
+      {meta && <p className="num px-0.5 text-[11px] uppercase tracking-wide text-muted">{meta}</p>}
+    </div>
+  );
+}
+
+// Posters / List, in Completed's title row.
+function ViewToggle({ view, onChange }: { view: View; onChange: (v: View) => void }) {
+  return (
+    <div role="radiogroup" aria-label="View" className="flex rounded-control bg-surface p-0.5">
+      {(
+        [
+          ["posters", "Posters", <path key="p" d="M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z" />],
+          ["list", "List", <path key="l" d="M4 6h16M4 12h16M4 18h16" />],
+        ] as const
+      ).map(([v, label, icon]) => (
+        <button
+          key={v}
+          type="button"
+          role="radio"
+          aria-checked={view === v}
+          aria-label={label}
+          title={label}
+          onClick={() => onChange(v)}
+          className={`grid h-6 w-7 place-items-center rounded-[7px] transition-colors ${
+            view === v ? "bg-paper text-ink shadow-sm" : "text-muted hover:text-ink"
+          }`}
+        >
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinejoin="round" strokeLinecap="round" aria-hidden="true">
+            {icon}
+          </svg>
+        </button>
+      ))}
+    </div>
+  );
+}
+
 // A cover picture, or (for your own titles) a plain tile with the first letter.
 function Cover({ src, title, big }: { src: string; title: string; big: boolean }) {
   // Closed: h-12 (48px). Open: h-24 (96px). Covers are about 3:4.
-  // Closed: --cover-h (48px, smaller on short screens; see .board-covers in globals.css), 3:4.
-  const size = big ? "h-24 w-[4.5rem] rounded-[7px]" : "h-[var(--cover-h,3rem)] w-[calc(var(--cover-h,3rem)*0.75)] rounded-[5px]";
+  const size = big ? "h-24 w-[4.5rem] rounded-[7px]" : "h-12 w-9 rounded-[5px]";
   return src ? (
     // eslint-disable-next-line @next/next/no-img-element -- remote cover (AniList / IGDB)
-    <img src={src} alt="" draggable={false} className={`${size} shrink-0 bg-line object-cover`} />
+    <img src={big ? bigCover(src) : src} alt="" draggable={false} className={`${size} shrink-0 bg-line object-cover`} />
   ) : (
     <span aria-hidden="true" className={`${size} grid shrink-0 place-items-center bg-line/80 font-display ${big ? "text-2xl" : "text-base"} font-semibold text-muted`}>
       {title.trim()[0]?.toUpperCase()}
