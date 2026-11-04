@@ -61,18 +61,15 @@ export type BoardConfig<T extends BoardItem> = {
   mascots?: Partial<Record<Status, { src: string; className: string }>>;
 };
 
-// The shortest the board gets on wide screens: room for at least 8 cards in every area, measured:
-//   an open area = title 52px + 8 cards (64px each + 8px gaps = 568px) + 12px padding = 632px
-//   right side   = the open area + the closed one's title (60px) + a line = 693px
-//   + the bottom row (125px) + the box's borders ≈ 821px → 51.5rem
-// Up to that size, the box also stays within the screen under the pinned title + search
+// Wide screens: the box is never taller than the screen under the pinned title + search
 // (--sticky-top; 2.75rem = the gap above the box + the page's bottom padding), so once you scroll
-// down its top border stays in view. On screens too short for both, the 8 cards win.
-// Boards without covers (Goals) have small cards: ~28rem is plenty, always within the screen.
-const MIN_HEIGHT = {
-  covers: "md:min-h-[51.5rem] md:max-h-[max(51.5rem,calc(100dvh-var(--sticky-top,0px)-2.75rem))]",
-  plain: "md:min-h-[min(28rem,calc(100dvh-var(--sticky-top,0px)-2.75rem))] md:max-h-[calc(100dvh-var(--sticky-top,0px)-2.75rem)]",
-};
+// down, its top border is always in view. It's at least 28rem (or the whole space, if less).
+const MIN_HEIGHT =
+  "md:min-h-[min(28rem,calc(100dvh-var(--sticky-top,0px)-2.75rem))] md:max-h-[calc(100dvh-var(--sticky-top,0px)-2.75rem)]";
+// Boards with covers (Games / Anime): exactly that tall, so scrolling down to it fills the screen,
+// and always room for 8 cards in every area: on shorter screens the covers (and so the cards)
+// shrink to fit. See .board-covers in globals.css for the sum.
+const COVER_HEIGHT = "md:h-[calc(100dvh-var(--sticky-top,0px)-2.75rem)] md:shrink-0";
 
 function todayKey() {
   const d = localNow();
@@ -163,7 +160,7 @@ export default function Board<T extends BoardItem>({
       <section
         aria-label={ALL.filter((s) => s !== bottom).map((s) => config.labels[s]).join(", ")}
         data-board
-        className={`mt-5 flex flex-col overflow-hidden rounded-card border-[1.5px] border-ink md:flex-1 md:basis-0 ${config.cover ? MIN_HEIGHT.covers : MIN_HEIGHT.plain}`}
+        className={`mt-5 flex flex-col overflow-hidden rounded-card border-[1.5px] border-ink ${config.cover ? `board-covers ${COVER_HEIGHT}` : `md:flex-1 md:basis-0 ${MIN_HEIGHT}`}`}
       >
         {/* Completed takes the left 2/3 (both rows); the other two stack on the right.
             Width split: md:grid-cols-[2fr_1fr]. */}
@@ -520,7 +517,7 @@ function CardFace<T extends BoardItem>({
   // What shows under the title when open: the board's own body (Goals: why + proof), or the note.
   const body: ReactNode = config.body ? config.body(item) : item.note;
   // Boards with covers (Anime / Games): bigger cards, one per line.
-  const row = cover !== null ? "min-h-12" : "min-h-7";
+  const row = cover !== null ? "min-h-[var(--cover-h,3rem)]" : "min-h-7";
 
   const actions = (
     <div className="flex justify-center gap-0.5">
@@ -603,7 +600,8 @@ function CardFace<T extends BoardItem>({
 // A cover picture, or (for your own titles) a plain tile with the first letter.
 function Cover({ src, title, big }: { src: string; title: string; big: boolean }) {
   // Closed: h-12 (48px). Open: h-24 (96px). Covers are about 3:4.
-  const size = big ? "h-24 w-[4.5rem] rounded-[7px]" : "h-12 w-9 rounded-[5px]";
+  // Closed: --cover-h (48px, smaller on short screens; see .board-covers in globals.css), 3:4.
+  const size = big ? "h-24 w-[4.5rem] rounded-[7px]" : "h-[var(--cover-h,3rem)] w-[calc(var(--cover-h,3rem)*0.75)] rounded-[5px]";
   return src ? (
     // eslint-disable-next-line @next/next/no-img-element -- remote cover (AniList / IGDB)
     <img src={src} alt="" draggable={false} className={`${size} shrink-0 bg-line object-cover`} />

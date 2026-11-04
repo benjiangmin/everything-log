@@ -312,3 +312,15 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .env-shake, .env-in, .seal-pop, .flap-open, .paper-rise, .env-away, .letter-reveal, .letter-glow { animation: none; }
 }
+
+/* Games / Anime boards: room for 8 cards in every area, however short the screen.
+   The box = screen − pinned title/search (--sticky-top) − 2.75rem. Inside it, measured:
+     9 cards (8 in the open right-hand area + 1 in the bottom row), each cover + 16px padding
+     + 245px of titles, gaps and borders (+ 5px to spare)
+   so cover = (box − 250px) / 9 − 16px, between 24px and 48px. */
+@media (min-width: 48rem) {
+  .board-covers {
+    --board-room: calc(100dvh - var(--sticky-top, 0px) - 2.75rem - 250px);
+    --cover-h: clamp(1.5rem, calc(var(--board-room) / 9 - 16px), 3rem);
+  }
+}
