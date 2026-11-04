@@ -2,10 +2,12 @@ import "server-only";
 import { db } from "./supabase";
 import { localNow } from "./month";
 import { countPendingInbox } from "./budget-inbox";
+import { countArrived } from "./letters";
 import { bibleHref, bibleYear } from "./home-pages";
 
 // The red "!" on home / category cards: pages that want your attention.
 //  - Budget: purchases from your alert emails waiting for review
+//  - Letters to self: a letter has arrived and you haven't opened it
 //  - After 5pm, if today has nothing yet: Gratitude, Something new I've learned, and the newest
 //    Bible in a year (this year's)
 // Anything that fails to load just doesn't get a "!" (never breaks the page).
@@ -30,6 +32,7 @@ export async function getAlertHrefs(): Promise<string[]> {
 
   const checks: Promise<string | null>[] = [
     safe(countPendingInbox().then((n) => (n > 0 ? "/budget" : null)), null),
+    safe(countArrived().then((n) => (n > 0 ? "/letters" : null)), null),
   ];
 
   if (evening) {

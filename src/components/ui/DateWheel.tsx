@@ -13,18 +13,21 @@ const daysIn = (y: number, m: number) => new Date(y, m, 0).getDate(); // m is 1â
 // Submits as a hidden "YYYY-MM-DD" input so the form/server action don't change.
 // Optional onChange: called with the new date when the picker closes (not on every wheel tick).
 // noYear: the box shows "Oct 29" (the year is still in the wheels). display: show this instead (e.g. "?").
+// years: how far back / ahead the year wheel goes (default: 5 back, 1 ahead).
 export default function DateWheel({
   name,
   defaultValue,
   onChange,
   noYear = false,
   display,
+  years: yearRange = [-5, 1],
 }: {
   name: string;
   defaultValue: string;
   onChange?: (value: string) => void;
   noYear?: boolean;
   display?: string;
+  years?: [number, number]; // [back, ahead] from this year
 }) {
   const [y0, m0, d0] = defaultValue.split("-").map(Number);
   const [year, setYear] = useState(y0);
@@ -33,7 +36,9 @@ export default function DateWheel({
   const { open, setOpen, ref } = usePopover();
 
   const thisYear = localNow().getFullYear();
-  const years = Array.from({ length: 7 }, (_, i) => thisYear - 5 + i);
+  const first = Math.min(thisYear + yearRange[0], y0);
+  const last = Math.max(thisYear + yearRange[1], y0); // a saved date outside the range still shows
+  const years = Array.from({ length: last - first + 1 }, (_, i) => first + i);
   const maxDay = daysIn(year, month);
   const safeDay = Math.min(day, maxDay);
   const days = Array.from({ length: maxDay }, (_, i) => i + 1);

@@ -7,6 +7,9 @@ import { inboxCount } from "@/app/budget/inbox-actions";
 import InboxPanel from "@/components/budget/InboxPanel";
 import SubscriptionsPanel from "@/components/subscriptions/SubscriptionsPanel";
 import AppSearchPanel from "@/components/home/AppSearchPanel";
+import { inboxCount as lettersInboxCount } from "@/app/letters/actions";
+import LettersInboxPanel from "@/components/letters/LettersInboxPanel";
+import SealedLettersPanel from "@/components/letters/SealedLettersPanel";
 import { useEffect, useState, useSyncExternalStore, useTransition, type ReactNode } from "react";
 
 // The navigation bar on the left of every page (not the login page).
@@ -67,6 +70,13 @@ export default function SideNav() {
         <path d="M4 11l8-7 8 7v8a1 1 0 0 1-1 1h-4v-6h-6v6H5a1 1 0 0 1-1-1v-8z" />
       </NavButton>
       {/* Budget only: purchases read from your alert emails, waiting for review. */}
+      {/* Letters to self only: the inbox (with a "!" when one has arrived) and the sealed letters. */}
+      {pathname === "/letters" && (
+        <>
+          <LettersInboxButton showLabel={labels} />
+          <SealedLettersButton showLabel={labels} />
+        </>
+      )}
       {/* Home only: search every app. */}
       {pathname === "/" && <SearchButton showLabel={labels} />}
       {pathname.startsWith("/budget") && (
@@ -163,6 +173,50 @@ function InboxButton({ showLabel }: { showLabel: boolean }) {
           onChanged={() => setCount((c) => Math.max(0, c - 1))}
         />
       )}
+    </>
+  );
+}
+
+// Letters to self: arrived letters you haven't read. Checks every minute (so a letter shows up
+// right after 12:00am on its day) and whenever you come back to the tab.
+function LettersInboxButton({ showLabel }: { showLabel: boolean }) {
+  const [count, setCount] = useState(0);
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    let live = true;
+    const check = () => lettersInboxCount().then((n) => live && setCount(n));
+    check();
+    const timer = setInterval(check, 60_000);
+    window.addEventListener("focus", check);
+    return () => {
+      live = false;
+      clearInterval(timer);
+      window.removeEventListener("focus", check);
+    };
+  }, []);
+  return (
+    <>
+      <NavButton label={count ? `Inbox (${count} new)` : "Inbox"} showLabel={showLabel} onClick={() => setOpen(true)} badge={count > 0}>
+        <path d="M3 13h5l1.5 3h5L16 13h5" />
+        <path d="M5.5 5h13L21 13v5a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-5L5.5 5z" />
+      </NavButton>
+      {open && <LettersInboxPanel onClose={() => setOpen(false)} onRead={() => setCount((c) => Math.max(0, c - 1))} />}
+    </>
+  );
+}
+
+// Letters to self: the letters still on the way, behind your password. Never hints at whether
+// there are any.
+function SealedLettersButton({ showLabel }: { showLabel: boolean }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <NavButton label="Sealed letters" showLabel={showLabel} onClick={() => setOpen(true)}>
+        <rect x="3" y="5" width="18" height="14" rx="2" />
+        <path d="M3.5 6l8.5 7 8.5-7" />
+        <circle cx="12" cy="15.5" r="1.6" />
+      </NavButton>
+      {open && <SealedLettersPanel onClose={() => setOpen(false)} />}
     </>
   );
 }
