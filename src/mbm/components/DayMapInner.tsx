@@ -22,12 +22,14 @@ export default function DayMapInner({
   tz,
   focus,
   showDots = false,
+  liveColor = null,
 }: {
   visits: Visit[];
   points: RoutePoint[];
   tz: string;
   focus: Focus | null;
   showDots?: boolean; // every recorded dot, to see what the phone actually got
+  liveColor?: string | null; // today: show where you are now, pulsing, in this color
 }) {
   const [open, setOpen] = useState<Visit | null>(null);
   const [moving, setMoving] = useState<Visit | null>(null); // "click where it really is"
@@ -48,6 +50,15 @@ export default function DayMapInner({
     );
     return { trip, stops };
   }, [focus, trips, visits]);
+  // Where you are now (today only): the stop you haven't left, if it's the latest thing the phone
+  // knows; otherwise the last dot.
+  const here = useMemo(() => {
+    if (!liveColor) return null;
+    const last = points.length ? points[points.length - 1] : null;
+    const open = [...visits].reverse().find((v) => !v.departed_at);
+    if (open && (!last || +new Date(open.arrived_at) >= +new Date(last.at) - 5 * 60000)) return { at: { lat: open.lat, lng: open.lng }, when: null };
+    return last ? { at: { lat: last.lat, lng: last.lng }, when: last.at } : null;
+  }, [liveColor, points, visits]);
   const nothingLit = lit !== null && lit.stops.size === 0 && lit.trip.size === 0;
   const dimming = lit !== null && !nothingLit;
   if (!KEY) {
@@ -110,6 +121,14 @@ export default function DayMapInner({
             </HtmlMarker>
           ));
         })}
+        {here && liveColor && (
+          <HtmlMarker position={here.at} zIndex={here.when ? 4 : 0}>
+            <span className="relative grid size-4 place-items-center" title={here.when ? `Last seen here · ${clock(here.when, tz)}` : "You're here"}>
+              <span className="absolute inline-flex size-4 animate-ping rounded-full opacity-50" style={{ background: liveColor }} />
+              {here.when && <span className="relative size-3.5 rounded-full border-2 border-[#faf6f0] shadow" style={{ background: liveColor }} />}
+            </span>
+          </HtmlMarker>
+        )}
         {visits.map((v) => {
           const name = v.place ?? v.auto_name;
           const on = lit?.stops.has(v.id) ?? false;

@@ -53,7 +53,12 @@ export default function DayView({ day, today, renderedAt }: { day: Day; today: b
         />
       </section>
 
-      <DayMap day={day} focus={focus} />
+      <DayMap
+        day={day}
+        focus={focus}
+        // Today: where you are now pulses, in the color of what you're doing.
+        liveColor={today ? ((day.running[0]?.activity_id && byId.get(day.running[0].activity_id)?.color) || "#7f5539") : null}
+      />
     </div>
   );
 }
