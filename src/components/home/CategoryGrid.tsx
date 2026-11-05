@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import AlertDot from "./AlertDot";
-import { useState, useTransition } from "react";
+import { useState, useTransition, type ReactNode } from "react";
 import {
   addCategory,
   addHomeSection,
@@ -26,11 +26,13 @@ export default function CategoryGrid({
   categories,
   sections,
   description: savedDescription,
+  children,
   alerts = [],
 }: {
   categories: HomeCategory[];
   sections: HomeSection[];
   description: string | null;
+  children?: ReactNode; // shown right under the Home bar (Minute by Minute)
   alerts?: string[];
 }) {
   const [editing, setEditing] = useState(false);
@@ -91,6 +93,7 @@ export default function CategoryGrid({
   return (
     <>
       <PageHeader
+        sticky
         title="Home"
         editing={editing}
         onToggle={() => setEditing((e) => !e)}
@@ -100,6 +103,7 @@ export default function CategoryGrid({
           startTransition(() => setHomeDescription(d));
         }}
       />
+      {children}
 
       <div className="mt-8">
         {order.length === 0 && secs.length === 0 && !editing ? (

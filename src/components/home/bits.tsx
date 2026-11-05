@@ -26,8 +26,10 @@ export function PageHeader({
   onToggle,
   description,
   onDescription,
+  sticky = false,
 }: {
   title: string;
+  sticky?: boolean; // stays at the top while you scroll (the home page)
   back?: { href: string; label: string };
   editing: boolean;
   onToggle: () => void;
@@ -44,34 +46,37 @@ export function PageHeader({
           ← {back.label}
         </Link>
       )}
-      <header className="flex items-center justify-between gap-4 rounded-card bg-accent px-5 py-4 text-accent-ink shadow-lg shadow-ink/15">
-        <div className="min-w-0 flex-1">
-          <h1 className="min-w-0 truncate font-display text-2xl font-semibold tracking-tight sm:text-3xl">{title}</h1>
-          {editing && onDescription ? (
-            <InlineInput
-              value={description ?? ""}
-              label="Description"
-              placeholder="Add a description"
-              allowEmpty
-              onSave={onDescription}
-              className="mt-0.5 w-full text-sm text-accent-ink/80 placeholder:text-accent-ink/40 hover:border-accent-ink/25 focus:border-accent-ink/70"
-            />
-          ) : (
-            description && <p className="mt-0.5 text-sm opacity-75">{description}</p>
-          )}
-        </div>
-        <button
-          type="button"
-          onClick={onToggle}
-          className={`shrink-0 rounded-control border px-4 py-1.5 text-sm font-semibold transition-colors ${
-            editing
-              ? "border-accent-ink bg-accent-ink text-accent hover:opacity-90"
-              : "border-accent-ink/25 hover:bg-accent-ink/10"
-          }`}
-        >
-          {editing ? "Done" : "Edit"}
-        </button>
-      </header>
+      {/* Sticky: a paper strip behind it, so the page scrolls away underneath. */}
+      <div className={sticky ? "sticky top-0 z-40 -mx-3 -mt-3 bg-paper px-3 py-3" : ""}>
+        <header className="flex items-center justify-between gap-4 rounded-card bg-accent px-5 py-4 text-accent-ink shadow-lg shadow-ink/15">
+          <div className="min-w-0 flex-1">
+            <h1 className="min-w-0 truncate font-display text-2xl font-semibold tracking-tight sm:text-3xl">{title}</h1>
+            {editing && onDescription ? (
+              <InlineInput
+                value={description ?? ""}
+                label="Description"
+                placeholder="Add a description"
+                allowEmpty
+                onSave={onDescription}
+                className="mt-0.5 w-full text-sm text-accent-ink/80 placeholder:text-accent-ink/40 hover:border-accent-ink/25 focus:border-accent-ink/70"
+              />
+            ) : (
+              description && <p className="mt-0.5 text-sm opacity-75">{description}</p>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={onToggle}
+            className={`shrink-0 rounded-control border px-4 py-1.5 text-sm font-semibold transition-colors ${
+              editing
+                ? "border-accent-ink bg-accent-ink text-accent hover:opacity-90"
+                : "border-accent-ink/25 hover:bg-accent-ink/10"
+            }`}
+          >
+            {editing ? "Done" : "Edit"}
+          </button>
+        </header>
+      </div>
     </>
   );
 }

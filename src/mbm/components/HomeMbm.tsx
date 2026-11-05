@@ -12,7 +12,7 @@ export default async function HomeMbm() {
   const user = await mbmUser();
   if (!user) {
     return (
-      <Link href="/mbm/login?next=/" className="mt-6 flex items-center justify-between rounded-card bg-surface px-5 py-4 transition-colors hover:bg-line/70">
+      <Link href="/mbm/login?next=/" className="mt-6 flex items-center justify-between rounded-card border-2 border-ink px-5 py-4 transition-colors hover:bg-surface">
         <span>
           <span className="block font-display text-lg font-semibold">Minute by Minute</span>
           <span className="text-sm text-muted">Sign in to track your day</span>
@@ -24,6 +24,6 @@ export default async function HomeMbm() {
     );
   }
   const day = await getDay(dayKeyOf(new Date(), mbmTz())).catch((e: Error) => e);
-  if (day instanceof Error) return <p className="mt-6 rounded-card bg-surface px-5 py-4 text-sm text-danger">Minute by Minute: {day.message}</p>;
+  if (day instanceof Error) return <p className="mt-6 rounded-card border-2 border-ink px-5 py-4 text-sm text-danger">Minute by Minute: {day.message}</p>;
   return <HomeMbmCard day={day} renderedAt={day.loadedAt} />;
 }

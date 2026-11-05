@@ -45,7 +45,7 @@ export default function DayBar({
   const hourAt = (h: number) => (h === 24 ? dayEnd : +zonedTime(dayKey, h * 60, tz));
   const marks = [0, 3, 6, 9, 12, 15, 18, 21, 24].map((h) => ({ h, at: hourAt(h) }));
   const ticks = [2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22].map(hourAt);
-  const height = compact ? Math.max(28, lanes * 14) : Math.max(56, lanes * 26);
+  const height = compact ? Math.max(48, lanes * 24) : Math.max(56, lanes * 26);
 
   const nameOf = (b: Block) => (b.activity_id ? byId.get(b.activity_id) : undefined);
   const hoverMid = hover ? at((hover.start + hover.end) / 2) : 0;

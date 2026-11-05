@@ -1,4 +1,4 @@
-import { Suspense } from "react";
+import { Suspense, type ReactNode } from "react";
 import { connection } from "next/server";
 import { getCategories, getHomeLayout } from "@/lib/home";
 import { getAlertCategoryIds, getAlertHrefs } from "@/lib/alerts";
@@ -6,31 +6,36 @@ import CategoryGrid from "@/components/home/CategoryGrid";
 import HomeGreeting from "@/components/home/HomeGreeting";
 import HomeMbm from "@/mbm/components/HomeMbm";
 
-// Home: a greeting and the clock, then your categories. The layout lives in Supabase (supabase/home.sql), and you change it
+// Home: a greeting and the clock, the Home bar (sticks to the top), Minute by Minute, then your categories. The layout lives in Supabase (supabase/home.sql), and you change it
 // from the page itself with the Edit button.
 export default function Home() {
   return (
     <main className="mx-auto w-full max-w-4xl px-4 pb-24 pt-8 sm:pt-14">
       <HomeGreeting />
-      {/* Minute by Minute (its own app, see src/mbm): what you're doing now + today's bar. */}
-      <Suspense fallback={null}>
-        <HomeMbm />
-      </Suspense>
       <Suspense fallback={<Skeleton />}>
-        <Categories />
+        <Categories>
+          {/* Minute by Minute (its own app, see src/mbm): what you're doing now + today's bar. */}
+          <Suspense fallback={<div className="mt-6 h-40 animate-pulse rounded-card border-2 border-ink/15" />}>
+            <HomeMbm />
+          </Suspense>
+        </Categories>
       </Suspense>
     </main>
   );
 }
 
-async function Categories() {
+async function Categories({ children }: { children: ReactNode }) {
   await connection(); // always fresh, never a cached copy
   const [categories, layout, alerts] = await Promise.all([
     getCategories(),
     getHomeLayout(),
     getAlertHrefs().then(getAlertCategoryIds).catch(() => []),
   ]);
-  return <CategoryGrid categories={categories} sections={layout.sections} description={layout.description} alerts={alerts} />;
+  return (
+    <CategoryGrid categories={categories} sections={layout.sections} description={layout.description} alerts={alerts}>
+      {children}
+    </CategoryGrid>
+  );
 }
 
 function Skeleton() {
