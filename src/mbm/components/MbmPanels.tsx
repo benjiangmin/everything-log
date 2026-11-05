@@ -22,5 +22,13 @@ export default function MbmPanels() {
   // Adding: on the day you're looking at (?day=…), otherwise today.
   const viewing = new URLSearchParams(window.location.search).get("day");
   const dayKey = panel.dayKey ?? (window.location.pathname === "/mbm" && isDayKey(viewing) ? viewing : dayKeyOf(new Date(), DEFAULT_TZ));
-  return <EntryPanel key={`${panel.kind}-${dayKey}`} dayKey={dayKey} blockId={panel.kind === "edit" ? panel.blockId : undefined} onClose={close} />;
+  return (
+    <EntryPanel
+      key={`${panel.kind}-${dayKey}`}
+      dayKey={dayKey}
+      blockId={panel.kind === "edit" ? panel.blockId : undefined}
+      span={panel.kind === "add" && panel.from && panel.to ? { from: panel.from, to: panel.to } : undefined}
+      onClose={close}
+    />
+  );
 }

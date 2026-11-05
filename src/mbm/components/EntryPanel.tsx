@@ -7,8 +7,19 @@ import { clock, dayTitle } from "@/mbm/time";
 import BlockEditor from "./BlockEditor";
 import SidePanel from "./SidePanel";
 
-// Add a missed entry (on the day you're looking at), or change one you clicked on the bar.
-export default function EntryPanel({ dayKey, blockId, onClose }: { dayKey: string; blockId?: string; onClose: () => void }) {
+// Add a missed entry (on the day you're looking at, or for the untracked stretch you clicked), or
+// change one you clicked on the bar.
+export default function EntryPanel({
+  dayKey,
+  blockId,
+  span,
+  onClose,
+}: {
+  dayKey: string;
+  blockId?: string;
+  span?: { from: number; to: number }; // the untracked stretch to fill in
+  onClose: () => void;
+}) {
   const [day, setDay] = useState<Day | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -49,8 +60,8 @@ export default function EntryPanel({ dayKey, blockId, onClose }: { dayKey: strin
     } else {
       // A new one: starts where your last entry that day ended (or half an hour ago).
       const lastEnd = day.blocks.reduce((m, b) => (b.ended_at && +new Date(b.ended_at) <= until ? Math.max(m, +new Date(b.ended_at)) : m), 0);
-      const from = lastEnd > dayStart && lastEnd < until ? lastEnd : Math.max(dayStart, until - 30 * 60000);
-      const to = Math.max(from + 60000, until);
+      const from = span ? span.from : lastEnd > dayStart && lastEnd < until ? lastEnd : Math.max(dayStart, until - 30 * 60000);
+      const to = span ? span.to : Math.max(from + 60000, until);
       body = (
         <BlockEditor
           dayKey={day.dayKey}

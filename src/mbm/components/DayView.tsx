@@ -33,6 +33,7 @@ export default function DayView({ day, today, renderedAt }: { day: Day; today: b
           tz={day.tz}
           byId={byId}
           onSelect={(b) => openMbm({ kind: "edit", dayKey: day.dayKey, blockId: b.id })}
+          onSelectGap={(g) => openMbm({ kind: "add", dayKey: day.dayKey, from: g.start, to: g.end })}
         />
       </section>
 
