@@ -9,6 +9,7 @@ import { clock, span } from "@/mbm/time";
 import { HtmlMarker, KEY, stylesFor } from "./mapBits";
 import { buildTrips, decodePolyline, metres, type Piece, type Spot, type Trip } from "@/mbm/trips";
 import { snapTrip } from "@/mbm/snap";
+import { isMoving } from "@/mbm/moving";
 
 // The stretch you're hovering on the day bar. moving: light up the route (Commute); still: the
 // stop you were at (everything else); any: both (untracked time).
@@ -239,19 +240,21 @@ export default function DayMapInner({
 
 type Row = { key: string; color: string; title: string; detail: string };
 
-// A trip, named after what you were doing then (the entry that overlaps it most: usually Commute).
+// A trip, named after the moving entry during it (Commute, or later Running…). Never after a
+// still one like a class: if no moving entry covers it, it's just a trip nothing was tracked for.
 function tripRow(t: Trip, blocks: Block[], activities: Activity[], tz: string): Row {
-  let best: Block | null = null;
+  let best: Activity | undefined;
   let most = 0;
   for (const b of blocks) {
+    const a = b.activity_id ? activities.find((x) => x.id === b.activity_id) : undefined;
+    if (!a || !isMoving(a.name)) continue;
     const o = Math.min(t.end, b.ended_at ? +new Date(b.ended_at) : Date.now()) - Math.max(t.start, +new Date(b.started_at));
-    if (o > most) [best, most] = [b, o];
+    if (o > most) [best, most] = [a, o];
   }
-  const a = best?.activity_id ? activities.find((x) => x.id === best!.activity_id) : undefined;
   return {
     key: t.key,
-    color: a?.color ?? "#7f5539",
-    title: a?.name ?? "Trip (nothing tracked)",
+    color: best?.color ?? "#7f5539",
+    title: best?.name ?? "Trip (no Commute tracked)",
     detail: `${clock(new Date(t.start), tz)} – ${clock(new Date(t.end), tz)} · ${span(t.end - t.start)}`,
   };
 }

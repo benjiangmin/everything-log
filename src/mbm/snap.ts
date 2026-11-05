@@ -23,7 +23,7 @@ export async function snapTrip(trip: Trip): Promise<Spot[] | null> {
 
   const step = Math.ceil(raw.length / MAX_POINTS);
   const shape = raw.filter((_, i) => i % step === 0 || i === raw.length - 1);
-  const id = `mbm-snap:v1:${trip.key}:${shape.length}:${shape[0].lat.toFixed(5)},${shape[shape.length - 1].lng.toFixed(5)}`;
+  const id = `mbm-snap:v2:${trip.key}:${shape.length}:${shape[0].lat.toFixed(5)},${shape[shape.length - 1].lng.toFixed(5)}`;
   try {
     const kept = localStorage.getItem(id);
     if (kept) return kept === "none" ? null : (JSON.parse(kept) as Spot[]);
@@ -35,7 +35,7 @@ export async function snapTrip(trip: Trip): Promise<Spot[] | null> {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         shape: shape.map((s) => ({ lat: s.lat, lon: s.lng })),
-        costing: (trip.pace ?? 0) > 6 ? "auto" : "pedestrian", // faster than ~20 km/h: a car or bus
+        costing: (trip.pace ?? 0) > 5 ? "bus" : "pedestrian", // faster than ~18 km/h: a bus (or car; bus lanes allowed)
         shape_match: "map_snap",
         directions_type: "none",
         trace_options: { search_radius: 35, gps_accuracy: 20, breakage_distance: 3000, turn_penalty_factor: 500 },

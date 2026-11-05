@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, type PointerEvent, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type PointerEvent, type ReactNode } from "react";
 import type { Activity, Block } from "@/mbm/data";
 import { clock, span, zonedTime } from "@/mbm/time";
 import type { Placed } from "./segments";
@@ -12,7 +12,6 @@ import type { Placed } from "./segments";
 // buttons. Drag (or scroll sideways) to move around. The time marks get finer as you zoom.
 export default function DayBar({
   placed,
-  lanes,
   gaps,
   dayKey,
   dayStart,
@@ -124,7 +123,10 @@ export default function DayBar({
   // Time marks for what's on screen: labels and faint lines, finer as you zoom in. Placed by
   // the real clock time, so daylight-saving days still line up.
   const { labels, lines } = marksFor(dayKey, tz, dayStart, dayEnd, from, to);
-  const height = compact ? Math.max(48, lanes * 24) : Math.max(56, lanes * 26);
+  // The same height however many entries overlap: an entry fills it, except while others overlap
+  // it, when they share it (each in its own row).
+  const height = compact ? 56 : 72;
+  const pieces = useMemo(() => slice(placed), [placed]);
 
   const nameOf = (b: Block) => (b.activity_id ? byId.get(b.activity_id) : undefined);
   // Middle of the part of it that's on screen.
@@ -211,24 +213,26 @@ export default function DayBar({
           );
         })}
         {now < dayEnd && <div className="absolute inset-y-0 right-0 bg-paper" style={{ left: `${Math.max(0, at(now))}%` }} />}
-        {placed.map((p) => {
+        {pieces.map(({ p, start, end, row, rows, last }) => {
           const a = nameOf(p.block);
           const style = {
-            left: `${at(p.start)}%`,
-            width: `${at(p.end) - at(p.start)}%`,
-            top: `${(p.lane / lanes) * 100}%`,
-            height: `${100 / lanes}%`,
+            left: `${at(start)}%`,
+            width: `${at(end) - at(start)}%`,
+            top: `${(row / rows) * 100}%`,
+            height: `${100 / rows}%`,
             background: a?.color ?? "#a98467",
           };
-          const cls = `absolute border-r border-paper/70 transition-[filter] ${lanes > 1 ? "border-b" : ""} ${p.block.confirmed ? "" : "opacity-60"} ${
-            hover?.block?.id === p.block.id ? "brightness-110" : ""
-          }`;
+          const cls = `absolute border-paper/70 transition-[filter] ${last ? "border-r" : ""} ${rows > 1 ? "border-b" : ""} ${
+            p.block.confirmed ? "" : "opacity-60"
+          } ${hover?.block?.id === p.block.id ? "brightness-110" : ""}`;
           const label = `${a?.name ?? "Something"}, ${clock(new Date(p.start), tz)} to ${p.block.ended_at ? clock(new Date(p.end), tz) : "now"}`;
+          const key = `${p.block.id}-${start}`;
           return onSelect ? (
             <button
-              key={p.block.id}
+              key={key}
               type="button"
               aria-label={label}
+              tabIndex={start === p.start ? 0 : -1}
               onMouseEnter={() => setHover(p)}
               onFocus={() => setHover(p)}
               onBlur={() => setHover(null)}
@@ -237,7 +241,7 @@ export default function DayBar({
               style={style}
             />
           ) : (
-            <div key={p.block.id} aria-label={label} onMouseEnter={() => setHover(p)} className={cls} style={style} />
+            <div key={key} aria-label={label} onMouseEnter={() => setHover(p)} className={cls} style={style} />
           );
         })}
         {/* Faint lines at the time marks. */}
@@ -358,4 +362,29 @@ function timeLabel(m: number) {
   const mm = m % 60;
   const hr = h % 12 === 0 ? 12 : h % 12;
   return `${hr}${mm ? `:${String(mm).padStart(2, "0")}` : ""}${h < 12 ? "a" : "p"}`;
+}
+
+// Entries cut into pieces where the number overlapping changes. In each piece, the entries going
+// on share the height, in lane order (so an entry stays in the same row while it overlaps).
+type Piece = { p: Placed; start: number; end: number; row: number; rows: number; last: boolean };
+function slice(placed: Placed[]): Piece[] {
+  const cuts = [...new Set(placed.flatMap((p) => [p.start, p.end]))].sort((a, b) => a - b);
+  const out: Piece[] = [];
+  const open = new Map<string, Piece>(); // the piece each entry is in, while it carries on unchanged
+  for (let i = 0; i < cuts.length - 1; i++) {
+    const [a, b] = [cuts[i], cuts[i + 1]];
+    const on = placed.filter((p) => p.start < b && p.end > a).sort((x, y) => x.lane - y.lane);
+    on.forEach((p, row) => {
+      const prev = open.get(p.block.id);
+      if (prev && prev.end === a && prev.row === row && prev.rows === on.length) {
+        prev.end = b; // same row, same company: just longer
+      } else {
+        const piece = { p, start: a, end: b, row, rows: on.length, last: false };
+        out.push(piece);
+        open.set(p.block.id, piece);
+      }
+    });
+  }
+  for (const piece of out) piece.last = piece.end === piece.p.end;
+  return out;
 }
