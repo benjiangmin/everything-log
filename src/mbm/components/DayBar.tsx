@@ -23,6 +23,7 @@ export default function DayBar({
   onSelect,
   onSelectGap,
   onHover,
+  marks = null,
   compact = false,
 }: {
   placed: Placed[];
@@ -37,7 +38,8 @@ export default function DayBar({
   byId: Map<string, Activity>;
   onSelect?: (b: Block) => void;
   onSelectGap?: (gap: { start: number; end: number }) => void; // click untracked time to fill it in
-  onHover?: (span: { start: number; end: number; block?: Block } | null) => void; // what's hovered (the map lights it up)
+  onHover?: (span: { start: number; end: number; block?: Block } | null) => void;
+  marks?: { start: number; end: number }[] | null; // outlined (what you're hovering on the map) // what's hovered (the map lights it up)
   compact?: boolean; // the home page's smaller version
 }) {
   // What the bubble is about: an entry, or an untracked stretch.
@@ -243,7 +245,21 @@ export default function DayBar({
           lines.map((t) => (
             <div key={t} aria-hidden="true" className="pointer-events-none absolute inset-y-0 z-10 w-px bg-ink/10" style={{ left: `${at(t)}%` }} />
           ))}
-        {showNow && <div aria-hidden="true" className="pointer-events-none absolute inset-y-0 z-20 w-0.5 -translate-x-1/2 bg-ink" style={{ left: `${at(now)}%` }} />}
+        {/* What you're pointing at on the map. */}
+        {marks?.map((m, i) => {
+          const left = Math.max(0, at(Math.max(m.start, from)));
+          const right = Math.min(100, at(Math.min(m.end, to)));
+          if (right <= 0 || left >= 100) return null;
+          return (
+            <div
+              key={i}
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-y-0 z-10 rounded-[4px] bg-ink/15 ring-2 ring-inset ring-ink"
+              style={{ left: `${left}%`, width: `max(${right - left}%, 3px)` }}
+            />
+          );
+        })}
+                {showNow && <div aria-hidden="true" className="pointer-events-none absolute inset-y-0 z-20 w-0.5 -translate-x-1/2 bg-ink" style={{ left: `${at(now)}%` }} />}
       </div>
 
       {!compact && (

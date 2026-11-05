@@ -20,6 +20,7 @@ export default function DayView({ day, today, renderedAt }: { day: Day; today: b
   const byId = new Map(day.activities.map((a) => [a.id, a]));
   const { placed, lanes, gaps } = layOut(day.blocks, dayStart, dayEnd, now);
   const [focus, setFocus] = useState<Focus | null>(null); // hovering the bar → lit up on the map
+  const [marks, setMarks] = useState<{ start: number; end: number }[] | null>(null); // hovering the map → outlined on the bar
 
   return (
     <div className="flex flex-col gap-5">
@@ -39,6 +40,7 @@ export default function DayView({ day, today, renderedAt }: { day: Day; today: b
           tz={day.tz}
           byId={byId}
           onSelect={(b) => openMbm({ kind: "edit", dayKey: day.dayKey, blockId: b.id })}
+          marks={marks}
           onHover={(h) =>
             setFocus(
               h && {
@@ -56,6 +58,7 @@ export default function DayView({ day, today, renderedAt }: { day: Day; today: b
       <DayMap
         day={day}
         focus={focus}
+        onPointer={setMarks}
         // Today: where you are now pulses, in the color of what you're doing.
         liveColor={today ? ((day.running[0]?.activity_id && byId.get(day.running[0].activity_id)?.color) || "#7f5539") : null}
       />

@@ -16,6 +16,7 @@ export type Trip = {
   pieces: Piece[];
   looseStart: Spot | null; // no stop before it: a small node where it began
   looseEnd: Spot | null; // no stop after it (yet): a small node where it ends
+  pace: number | null; // metres a second over the recorded dots (walking ~1.4, driving 5+)
 };
 
 // The recording missed a bit when there are no dots for 20 minutes, or it jumps 200 m+ after 3+
@@ -43,6 +44,14 @@ function cleanDots(points: RoutePoint[]) {
     const c = pts[i + 1];
     return !(a && c && metres(a, b) > 150 && metres(b, c) > 150 && metres(a, c) < 100);
   });
+}
+
+function pace(dots: (Spot & { t: number })[]) {
+  if (dots.length < 2) return null;
+  let m = 0;
+  for (let i = 1; i < dots.length; i++) m += metres(dots[i - 1], dots[i]);
+  const s = (dots[dots.length - 1].t - dots[0].t) / 1000;
+  return s > 0 ? m / s : null;
 }
 
 export function buildTrips(visits: Visit[], points: RoutePoint[]): Trip[] {
@@ -124,6 +133,7 @@ export function buildTrips(visits: Visit[], points: RoutePoint[]): Trip[] {
       start: from ? lo : dots[0].t,
       end: to ? hi : dots[dots.length - 1].t,
       pieces: kept,
+      pace: pace(dots),
       looseStart: from ? null : spot(dots[0]),
       looseEnd: to ? null : spot(dots[dots.length - 1]),
     });
@@ -131,8 +141,9 @@ export function buildTrips(visits: Visit[], points: RoutePoint[]): Trip[] {
   return trips;
 }
 
-// Google's encoded polyline → spots.
-export function decodePolyline(encoded: string): Spot[] {
+// An encoded polyline → spots (Google: precision 5; Valhalla: 6).
+export function decodePolyline(encoded: string, precision = 5): Spot[] {
+  const f = 10 ** precision;
   const out: Spot[] = [];
   let i = 0;
   let lat = 0;
@@ -151,7 +162,7 @@ export function decodePolyline(encoded: string): Spot[] {
   while (i < encoded.length) {
     lat += next();
     lng += next();
-    out.push({ lat: lat / 1e5, lng: lng / 1e5 });
+    out.push({ lat: lat / f, lng: lng / f });
   }
   return out;
 }

@@ -4,10 +4,11 @@ import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { APIProvider, InfoWindow, Map, useMap, useMapsLibrary } from "@vis.gl/react-google-maps";
 import { moveStop, namePlace, rememberedRoute, removeStop } from "@/app/mbm/actions";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
-import type { RoutePoint, Visit } from "@/mbm/data";
-import { clock } from "@/mbm/time";
+import type { Activity, Block, RoutePoint, Visit } from "@/mbm/data";
+import { clock, span } from "@/mbm/time";
 import { HtmlMarker, KEY, stylesFor } from "./mapBits";
 import { buildTrips, decodePolyline, metres, type Piece, type Spot, type Trip } from "@/mbm/trips";
+import { snapTrip } from "@/mbm/snap";
 
 // The stretch you're hovering on the day bar. moving: light up the route (Commute); still: the
 // stop you were at (everything else); any: both (untracked time).
@@ -23,9 +24,15 @@ export default function DayMapInner({
   focus,
   showDots = false,
   liveColor = null,
+  blocks = [],
+  activities = [],
+  onPointer,
 }: {
   visits: Visit[];
   points: RoutePoint[];
+  blocks?: Block[];
+  activities?: Activity[];
+  onPointer?: (spans: { start: number; end: number }[] | null) => void; // what you're pointing at, for the day bar
   tz: string;
   focus: Focus | null;
   showDots?: boolean; // every recorded dot, to see what the phone actually got
@@ -36,10 +43,13 @@ export default function DayMapInner({
   const [moveNote, setMoveNote] = useState<string | null>(null);
   const [, runMove] = useTransition();
   const [zoom, setZoom] = useState(15);
+  // What the pointer is on: trips under it (several, where paths overlap) or a stop.
+  const [pointed, setPointed] = useState<{ trips: string[]; stops: string[]; x: number; y: number } | null>(null);
+  const box = useRef<HTMLDivElement>(null);
   const built = useMemo(() => buildTrips(visits, points), [visits, points]);
   const trips = useFilledTrips(built);
   // What lights up for the hovered stretch: the trips (moving) or the stops (still) during it.
-  const lit = useMemo(() => {
+  const barLit = useMemo(() => {
     if (!focus) return null;
     const overlaps = (a: number, b: number) => a < focus.end && b > focus.start;
     const trip = new Set(focus.kind === "still" ? [] : trips.filter((t) => overlaps(t.start, t.end)).map((t) => t.key));
@@ -50,6 +60,25 @@ export default function DayMapInner({
     );
     return { trip, stops };
   }, [focus, trips, visits]);
+  const lit = pointed ? { trip: new Set(pointed.trips), stops: new Set(pointed.stops) } : barLit;
+
+  // Pointing at something on the map: light it up here, and tell the day bar its times.
+  const point = (p: { trips: string[]; stops: string[]; x: number; y: number } | null) => {
+    setPointed(p);
+    if (!onPointer) return;
+    if (!p) return onPointer(null);
+    const spans = [
+      ...trips.filter((t) => p.trips.includes(t.key)).map((t) => ({ start: t.start, end: t.end })),
+      ...visits
+        .filter((v) => p.stops.includes(v.id))
+        .map((v) => ({ start: +new Date(v.arrived_at), end: v.departed_at ? +new Date(v.departed_at) : Date.now() })),
+    ];
+    onPointer(spans);
+  };
+  const where = (e: { clientX: number; clientY: number }) => {
+    const r = box.current?.getBoundingClientRect();
+    return r ? { x: e.clientX - r.left, y: e.clientY - r.top } : { x: 0, y: 0 };
+  };
   // Where you are now (today only): the stop you haven't left, if it's the latest thing the phone
   // knows; otherwise the last dot.
   const here = useMemo(() => {
@@ -59,7 +88,7 @@ export default function DayMapInner({
     if (open && (!last || +new Date(open.arrived_at) >= +new Date(last.at) - 5 * 60000)) return { at: { lat: open.lat, lng: open.lng }, when: null };
     return last ? { at: { lat: last.lat, lng: last.lng }, when: last.at } : null;
   }, [liveColor, points, visits]);
-  const nothingLit = lit !== null && lit.stops.size === 0 && lit.trip.size === 0;
+  const nothingLit = !pointed && lit !== null && lit.stops.size === 0 && lit.trip.size === 0;
   const dimming = lit !== null && !nothingLit;
   if (!KEY) {
     return (
@@ -72,6 +101,7 @@ export default function DayMapInner({
   const all: Spot[] = [...points, ...visits].map((s) => ({ lat: s.lat, lng: s.lng }));
 
   return (
+    <div ref={box} className="relative size-full" onMouseLeave={() => pointed && point(null)}>
     <APIProvider apiKey={KEY}>
       <Map
         styles={stylesFor(zoom)}
@@ -96,6 +126,7 @@ export default function DayMapInner({
         className="size-full"
       >
         <FitTo spots={all} />
+        <PointerTrack trips={trips} onHit={(hit, e) => point(hit.length ? { trips: hit, stops: [], ...where(e) } : null)} />
         {showDots && <Dots points={points} tz={tz} />}
         {trips.map((t) => {
           const on = lit?.trip.has(t.key) ?? false;
@@ -138,7 +169,9 @@ export default function DayMapInner({
               <button
                 type="button"
                 onClick={() => setOpen(v)}
-                title={name ?? "Unnamed stop"}
+                onMouseEnter={(e) => point({ trips: [], stops: [v.id], ...where(e) })}
+                onMouseLeave={() => point(null)}
+                aria-label={name ?? "Unnamed stop"}
                 className={`flex cursor-pointer flex-col items-center transition-[opacity,transform] duration-150 ${dim ? "opacity-35" : ""} ${on ? "scale-125" : ""}`}
                 style={{ transformOrigin: "bottom center" }}
               >
@@ -190,41 +223,185 @@ export default function DayMapInner({
         </p>
       )}
     </APIProvider>
+      {pointed && !moving && (
+        <Tip
+          x={pointed.x}
+          y={pointed.y}
+          rows={[
+            ...trips.filter((t) => pointed.trips.includes(t.key)).map((t) => tripRow(t, blocks, activities, tz)),
+            ...visits.filter((v) => pointed.stops.includes(v.id)).map((v) => stopRow(v, tz)),
+          ]}
+        />
+      )}
+    </div>
   );
 }
 
-// Bits the phone missed, filled in: a whole missed trip uses a walk you recorded before between
-// the same two places; otherwise (and for gaps in the middle of a trip) Google's walking route.
-// Still drawn dashed. Google's answers are kept in this browser, so each is only asked for once.
+type Row = { key: string; color: string; title: string; detail: string };
+
+// A trip, named after what you were doing then (the entry that overlaps it most: usually Commute).
+function tripRow(t: Trip, blocks: Block[], activities: Activity[], tz: string): Row {
+  let best: Block | null = null;
+  let most = 0;
+  for (const b of blocks) {
+    const o = Math.min(t.end, b.ended_at ? +new Date(b.ended_at) : Date.now()) - Math.max(t.start, +new Date(b.started_at));
+    if (o > most) [best, most] = [b, o];
+  }
+  const a = best?.activity_id ? activities.find((x) => x.id === best!.activity_id) : undefined;
+  return {
+    key: t.key,
+    color: a?.color ?? "#7f5539",
+    title: a?.name ?? "Trip (nothing tracked)",
+    detail: `${clock(new Date(t.start), tz)} – ${clock(new Date(t.end), tz)} · ${span(t.end - t.start)}`,
+  };
+}
+
+function stopRow(v: Visit, tz: string): Row {
+  const end = v.departed_at ? +new Date(v.departed_at) : Date.now();
+  return {
+    key: v.id,
+    color: "#faf6f0",
+    title: v.place ?? v.auto_name ?? "Unnamed stop",
+    detail: `${clock(v.arrived_at, tz)} – ${v.departed_at ? clock(v.departed_at, tz) : "now"} · ${span(end - +new Date(v.arrived_at))}`,
+  };
+}
+
+// The little speech bubble by the pointer: everything under it (overlapping paths all listed).
+function Tip({ x, y, rows }: { x: number; y: number; rows: Row[] }) {
+  if (!rows.length) return null;
+  const below = y < 40 + rows.length * 40; // near the top of the map: show it under the pointer instead
+  return (
+    <div
+      role="tooltip"
+      className={`pointer-events-none absolute z-30 w-max max-w-64 -translate-x-1/2 rounded-card bg-ink px-3 py-2 text-paper shadow-lg ${below ? "" : "-translate-y-full"}`}
+      style={{ left: x, top: below ? y + 18 : y - 14 }}
+    >
+      {rows.length > 1 && <p className="mb-1 text-[11px] text-paper/60">{rows.length} trips here</p>}
+      <ul className="flex flex-col gap-1">
+        {rows.map((r) => (
+          <li key={r.key} className="leading-tight">
+            <p className="flex items-center gap-1.5 text-sm font-semibold">
+              <span className="size-2 shrink-0 rounded-full ring-1 ring-paper/40" style={{ background: r.color }} />
+              {r.title}
+            </p>
+            <p className="num text-xs text-paper/70">{r.detail}</p>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+// Which trips are under the pointer (within ~10 px of their line), as it moves over the map.
+function PointerTrack({ trips, onHit }: { trips: Trip[]; onHit: (keys: string[], e: { clientX: number; clientY: number }) => void }) {
+  const map = useMap();
+  const report = useRef(onHit); // the latest callback, without re-listening every render
+  useEffect(() => {
+    report.current = onHit;
+  }, [onHit]);
+  useEffect(() => {
+    if (!map) return;
+    let frame = 0;
+    let last = "";
+    const move = map.addListener("mousemove", (e: google.maps.MapMouseEvent) => {
+      const dom = e.domEvent as MouseEvent | undefined;
+      const at = e.latLng;
+      if (!dom || !at) return;
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        const proj = map.getProjection();
+        const zoom = map.getZoom();
+        if (!proj || zoom == null) return;
+        const k = 2 ** zoom;
+        const px = (s: Spot | google.maps.LatLng) => {
+          const p = proj.fromLatLngToPoint(s)!;
+          return { x: p.x * k, y: p.y * k };
+        };
+        const c = px(at);
+        const near = (a: { x: number; y: number }, b: { x: number; y: number }) => {
+          const dx = b.x - a.x;
+          const dy = b.y - a.y;
+          const len = dx * dx + dy * dy;
+          const u = len ? Math.max(0, Math.min(1, ((c.x - a.x) * dx + (c.y - a.y) * dy) / len)) : 0;
+          return Math.hypot(a.x + u * dx - c.x, a.y + u * dy - c.y);
+        };
+        const hit = trips
+          .filter((t) =>
+            t.pieces.some((p) => {
+              let prev = px(p.path[0]);
+              for (let i = 1; i < p.path.length; i++) {
+                const cur = px(p.path[i]);
+                if (near(prev, cur) < 10) return true;
+                prev = cur;
+              }
+              return false;
+            }),
+          )
+          .map((t) => t.key);
+        const sig = hit.join("|");
+        if (sig === last && !hit.length) return;
+        last = sig;
+        report.current(hit, dom);
+      });
+    });
+    const out = map.addListener("mouseout", () => {
+      cancelAnimationFrame(frame);
+      last = "";
+    });
+    return () => {
+      cancelAnimationFrame(frame);
+      move.remove();
+      out.remove();
+    };
+  }, [map, trips]);
+  return null;
+}
+
+// Trips drawn as realistically as we can: first snapped onto real walkways and roads (your dots,
+// matched to the paths you took; see snap.ts). If that isn't possible, bits the phone missed are
+// filled in: a whole missed trip uses a walk you recorded before between the same two places;
+// otherwise Google's walking route. Those stay dashed. Answers are kept in this browser.
 function useFilledTrips(trips: Trip[]): Trip[] {
   const [filled, setFilled] = useState<Record<string, Spot[]>>({});
+  const [snapped, setSnapped] = useState<Record<string, Spot[]>>({});
   const asked = useRef(new Set<string>());
+  // (Answers are kept even if the trips change meanwhile: each trip is only asked about once.)
   useEffect(() => {
-    let live = true;
     for (const t of trips) {
-      t.pieces.forEach((p, i) => {
-        const key = `${t.key}:${i}`;
-        if (!p.missing || asked.current.has(key)) return;
-        const a = p.path[0];
-        const b = p.path[p.path.length - 1];
-        if (metres(a, b) < 120) return; // short: a straight dash is fine
-        asked.current.add(key);
-        const whole = t.pieces.length === 1 && t.fromId && t.toId;
-        (async () => {
+      if (asked.current.has(t.key)) continue;
+      asked.current.add(t.key);
+      const recorded = t.pieces.some((p) => !p.missing);
+      (async () => {
+        if (recorded) {
+          const path = await snapTrip(t);
+          if (path) {
+            setSnapped((m) => ({ ...m, [t.key]: path }));
+            return;
+          }
+        }
+        // Couldn't snap: fill the missing bits.
+        t.pieces.forEach(async (p, i) => {
+          if (!p.missing) return;
+          const a = p.path[0];
+          const b = p.path[p.path.length - 1];
+          if (metres(a, b) < 120) return; // short: a straight dash is fine
+          const whole = t.pieces.length === 1 && t.fromId && t.toId;
           let path = whole ? await rememberedRoute(t.fromId!, t.toId!).catch(() => null) : null;
           if (path) path = [a, ...path, b];
           else path = await walkingRoute(a, b);
-          if (live && path && path.length >= 2) setFilled((f) => ({ ...f, [key]: path! }));
-        })();
-      });
+          if (path && path.length >= 2) setFilled((f) => ({ ...f, [`${t.key}:${i}`]: path! }));
+        });
+      })();
     }
-    return () => {
-      live = false;
-    };
   }, [trips]);
   return useMemo(
-    () => trips.map((t) => ({ ...t, pieces: t.pieces.map((p, i) => (filled[`${t.key}:${i}`] ? { ...p, path: filled[`${t.key}:${i}`] } : p)) })),
-    [trips, filled],
+    () =>
+      trips.map((t) =>
+        snapped[t.key]
+          ? { ...t, pieces: [{ path: snapped[t.key], missing: false }] }
+          : { ...t, pieces: t.pieces.map((p, i) => (filled[`${t.key}:${i}`] ? { ...p, path: filled[`${t.key}:${i}`] } : p)) },
+      ),
+    [trips, filled, snapped],
   );
 }
 

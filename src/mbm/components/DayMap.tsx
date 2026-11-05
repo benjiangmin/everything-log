@@ -11,7 +11,17 @@ const Inner = dynamic(() => import("./DayMapInner"), {
   loading: () => <div className="size-full animate-pulse bg-surface" />,
 });
 
-export default function DayMap({ day, focus = null, liveColor = null }: { day: Day; focus?: Focus | null; liveColor?: string | null }) {
+export default function DayMap({
+  day,
+  focus = null,
+  liveColor = null,
+  onPointer,
+}: {
+  day: Day;
+  focus?: Focus | null;
+  liveColor?: string | null;
+  onPointer?: (spans: { start: number; end: number }[] | null) => void;
+}) {
   const empty = day.visits.length === 0 && day.points.length === 0;
   const [showDots, setShowDots] = useState(false);
   return (
@@ -45,7 +55,17 @@ export default function DayMap({ day, focus = null, liveColor = null }: { day: D
       ) : (
         // isolate: keeps the map's own layers under the page's popups and panels.
         <div className="relative isolate h-[22rem] border-t border-line sm:h-[26rem]">
-          <Inner visits={day.visits} points={day.points} tz={day.tz} focus={focus} showDots={showDots} liveColor={liveColor} />
+          <Inner
+            visits={day.visits}
+            points={day.points}
+            blocks={day.blocks}
+            activities={day.activities}
+            tz={day.tz}
+            focus={focus}
+            showDots={showDots}
+            liveColor={liveColor}
+            onPointer={onPointer}
+          />
         </div>
       )}
       {!empty && (

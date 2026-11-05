@@ -23,7 +23,7 @@ export type Visit = {
   place: string | null; // the name you gave it
   auto_name: string | null; // the name your phone found (e.g. "Noland Hall")
 };
-export type RoutePoint = { at: string; lat: number; lng: number; accuracy_m?: number | null };
+export type RoutePoint = { at: string; lat: number; lng: number; accuracy_m?: number | null; motion?: string | null };
 
 export type Day = {
   dayKey: string;
@@ -46,6 +46,9 @@ export async function getDay(dayKey: string): Promise<Day> {
   const tz = mbmTz();
   const { start, end } = dayRange(dayKey, tz);
   const client = await mbm();
+  // Stops iOS told us about late: make sure no automatic Commute runs through them (011; does
+  // nothing if not run yet, or if there's nothing to fix).
+  await client.rpc("repair_day", { p_from: start.toISOString(), p_to: end.toISOString() });
   const [blocks, activities, running] = await Promise.all([
     client
       .from("blocks")
@@ -66,7 +69,7 @@ export async function getDay(dayKey: string): Promise<Day> {
       .order("arrived_at");
   const [firstVisits, pointRows] = await Promise.all([
     visitsOn("id, arrived_at, departed_at, lat, lng, auto_name, places(name)"),
-    client.from("points").select("at, lat, lng, accuracy_m").gte("at", start.toISOString()).lt("at", end.toISOString()).order("at").limit(5000),
+    client.from("points").select("*").gte("at", start.toISOString()).lt("at", end.toISOString()).order("at").limit(5000),
   ]);
   const visitRows = firstVisits.error ? await visitsOn("id, arrived_at, departed_at, lat, lng, places(name)") : firstVisits; // 006 not run yet
   type VisitRow = Omit<Visit, "place" | "auto_name"> & { auto_name?: string | null; places: { name: string } | { name: string }[] | null };
