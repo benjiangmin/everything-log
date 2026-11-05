@@ -7,7 +7,7 @@ import { clock, span } from "@/mbm/time";
 import { openMbm } from "./open";
 import { useNow } from "./useNow";
 
-// What's running right now (each with its timer and a Stop), and a button to start something.
+// What's running right now (each with its timer), then Stop and Switch on the right.
 // Typing what you're doing happens in the side panel (sidebar → "What are you doing?").
 export default function NowStatus({
   activities,
@@ -46,18 +46,21 @@ export default function NowStatus({
                     since {clock(b.started_at, tz)} · {span(t - +new Date(b.started_at))}
                   </p>
                 </div>
-                <button
-                  type="button"
-                  disabled={pending}
-                  onClick={() => run(async () => void (await stopEntry(b.id)))}
-                  className="shrink-0 rounded-control px-2.5 py-1.5 text-sm text-muted transition-colors hover:bg-paper hover:text-ink"
-                >
-                  Stop
-                </button>
               </li>
             );
           })}
         </ul>
+      )}
+      <div className="flex shrink-0 items-center gap-1">
+      {running.length > 0 && (
+        <button
+          type="button"
+          disabled={pending}
+          onClick={() => run(async () => void (await stopEntry()))}
+          className="rounded-control px-3 py-2 text-sm font-semibold text-muted transition-colors hover:bg-paper hover:text-ink"
+        >
+          {running.length > 1 ? "Stop all" : "Stop"}
+        </button>
       )}
       <button
         type="button"
@@ -66,6 +69,7 @@ export default function NowStatus({
       >
         {running.length ? "Switch" : "What are you doing?"}
       </button>
+      </div>
     </div>
   );
 }

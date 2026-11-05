@@ -9,9 +9,9 @@ import ActivityInput from "./ActivityInput";
 
 const field = "rounded-control border border-line bg-paper px-3 py-2.5 text-ink focus:border-ink";
 
-// Add a missed entry, or change one: what, from, to (or "still going"), a note. Times are on
-// this day; an entry that began yesterday (or ends tomorrow) keeps that end unless you change it.
-// Entries may overlap others.
+// Add a missed entry, or change one: what, from, to, and a note (behind "+ Note" in the name box).
+// Times are on this day; an entry that began yesterday (or ends tomorrow) keeps that end unless
+// you change it. A running entry has no end here (stop it from the page). Entries may overlap.
 export default function BlockEditor({
   dayKey,
   tz,
@@ -19,8 +19,6 @@ export default function BlockEditor({
   block,
   from,
   to,
-  canRun,
-  running = [],
   onDone,
 }: {
   dayKey: string;
@@ -28,18 +26,16 @@ export default function BlockEditor({
   activities: Activity[];
   block?: Block; // editing this one; otherwise adding
   from: number; // start shown
-  to: number | null; // end shown (null = still going)
-  canRun: boolean; // "still going" is allowed (today)
-  running?: string[]; // names of what's running (for "stop it?" when adding one that's still going)
+  to: number | null; // end shown (null = it's running)
   onDone: () => void;
 }) {
   const byId = new Map(activities.map((a) => [a.id, a]));
   const [name, setName] = useState(block?.activity_id ? (byId.get(block.activity_id)?.name ?? "") : "");
   const [start, setStart] = useState(hhmm(new Date(from), tz));
   const [end, setEnd] = useState(() => hhmm(to === null ? new Date() : new Date(to), tz));
-  const [going, setGoing] = useState(to === null);
-  const [stop, setStop] = useState(true);
+  const going = to === null; // a running entry: only its start can change here
   const [note, setNote] = useState(block?.note ?? "");
+  const [showNote, setShowNote] = useState(Boolean(block?.note));
   const [message, setMessage] = useState<string | null>(null);
   const [pending, run] = useTransition();
   const confirm = useConfirm();
@@ -64,7 +60,7 @@ export default function BlockEditor({
       endIso = endsLater && end === endShown ? block!.ended_at : zonedTime(dayKey, m === 0 ? 24 * 60 : m, tz).toISOString();
     }
     run(async () => {
-      const res = await saveBlock({ id: block?.id, name, start: startIso, end: endIso, note, stopRunning: !block && going && stop });
+      const res = await saveBlock({ id: block?.id, name, start: startIso, end: endIso, note: showNote ? note : (block?.note ?? "") });
       if (res.ok) onDone();
       else setMessage(res.message);
     });
@@ -89,7 +85,40 @@ export default function BlockEditor({
       }}
       className={`flex flex-col gap-4 ${pending ? "opacity-70" : ""}`}
     >
-      <ActivityInput activities={activities} value={name} onChange={setName} placeholder="What were you doing?" autoFocus={!block} />
+      <ActivityInput
+        activities={activities}
+        value={name}
+        onChange={setName}
+        placeholder="What were you doing?"
+        autoFocus={!block}
+        trailing={
+          <button
+            type="button"
+            onClick={() => setShowNote((v) => !v)}
+            aria-expanded={showNote}
+            className={`rounded-[9px] border px-2.5 py-1.5 text-xs font-semibold leading-none transition-colors ${
+              showNote ? "border-accent/30 bg-accent/10 text-accent" : "border-dashed border-muted/50 text-muted hover:border-muted hover:text-ink"
+            }`}
+          >
+            {showNote ? "− Note" : "+ Note"}
+          </button>
+        }
+      />
+      {/* The note, under a line, once "+ Note" is clicked. Folding it away keeps a saved note. */}
+      {showNote && (
+        <div className="-mt-1 border-t border-accent/20 pt-3">
+          <input
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            maxLength={500}
+            autoFocus={!block?.note}
+            placeholder="Note"
+            aria-label="Note"
+            className={`${field} w-full`}
+            style={{ outline: "none" }}
+          />
+        </div>
+      )}
 
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
         <label className="flex items-center gap-2 text-sm text-muted">
@@ -105,20 +134,7 @@ export default function BlockEditor({
       </div>
       {startedEarlier && start === startShown && <p className="-mt-2 text-xs text-muted">It started the day before (that stays as is unless you change the time).</p>}
 
-      {canRun && (!block || !block.ended_at) && (
-        <label className="flex items-center gap-2.5 text-sm text-ink">
-          <input type="checkbox" checked={going} onChange={(e) => setGoing(e.target.checked)} className="size-4 accent-[var(--color-accent)]" />
-          Still going
-        </label>
-      )}
-      {!block && going && running.length > 0 && (
-        <label className="-mt-2 flex items-center gap-2.5 text-sm text-ink">
-          <input type="checkbox" checked={stop} onChange={(e) => setStop(e.target.checked)} className="size-4 accent-[var(--color-accent)]" />
-          Stop {running.length === 1 ? running[0] : `what's running (${running.join(", ")})`}
-        </label>
-      )}
-
-      <input value={note} onChange={(e) => setNote(e.target.value)} maxLength={500} placeholder="Note (optional)" aria-label="Note" className={`${field} w-full`} style={{ outline: "none" }} />
+      {going && <p className="-mt-2 text-xs text-muted">Still running (stop it from the page).</p>}
 
       <div className="flex items-center gap-2">
         <button type="submit" disabled={pending} className="h-11 flex-1 rounded-control bg-accent px-4 font-semibold text-accent-ink transition-opacity hover:opacity-90 disabled:opacity-60">

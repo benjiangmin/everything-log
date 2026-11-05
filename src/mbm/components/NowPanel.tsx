@@ -9,15 +9,14 @@ import SidePanel from "./SidePanel";
 
 type Since = "last" | "now" | "custom";
 
-// "What are you doing?": type it (or tap one of your usual ones) and it starts. By default it
-// starts when your last entry ended, and stops whatever's running.
+// "What are you doing?": type it (or tap one of your usual ones) and it starts, stopping whatever
+// was running. By default it starts when your last entry ended.
 export default function NowPanel({ onClose }: { onClose: () => void }) {
   const [info, setInfo] = useState<NowInfo | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [text, setText] = useState("");
   const [since, setSince] = useState<Since>("last");
   const [custom, setCustom] = useState("");
-  const [stop, setStop] = useState(true);
   const [pending, run] = useTransition();
 
   useEffect(() => {
@@ -44,7 +43,7 @@ export default function NowPanel({ onClose }: { onClose: () => void }) {
   // What "since last entry" means right now, shown on the button.
   const lastLabel = (() => {
     if (!info) return "";
-    if (stop && running.length) return "now";
+    if (running.length) return "now"; // what's running stops now, so that's "the last entry"
     if (!info.lastEnd) return "now";
     const sameDay = dayKeyOf(new Date(info.lastEnd), tz) === dayKeyOf(new Date(info.loadedAt), tz);
     const t = clock(info.lastEnd, tz);
@@ -61,7 +60,7 @@ export default function NowPanel({ onClose }: { onClose: () => void }) {
     }
     setError(null);
     run(async () => {
-      const res = await startEntry({ name, since: sinceValue, stopRunning: stop && running.length > 0 });
+      const res = await startEntry({ name, since: sinceValue, stopRunning: true });
       if (res.ok) onClose();
       else setError(res.message);
     });
@@ -128,13 +127,6 @@ export default function NowPanel({ onClose }: { onClose: () => void }) {
               />
             )}
           </div>
-
-          {running.length > 0 && (
-            <label className="flex items-center gap-2.5 text-sm text-ink">
-              <input type="checkbox" checked={stop} onChange={(e) => setStop(e.target.checked)} className="size-4 accent-[var(--color-accent)]" />
-              Stop {names.length === 1 ? names[0] : `what's running (${names.join(", ")})`}
-            </label>
-          )}
 
           <button
             type="submit"

@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { dayData } from "@/app/mbm/actions";
 import type { Day } from "@/mbm/data";
-import { clock, dayKeyOf, dayTitle } from "@/mbm/time";
+import { clock, dayTitle } from "@/mbm/time";
 import BlockEditor from "./BlockEditor";
 import SidePanel from "./SidePanel";
 
@@ -32,7 +32,6 @@ export default function EntryPanel({ dayKey, blockId, onClose }: { dayKey: strin
   if (day) {
     const dayStart = +new Date(day.start);
     const dayEnd = +new Date(day.end);
-    const today = dayKeyOf(new Date(day.loadedAt), day.tz) === day.dayKey;
     const until = Math.min(day.loadedAt, dayEnd);
     if (editing && !block) body = <p className="text-sm text-muted">That entry is gone.</p>;
     else if (block) {
@@ -44,7 +43,6 @@ export default function EntryPanel({ dayKey, blockId, onClose }: { dayKey: strin
           block={block}
           from={Math.max(dayStart, +new Date(block.started_at))}
           to={block.ended_at ? Math.min(+new Date(block.ended_at), dayEnd) : null}
-          canRun={today}
           onDone={onClose}
         />
       );
@@ -60,8 +58,6 @@ export default function EntryPanel({ dayKey, blockId, onClose }: { dayKey: strin
           activities={day.activities}
           from={from}
           to={to}
-          canRun={today}
-          running={day.running.map((b) => (b.activity_id ? byId.get(b.activity_id)?.name : null) ?? "Something")}
           onDone={onClose}
         />
       );

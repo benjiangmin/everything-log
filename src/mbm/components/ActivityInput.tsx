@@ -13,6 +13,7 @@ export default function ActivityInput({
   placeholder,
   autoFocus,
   className = "",
+  trailing,
 }: {
   activities: Activity[];
   value: string;
@@ -21,6 +22,7 @@ export default function ActivityInput({
   placeholder: string;
   autoFocus?: boolean;
   className?: string;
+  trailing?: React.ReactNode; // inside the box, on the right (e.g. "+ Note")
 }) {
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(0);
@@ -67,8 +69,9 @@ export default function ActivityInput({
         placeholder={placeholder}
         aria-label={placeholder}
         style={{ outline: "none" }}
-        className={`w-full rounded-control border border-line bg-paper px-3 py-2.5 text-ink placeholder:text-muted/70 focus:border-ink ${className}`}
+        className={`w-full rounded-control border border-line bg-paper px-3 py-2.5 text-ink placeholder:text-muted/70 focus:border-ink ${trailing ? "pr-24" : ""} ${className}`}
       />
+      {trailing && <div className="absolute right-2 top-1/2 -translate-y-1/2">{trailing}</div>}
       {showing && (
         <ul id={listId} role="listbox" className="panel-pop absolute inset-x-0 top-full z-40 mt-1 overflow-hidden rounded-control border border-line bg-paper p-1 shadow-xl shadow-ink/15">
           {matches.map((a, i) => (
