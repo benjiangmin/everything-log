@@ -37,14 +37,14 @@ export default function DayBar({
   byId: Map<string, Activity>;
   onSelect?: (b: Block) => void;
   onSelectGap?: (gap: { start: number; end: number }) => void; // click untracked time to fill it in
-  onHover?: (span: { start: number; end: number } | null) => void; // what's hovered (the map lights it up)
+  onHover?: (span: { start: number; end: number; block?: Block } | null) => void; // what's hovered (the map lights it up)
   compact?: boolean; // the home page's smaller version
 }) {
   // What the bubble is about: an entry, or an untracked stretch.
   const [hover, setHoverState] = useState<{ start: number; end: number; block?: Block } | null>(null);
   const setHover = (h: { start: number; end: number; block?: Block } | null) => {
     setHoverState(h);
-    onHover?.(h && { start: h.start, end: h.end });
+    onHover?.(h && { start: h.start, end: h.end, block: h.block });
   };
   const total = dayEnd - dayStart;
   const zoomable = !compact;

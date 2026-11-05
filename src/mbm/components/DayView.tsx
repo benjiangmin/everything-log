@@ -8,6 +8,7 @@ import type { Focus } from "./DayMapInner";
 import NowStatus from "./NowStatus";
 import { openMbm } from "./open";
 import { layOut } from "./segments";
+import { isMoving } from "@/mbm/moving";
 import { useNow } from "./useNow";
 
 // One day: (today) what's running, the 24-hour bar, and the map. Hover an entry on the bar for
@@ -38,7 +39,16 @@ export default function DayView({ day, today, renderedAt }: { day: Day; today: b
           tz={day.tz}
           byId={byId}
           onSelect={(b) => openMbm({ kind: "edit", dayKey: day.dayKey, blockId: b.id })}
-          onHover={setFocus}
+          onHover={(h) =>
+            setFocus(
+              h && {
+                start: h.start,
+                end: h.end,
+                // Commute → the route; anything else → where you were; untracked → either.
+                kind: !h.block ? "any" : isMoving(h.block.activity_id ? byId.get(h.block.activity_id)?.name : null) ? "moving" : "still",
+              },
+            )
+          }
           onSelectGap={(g) => openMbm({ kind: "add", dayKey: day.dayKey, from: g.start, to: g.end })}
         />
       </section>

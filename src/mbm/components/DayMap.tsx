@@ -32,6 +32,11 @@ export default function DayMap({ day, focus = null }: { day: Day; focus?: Focus 
           <Inner visits={day.visits} points={day.points} tz={day.tz} focus={focus} />
         </div>
       )}
+      {!empty && (
+        <p className="border-t border-line px-4 py-2 text-xs text-muted sm:px-6">
+          Dashed: the phone missed that bit, so it&apos;s drawn from a walk you took before, or Google&apos;s walking route.
+        </p>
+      )}
     </section>
   );
 }

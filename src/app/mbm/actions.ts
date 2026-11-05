@@ -160,6 +160,15 @@ export async function setActivityColor(id: string, color: string): Promise<Resul
   return { ok: true };
 }
 
+// A route you walked before between these two stops' places, for a trip the phone missed (null if
+// there isn't one, or 008_smarter_trips.sql hasn't been run).
+export async function rememberedRoute(fromId: string, toId: string): Promise<{ lat: number; lng: number }[] | null> {
+  if (!isUuid(fromId) || !isUuid(toId)) return null;
+  const { data, error } = await (await mbm()).rpc("route_between", { p_from: fromId, p_to: toId });
+  if (error || !Array.isArray(data) || data.length < 2) return null;
+  return (data as { lat: number; lng: number }[]).map((p) => ({ lat: Number(p.lat), lng: Number(p.lng) }));
+}
+
 // Name a stop on the map ("Home", "Theory"). Later stops there get the name by themselves.
 export async function namePlace(visitId: string, name: string): Promise<Result> {
   if (!isUuid(visitId)) return fail("That stop is gone.");
