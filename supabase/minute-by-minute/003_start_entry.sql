@@ -37,7 +37,7 @@ security invoker
 set search_path = public
 as $$
 declare
-  v_now timestamptz := now();
+  v_now timestamptz := now();i 
   v_uid uuid := auth.uid();
   v_act uuid;
   v_start timestamptz;
