@@ -23,10 +23,13 @@ export default function DayMapInner({ visits, points, tz }: { visits: Visit[]; p
 
   return (
     <MapContainer center={all[0] ?? [43.0731, -89.4012]} zoom={15} scrollWheelZoom={false} className="size-full" attributionControl>
-      {/* Light, warm-ish map tiles (free, from CARTO / OpenStreetMap). */}
+      {/* OpenStreetMap's own map (free, no key; fine for personal use). Softened toward the
+          site's colors with the "mbm-map" filter in globals.css. */}
       <TileLayer
-        url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
-        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'
+        url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+        maxZoom={19}
+        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        className="mbm-map"
       />
       <FitTo spots={all} />
       {segments.map((seg, i) => (

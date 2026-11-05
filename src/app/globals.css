@@ -312,3 +312,8 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .env-shake, .env-in, .seal-pop, .flap-open, .paper-rise, .env-away, .letter-reveal, .letter-glow { animation: none; }
 }
+
+/* Minute by Minute's map: OpenStreetMap's colors, softened and warmed to sit with milk/oat/mocha. */
+.mbm-map {
+  filter: saturate(0.55) sepia(0.18) brightness(1.03) contrast(0.95);
+}
