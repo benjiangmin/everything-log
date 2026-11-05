@@ -12,6 +12,10 @@ export type Block = {
   source: "manual" | "calendar" | "location" | "health" | "app";
   confirmed: boolean;
 };
+// Where you went (from the iPhone app; see supabase/minute-by-minute/005_location.sql).
+export type Visit = { id: string; arrived_at: string; departed_at: string | null; lat: number; lng: number; place: string | null };
+export type RoutePoint = { at: string; lat: number; lng: number };
+
 export type Day = {
   dayKey: string;
   tz: string;
@@ -20,6 +24,8 @@ export type Day = {
   blocks: Block[];
   activities: Activity[];
   running: Block[]; // what's going on right now (can be more than one)
+  visits: Visit[]; // stops that day
+  points: RoutePoint[]; // the route between them
   loadedAt: number; // when the server read it (the live clock starts from here)
 };
 
@@ -41,6 +47,22 @@ export async function getDay(dayKey: string): Promise<Day> {
     client.from("activities").select("id, name, color, last_used_at").order("last_used_at", { ascending: false }),
     client.from("blocks").select("id, started_at, ended_at, activity_id, note, source, confirmed").is("ended_at", null).order("started_at"),
   ]);
+  // Location: if 005_location.sql hasn't been run yet, the day just has no map data.
+  const [visitRows, pointRows] = await Promise.all([
+    client
+      .from("visits")
+      .select("id, arrived_at, departed_at, lat, lng, places(name)")
+      .lt("arrived_at", end.toISOString())
+      .or(`departed_at.is.null,departed_at.gt.${start.toISOString()}`)
+      .order("arrived_at"),
+    client.from("points").select("at, lat, lng").gte("at", start.toISOString()).lt("at", end.toISOString()).order("at").limit(5000),
+  ]);
+  type VisitRow = Omit<Visit, "place"> & { places: { name: string } | { name: string }[] | null };
+  const visits: Visit[] = visitRows.error
+    ? []
+    : (visitRows.data as unknown as VisitRow[]).map(({ places, ...v }) => ({ ...v, place: (Array.isArray(places) ? places[0]?.name : places?.name) ?? null }));
+  const points: RoutePoint[] = pointRows.error ? [] : (pointRows.data as RoutePoint[]);
+
   const error = blocks.error ?? activities.error ?? running.error;
   if (error) {
     throw new Error(
@@ -57,6 +79,8 @@ export async function getDay(dayKey: string): Promise<Day> {
     blocks: blocks.data as Block[],
     activities: activities.data as Activity[],
     running: running.data as Block[],
+    visits,
+    points,
     loadedAt: Date.now(),
   };
 }

@@ -149,3 +149,14 @@ export async function deleteBlock(id: string): Promise<Result> {
   refresh();
   return { ok: true };
 }
+
+// Name a stop on the map ("Home", "Theory"). Later stops there get the name by themselves.
+export async function namePlace(visitId: string, name: string): Promise<Result> {
+  if (!isUuid(visitId)) return fail("That stop is gone.");
+  const clean = String(name ?? "").replace(/\s+/g, " ").trim().slice(0, 80);
+  if (!clean) return fail("What is this place called?");
+  const { error } = await (await mbm()).rpc("name_place", { p_visit_id: visitId, p_name: clean });
+  if (error) return fail(/name_place/.test(error.message) ? "Run supabase/minute-by-minute/005_location.sql first." : error.message);
+  refresh();
+  return { ok: true };
+}
