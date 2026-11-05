@@ -1,23 +1,71 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
-import { AdvancedMarker, APIProvider, InfoWindow, Map, useMap, useMapsLibrary } from "@vis.gl/react-google-maps";
+import { useEffect, useMemo, useState, useTransition, type ReactNode } from "react";
+import { createPortal } from "react-dom";
+import { APIProvider, InfoWindow, Map, useMap, useMapsLibrary } from "@vis.gl/react-google-maps";
 import { namePlace } from "@/app/mbm/actions";
 import type { RoutePoint, Visit } from "@/mbm/data";
 import { clock } from "@/mbm/time";
 
-// Google Maps. Both are meant to be in the page (the browser loads the map with them), so they're
-// NEXT_PUBLIC_ variables, unlike the site's secret keys. Lock the key to your site in Google Cloud.
+// Google Maps. The key is meant to be in the page (the browser loads the map with it), so it's a
+// NEXT_PUBLIC_ variable, unlike the site's secret keys. Lock it to your site in Google Cloud.
 const KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_KEY;
-const MAP_ID = process.env.NEXT_PUBLIC_GOOGLE_MAP_ID || "DEMO_MAP_ID"; // a Map ID allows styling it in Google Cloud
 
 type Spot = { lat: number; lng: number };
+export type Focus = { start: number; end: number }; // the stretch you're hovering on the day bar
+
+// Fewer labels when zoomed out; more come back as you zoom in. (Styled here in code, so no Map ID
+// is needed: NEXT_PUBLIC_GOOGLE_MAP_ID isn't used any more.)
+const QUIET: google.maps.MapTypeStyle[] = [
+  { featureType: "poi", elementType: "labels", stylers: [{ visibility: "off" }] },
+  { featureType: "poi.business", stylers: [{ visibility: "off" }] },
+  { featureType: "transit", stylers: [{ visibility: "off" }] },
+  { featureType: "road", elementType: "labels.icon", stylers: [{ visibility: "off" }] },
+  { featureType: "road.local", elementType: "labels", stylers: [{ visibility: "off" }] },
+  { featureType: "administrative.neighborhood", elementType: "labels", stylers: [{ visibility: "off" }] },
+];
+const CALM: google.maps.MapTypeStyle[] = [
+  { featureType: "poi.business", stylers: [{ visibility: "off" }] },
+  { featureType: "poi", elementType: "labels.icon", stylers: [{ visibility: "off" }] },
+  { featureType: "transit", elementType: "labels", stylers: [{ visibility: "off" }] },
+  { featureType: "road", elementType: "labels.icon", stylers: [{ visibility: "off" }] },
+];
+const stylesFor = (zoom: number) => (zoom < 16 ? QUIET : zoom < 18 ? CALM : []);
+
+// The route as lines, broken wherever there's a long gap (so it doesn't draw a straight line across town).
+function split(points: RoutePoint[]): Spot[][] {
+  const out: Spot[][] = [];
+  let prev: RoutePoint | null = null;
+  for (const p of points) {
+    if (!prev || +new Date(p.at) - +new Date(prev.at) > 20 * 60000) out.push([]);
+    out[out.length - 1].push({ lat: p.lat, lng: p.lng });
+    prev = p;
+  }
+  return out;
+}
 
 // The day on a map: the route you took (the iPhone's dots) and each stop, labelled with its name
 // (yours, or the one the phone found, like "Noland Hall"). Click a stop to rename it; later
-// visits there get the name by themselves.
-export default function DayMapInner({ visits, points, tz }: { visits: Visit[]; points: RoutePoint[]; tz: string }) {
+// visits there get the name by themselves. Hovering the day bar highlights where you were then.
+export default function DayMapInner({ visits, points, tz, focus }: { visits: Visit[]; points: RoutePoint[]; tz: string; focus: Focus | null }) {
   const [open, setOpen] = useState<Visit | null>(null);
+  const [zoom, setZoom] = useState(15);
+  const segments = useMemo(() => split(points), [points]);
+  // What was happening during the hovered stretch: that part of the route, and the stops.
+  const lit = useMemo(() => {
+    if (!focus) return null;
+    const inside = points.filter((p) => {
+      const t = +new Date(p.at);
+      return t >= focus.start && t <= focus.end;
+    });
+    const stops = new Set(
+      visits
+        .filter((v) => +new Date(v.arrived_at) < focus.end && (v.departed_at ? +new Date(v.departed_at) : Infinity) > focus.start)
+        .map((v) => v.id),
+    );
+    return { route: split(inside), stops };
+  }, [focus, points, visits]);
+  const nothingLit = lit !== null && lit.stops.size === 0 && lit.route.every((r) => r.length < 2);
   if (!KEY) {
     return (
       <p className="grid size-full place-items-center px-6 text-center text-sm text-muted">
@@ -26,20 +74,13 @@ export default function DayMapInner({ visits, points, tz }: { visits: Visit[]; p
     );
   }
 
-  // The route, broken wherever there's a long gap (so it doesn't draw a straight line across town).
-  const segments: Spot[][] = [];
-  let prev: RoutePoint | null = null;
-  for (const p of points) {
-    if (!prev || +new Date(p.at) - +new Date(prev.at) > 20 * 60000) segments.push([]);
-    segments[segments.length - 1].push({ lat: p.lat, lng: p.lng });
-    prev = p;
-  }
   const all: Spot[] = [...points, ...visits].map((s) => ({ lat: s.lat, lng: s.lng }));
 
   return (
     <APIProvider apiKey={KEY}>
       <Map
-        mapId={MAP_ID}
+        styles={stylesFor(zoom)}
+        onZoomChanged={(e) => setZoom(e.detail.zoom)}
         defaultCenter={all[0] ?? { lat: 43.0731, lng: -89.4012 }}
         defaultZoom={15}
         gestureHandling="cooperative"
@@ -50,13 +91,24 @@ export default function DayMapInner({ visits, points, tz }: { visits: Visit[]; p
       >
         <FitTo spots={all} />
         {segments.map((seg, i) => (
-          <Route key={i} path={seg} />
+          <Route key={i} path={seg} faded={lit !== null && !nothingLit} />
+        ))}
+        {lit?.route.map((seg, i) => (
+          <Route key={`lit${i}`} path={seg} lit />
         ))}
         {visits.map((v) => {
           const name = v.place ?? v.auto_name;
+          const on = lit?.stops.has(v.id) ?? false;
+          const dim = lit !== null && !nothingLit && !on;
           return (
-            <AdvancedMarker key={v.id} position={{ lat: v.lat, lng: v.lng }} onClick={() => setOpen(v)} title={name ?? "Unnamed stop"}>
-              <div className="flex flex-col items-center">
+            <HtmlMarker key={v.id} position={{ lat: v.lat, lng: v.lng }} zIndex={on ? 3 : 1}>
+              <button
+                type="button"
+                onClick={() => setOpen(v)}
+                title={name ?? "Unnamed stop"}
+                className={`flex cursor-pointer flex-col items-center transition-[opacity,transform] duration-150 ${dim ? "opacity-35" : ""} ${on ? "scale-125" : ""}`}
+                style={{ transformOrigin: "bottom center" }}
+              >
                 {name && (
                   <span
                     className={`mb-1 whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-semibold shadow-sm ${
@@ -66,9 +118,13 @@ export default function DayMapInner({ visits, points, tz }: { visits: Visit[]; p
                     {name}
                   </span>
                 )}
-                <span className={`block size-4 rounded-full border-2 border-[#3e281b] shadow ${v.place ? "bg-[#faf6f0]" : "bg-[#d4a373]"}`} />
-              </div>
-            </AdvancedMarker>
+                <span
+                  className={`block size-4 rounded-full border-2 border-[#3e281b] shadow ${v.place ? "bg-[#faf6f0]" : "bg-[#d4a373]"} ${
+                    on ? "ring-4 ring-[#d4a373]/60" : ""
+                  }`}
+                />
+              </button>
+            </HtmlMarker>
           );
         })}
         {open && (
@@ -77,20 +133,62 @@ export default function DayMapInner({ visits, points, tz }: { visits: Visit[]; p
           </InfoWindow>
         )}
       </Map>
+      {nothingLit && (
+        <p className="pointer-events-none absolute left-3 top-3 rounded-full bg-paper/95 px-3 py-1 text-xs text-muted shadow-sm ring-1 ring-line">
+          No location recorded then
+        </p>
+      )}
     </APIProvider>
   );
 }
 
-// The route as a mocha line.
-function Route({ path }: { path: Spot[] }) {
+// The route as a mocha line. Lit = the hovered stretch (thicker, caramel); faded = the rest of the day while hovering.
+function Route({ path, lit = false, faded = false }: { path: Spot[]; lit?: boolean; faded?: boolean }) {
   const map = useMap();
   const maps = useMapsLibrary("maps");
   useEffect(() => {
     if (!map || !maps) return;
-    const line = new maps.Polyline({ path, map, strokeColor: "#7f5539", strokeOpacity: 0.85, strokeWeight: 4 });
+    const line = new maps.Polyline({
+      path,
+      map,
+      clickable: false,
+      strokeColor: lit ? "#d4a373" : "#7f5539",
+      strokeOpacity: lit ? 1 : faded ? 0.3 : 0.85,
+      strokeWeight: lit ? 7 : 4,
+      zIndex: lit ? 2 : 1,
+    });
     return () => line.setMap(null);
-  }, [map, maps, path]);
+  }, [map, maps, path, lit, faded]);
   return null;
+}
+
+// A bit of the page pinned to a spot on the map (its bottom-middle sits on the spot).
+function HtmlMarker({ position, zIndex, children }: { position: Spot; zIndex: number; children: ReactNode }) {
+  const map = useMap();
+  const maps = useMapsLibrary("maps");
+  const [el] = useState(() => {
+    const d = document.createElement("div");
+    d.style.position = "absolute";
+    return d;
+  });
+  const { lat, lng } = position;
+  useEffect(() => {
+    if (!map || !maps) return;
+    const o = new maps.OverlayView();
+    o.onAdd = () => o.getPanes()?.overlayMouseTarget.appendChild(el);
+    o.draw = () => {
+      const p = o.getProjection()?.fromLatLngToDivPixel({ lat, lng });
+      if (!p) return;
+      el.style.left = `${p.x}px`;
+      el.style.top = `${p.y}px`;
+    };
+    o.onRemove = () => el.remove();
+    maps.OverlayView.preventMapHitsAndGesturesFrom(el);
+    o.setMap(map);
+    return () => o.setMap(null);
+  }, [map, maps, el, lat, lng]);
+  // (el has no z-index of its own, so this one stacks the markers against each other.)
+  return createPortal(<div style={{ position: "relative", zIndex, transform: "translate(-50%, -100%)" }}>{children}</div>, el);
 }
 
 // Zooms to show the whole day (when the number of spots changes).

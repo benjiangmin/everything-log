@@ -1,8 +1,10 @@
 "use client";
 
+import { useState } from "react";
 import type { Day } from "@/mbm/data";
 import DayBar from "./DayBar";
 import DayMap from "./DayMap";
+import type { Focus } from "./DayMapInner";
 import NowStatus from "./NowStatus";
 import { openMbm } from "./open";
 import { layOut } from "./segments";
@@ -16,6 +18,7 @@ export default function DayView({ day, today, renderedAt }: { day: Day; today: b
   const dayEnd = +new Date(day.end);
   const byId = new Map(day.activities.map((a) => [a.id, a]));
   const { placed, lanes, gaps } = layOut(day.blocks, dayStart, dayEnd, now);
+  const [focus, setFocus] = useState<Focus | null>(null); // hovering the bar → lit up on the map
 
   return (
     <div className="flex flex-col gap-5">
@@ -35,11 +38,12 @@ export default function DayView({ day, today, renderedAt }: { day: Day; today: b
           tz={day.tz}
           byId={byId}
           onSelect={(b) => openMbm({ kind: "edit", dayKey: day.dayKey, blockId: b.id })}
+          onHover={setFocus}
           onSelectGap={(g) => openMbm({ kind: "add", dayKey: day.dayKey, from: g.start, to: g.end })}
         />
       </section>
 
-      <DayMap day={day} />
+      <DayMap day={day} focus={focus} />
     </div>
   );
 }

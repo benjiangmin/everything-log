@@ -2,6 +2,7 @@
 
 import dynamic from "next/dynamic";
 import type { Day } from "@/mbm/data";
+import type { Focus } from "./DayMapInner";
 
 // The map only runs in the browser (it needs the page's window), so it loads after the page.
 const Inner = dynamic(() => import("./DayMapInner"), {
@@ -9,7 +10,7 @@ const Inner = dynamic(() => import("./DayMapInner"), {
   loading: () => <div className="size-full animate-pulse bg-surface" />,
 });
 
-export default function DayMap({ day }: { day: Day }) {
+export default function DayMap({ day, focus = null }: { day: Day; focus?: Focus | null }) {
   const empty = day.visits.length === 0 && day.points.length === 0;
   return (
     <section aria-label="Map" className="overflow-hidden rounded-card border-[1.5px] border-ink">
@@ -27,8 +28,8 @@ export default function DayMap({ day }: { day: Day }) {
         </p>
       ) : (
         // isolate: keeps the map's own layers under the page's popups and panels.
-        <div className="isolate h-[22rem] border-t border-line sm:h-[26rem]">
-          <Inner visits={day.visits} points={day.points} tz={day.tz} />
+        <div className="relative isolate h-[22rem] border-t border-line sm:h-[26rem]">
+          <Inner visits={day.visits} points={day.points} tz={day.tz} focus={focus} />
         </div>
       )}
     </section>
