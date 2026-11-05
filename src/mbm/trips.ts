@@ -33,9 +33,23 @@ export function metres(a: Spot, b: Spot) {
   return Math.sqrt(x * x + y * y) * 6371000;
 }
 
+// Dots worth drawing: accurate ones (±50 m or better), without lone spikes (a dot far off between
+// two that are close together: the GPS glitching, not you going somewhere and straight back).
+function cleanDots(points: RoutePoint[]) {
+  const pts = points
+    .filter((p) => p.accuracy_m == null || p.accuracy_m <= 50)
+    .map((p) => ({ ...spot(p), t: ms(p.at) }))
+    .sort((a, b) => a.t - b.t);
+  return pts.filter((b, i) => {
+    const a = pts[i - 1];
+    const c = pts[i + 1];
+    return !(a && c && metres(a, b) > 150 && metres(b, c) > 150 && metres(a, c) < 100);
+  });
+}
+
 export function buildTrips(visits: Visit[], points: RoutePoint[]): Trip[] {
   const vs = [...visits].sort((a, b) => ms(a.arrived_at) - ms(b.arrived_at));
-  const pts = points.map((p) => ({ ...spot(p), t: ms(p.at) })).sort((a, b) => a.t - b.t);
+  const pts = cleanDots(points);
 
   // When you left each stop. iOS sometimes never says; then it's the first dot well away from it
   // (before the next stop), or the next stop's arrival.
@@ -67,6 +81,10 @@ export function buildTrips(visits: Visit[], points: RoutePoint[]): Trip[] {
       if (!run || missed(run[run.length - 1], p)) runs.push([p]);
       else run.push(p);
     }
+    // A run of only a dot or two, cut off from the rest, is too little to trust: leave it out.
+    for (let r = runs.length - 1; r >= 0; r--) if (runs[r].length < 3) runs.splice(r, 1);
+    if (!runs.length && !(from && to)) continue;
+    const dots = runs.flat(); // what's left to draw
 
     const pieces: Piece[] = [];
     if (!runs.length) {
@@ -97,18 +115,18 @@ export function buildTrips(visits: Visit[], points: RoutePoint[]): Trip[] {
     // the stop it's attached to) isn't a trip.
     if (!from || !to) {
       const anchor = from ?? to;
-      const reach = anchor ? Math.max(...inside.map((p) => metres(p, anchor))) : Math.max(...inside.map((p) => metres(p, inside[0])));
+      const reach = anchor ? Math.max(...dots.map((p) => metres(p, anchor))) : Math.max(...dots.map((p) => metres(p, dots[0])));
       if (reach < (anchor ? 100 : 150)) continue;
     }
     trips.push({
       key: `${from?.id ?? "start"}-${to?.id ?? "end"}`,
       fromId: from?.id ?? null,
       toId: to?.id ?? null,
-      start: from ? lo : inside[0].t,
-      end: to ? hi : inside[inside.length - 1].t,
+      start: from ? lo : dots[0].t,
+      end: to ? hi : dots[dots.length - 1].t,
       pieces: kept,
-      looseStart: from ? null : spot(inside[0]),
-      looseEnd: to ? null : spot(inside[inside.length - 1]),
+      looseStart: from ? null : spot(dots[0]),
+      looseEnd: to ? null : spot(dots[dots.length - 1]),
     });
   }
   return trips;

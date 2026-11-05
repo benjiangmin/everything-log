@@ -220,8 +220,11 @@ export async function entryPlaceInfo(blockId: string): Promise<EntryPlaceInfo> {
 // Say where an entry happened (null = not set). The phone's stops for that time move to match.
 export async function setEntryPlace(blockId: string, placeId: string | null): Promise<Result> {
   if (!isUuid(blockId) || (placeId !== null && !isUuid(placeId))) return fail("That's gone.");
-  const { error } = await (await mbm()).rpc("set_entry_place", { p_block_id: blockId, p_place_id: placeId });
+  const client = await mbm();
+  const { error } = await client.rpc("set_entry_place", { p_block_id: blockId, p_place_id: placeId });
   if (error) return fail(/set_entry_place/.test(error.message) ? "Run supabase/minute-by-minute/009_entry_places.sql first." : error.message);
+  // The walk to / from the stops next to it becomes a Commute (010; skipped if not run yet).
+  if (placeId) await client.rpc("link_entry_stops", { p_block_id: blockId });
   refresh();
   return { ok: true };
 }
