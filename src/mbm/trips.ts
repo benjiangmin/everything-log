@@ -33,13 +33,11 @@ export function metres(a: Spot, b: Spot) {
   return Math.sqrt(x * x + y * y) * 6371000;
 }
 
-// Dots worth drawing: accurate ones (±50 m or better), without lone spikes (a dot far off between
-// two that are close together: the GPS glitching, not you going somewhere and straight back).
+// Dots worth drawing: everything the phone kept (it already throws out inaccurate ones), minus
+// lone spikes: a dot far off between two that are close together (the GPS glitching, not you
+// going somewhere and straight back).
 function cleanDots(points: RoutePoint[]) {
-  const pts = points
-    .filter((p) => p.accuracy_m == null || p.accuracy_m <= 50)
-    .map((p) => ({ ...spot(p), t: ms(p.at) }))
-    .sort((a, b) => a.t - b.t);
+  const pts = points.map((p) => ({ ...spot(p), t: ms(p.at) })).sort((a, b) => a.t - b.t);
   return pts.filter((b, i) => {
     const a = pts[i - 1];
     const c = pts[i + 1];
@@ -70,7 +68,7 @@ export function buildTrips(visits: Visit[], points: RoutePoint[]): Trip[] {
     if (lo === null) continue; // still at the last stop
     const hi = to ? ms(to.arrived_at) : Infinity;
     if (hi <= lo) continue;
-    const inside = pts.filter((p) => p.t > lo && p.t < hi);
+    const inside = pts.filter((p) => p.t >= lo && p.t <= hi);
     if (!inside.length && !(from && to)) continue;
     if (!inside.length && from && to && metres(from, to) < 60) continue; // back to the same place
 
@@ -81,8 +79,9 @@ export function buildTrips(visits: Visit[], points: RoutePoint[]): Trip[] {
       if (!run || missed(run[run.length - 1], p)) runs.push([p]);
       else run.push(p);
     }
-    // A run of only a dot or two, cut off from the rest, is too little to trust: leave it out.
-    for (let r = runs.length - 1; r >= 0; r--) if (runs[r].length < 3) runs.splice(r, 1);
+    // A single dot cut off from the rest of the trip is too little to trust: leave it out (but
+    // never all of them).
+    if (runs.length > 1) for (let r = runs.length - 1; r >= 0; r--) if (runs[r].length === 1 && runs.length > 1) runs.splice(r, 1);
     if (!runs.length && !(from && to)) continue;
     const dots = runs.flat(); // what's left to draw
 
