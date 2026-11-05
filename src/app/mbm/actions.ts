@@ -169,6 +169,73 @@ export async function rememberedRoute(fromId: string, toId: string): Promise<{ l
   return (data as { lat: number; lng: number }[]).map((p) => ({ lat: Number(p.lat), lng: Number(p.lng) }));
 }
 
+// ---------- Where an entry happened ----------
+
+export type PlaceLite = { id: string; name: string; lat: number; lng: number };
+export type EntryPlaceInfo = {
+  places: PlaceLite[]; // all your named places
+  current: PlaceLite | null; // the place you set on this entry
+  phone: { name: string | null; lat: number; lng: number } | null; // where the phone had you then
+  usual: PlaceLite | null; // where this activity usually happens (from entries you've set)
+  ready: boolean; // false until 009_entry_places.sql is run
+};
+
+export async function entryPlaceInfo(blockId: string): Promise<EntryPlaceInfo> {
+  const none: EntryPlaceInfo = { places: [], current: null, phone: null, usual: null, ready: false };
+  if (!isUuid(blockId)) return none;
+  const client = await mbm();
+  const block = await client.from("blocks").select("id, started_at, ended_at, activity_id, place_id").eq("id", blockId).maybeSingle();
+  if (block.error || !block.data) return none; // (place_id missing = 009 not run yet)
+  const b = block.data as { started_at: string; ended_at: string | null; activity_id: string | null; place_id: string | null };
+  const end = b.ended_at ?? new Date().toISOString();
+  const [places, visits, past] = await Promise.all([
+    client.from("places").select("id, name, lat, lng").order("name"),
+    client.from("visits").select("arrived_at, departed_at, lat, lng, auto_name, places(name)").lt("arrived_at", end).or(`departed_at.is.null,departed_at.gt.${b.started_at}`),
+    b.activity_id
+      ? client.from("blocks").select("place_id").eq("activity_id", b.activity_id).not("place_id", "is", null).neq("id", blockId).limit(200)
+      : Promise.resolve({ data: [] as { place_id: string }[], error: null }),
+  ]);
+  const all = (places.data ?? []) as PlaceLite[];
+  const byId = new Map(all.map((p) => [p.id, p]));
+  // The phone's stop that covers most of the entry.
+  type V = { arrived_at: string; departed_at: string | null; lat: number; lng: number; auto_name: string | null; places: { name: string } | { name: string }[] | null };
+  const s = +new Date(b.started_at);
+  const e = +new Date(end);
+  const overlap = (v: V) => Math.min(e, v.departed_at ? +new Date(v.departed_at) : e) - Math.max(s, +new Date(v.arrived_at));
+  const best = ((visits.data ?? []) as unknown as V[]).sort((x, y) => overlap(y) - overlap(x))[0];
+  const placeName = best && (Array.isArray(best.places) ? best.places[0]?.name : best.places?.name);
+  // The place this activity has most often.
+  const counts = new Map<string, number>();
+  for (const r of (past.data ?? []) as { place_id: string }[]) counts.set(r.place_id, (counts.get(r.place_id) ?? 0) + 1);
+  const top = [...counts.entries()].sort((x, y) => y[1] - x[1])[0]?.[0];
+  return {
+    places: all,
+    current: b.place_id ? (byId.get(b.place_id) ?? null) : null,
+    phone: best ? { name: placeName ?? best.auto_name ?? null, lat: best.lat, lng: best.lng } : null,
+    usual: top ? (byId.get(top) ?? null) : null,
+    ready: true,
+  };
+}
+
+// Say where an entry happened (null = not set). The phone's stops for that time move to match.
+export async function setEntryPlace(blockId: string, placeId: string | null): Promise<Result> {
+  if (!isUuid(blockId) || (placeId !== null && !isUuid(placeId))) return fail("That's gone.");
+  const { error } = await (await mbm()).rpc("set_entry_place", { p_block_id: blockId, p_place_id: placeId });
+  if (error) return fail(/set_entry_place/.test(error.message) ? "Run supabase/minute-by-minute/009_entry_places.sql first." : error.message);
+  refresh();
+  return { ok: true };
+}
+
+// A new place (picked on the map), set on the entry.
+export async function newPlaceForEntry(blockId: string, name: string, lat: number, lng: number): Promise<Result> {
+  const clean = String(name ?? "").replace(/\s+/g, " ").trim().slice(0, 80);
+  if (!clean) return fail("What is this place called?");
+  if (![lat, lng].every(Number.isFinite) || Math.abs(lat) > 90 || Math.abs(lng) > 180) return fail("Pick a spot on the map.");
+  const { data, error } = await (await mbm()).rpc("create_place", { p_name: clean, p_lat: lat, p_lng: lng });
+  if (error) return fail(/create_place/.test(error.message) ? "Run supabase/minute-by-minute/009_entry_places.sql first." : error.message);
+  return setEntryPlace(blockId, data as string);
+}
+
 // Name a stop on the map ("Home", "Theory"). Later stops there get the name by themselves.
 export async function namePlace(visitId: string, name: string): Promise<Result> {
   if (!isUuid(visitId)) return fail("That stop is gone.");

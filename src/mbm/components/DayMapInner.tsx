@@ -1,41 +1,19 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, useTransition, type ReactNode } from "react";
-import { createPortal } from "react-dom";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { APIProvider, InfoWindow, Map, useMap, useMapsLibrary } from "@vis.gl/react-google-maps";
 import { namePlace, rememberedRoute } from "@/app/mbm/actions";
 import type { RoutePoint, Visit } from "@/mbm/data";
 import { clock } from "@/mbm/time";
+import { HtmlMarker, KEY, stylesFor } from "./mapBits";
 import { buildTrips, decodePolyline, metres, type Piece, type Spot, type Trip } from "@/mbm/trips";
-
-// Google Maps. The key is meant to be in the page (the browser loads the map with it), so it's a
-// NEXT_PUBLIC_ variable, unlike the site's secret keys. Lock it to your site in Google Cloud.
-const KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_KEY;
 
 // The stretch you're hovering on the day bar. moving: light up the route (Commute); still: the
 // stop you were at (everything else); any: both (untracked time).
 export type Focus = { start: number; end: number; kind: "moving" | "still" | "any" };
 
-// Fewer labels when zoomed out; more come back as you zoom in. (Styled here in code, so no Map ID
-// is needed: NEXT_PUBLIC_GOOGLE_MAP_ID isn't used any more.)
-const QUIET: google.maps.MapTypeStyle[] = [
-  { featureType: "poi", elementType: "labels", stylers: [{ visibility: "off" }] },
-  { featureType: "poi.business", stylers: [{ visibility: "off" }] },
-  { featureType: "transit", stylers: [{ visibility: "off" }] },
-  { featureType: "road", elementType: "labels.icon", stylers: [{ visibility: "off" }] },
-  { featureType: "road.local", elementType: "labels", stylers: [{ visibility: "off" }] },
-  { featureType: "administrative.neighborhood", elementType: "labels", stylers: [{ visibility: "off" }] },
-];
-const CALM: google.maps.MapTypeStyle[] = [
-  { featureType: "poi.business", stylers: [{ visibility: "off" }] },
-  { featureType: "poi", elementType: "labels.icon", stylers: [{ visibility: "off" }] },
-  { featureType: "transit", elementType: "labels", stylers: [{ visibility: "off" }] },
-  { featureType: "road", elementType: "labels.icon", stylers: [{ visibility: "off" }] },
-];
-const stylesFor = (zoom: number) => (zoom < 16 ? QUIET : zoom < 18 ? CALM : []);
-
-// The day on a map: each stop, and the trips between them (from the iPhone's dots), each stop, labelled with its name
-// (yours, or the one the phone found, like "Noland Hall"). Click a stop to rename it; later
+// The day on a map: each stop, and the trips between them (from the iPhone's dots). Stops are
+// labelled with their name (yours, or the one the phone found, like "Noland Hall"). Click a stop to rename it; later
 // visits there get the name by themselves. Hovering the day bar highlights where you were then.
 export default function DayMapInner({ visits, points, tz, focus }: { visits: Visit[]; points: RoutePoint[]; tz: string; focus: Focus | null }) {
   const [open, setOpen] = useState<Visit | null>(null);
@@ -86,18 +64,24 @@ export default function DayMapInner({ visits, points, tz, focus }: { visits: Vis
             <TripLine key={t.key} pieces={t.pieces} lit={on} faded={dimming && !on} />
           );
         })}
-        {/* Loose ends: where a trip begins or ends away from any stop (e.g. where you are now). */}
-        {trips.flatMap((t) =>
-          [t.looseStart, t.looseEnd].filter((s): s is Spot => s !== null).map((s, i) => (
-            <HtmlMarker key={`${t.key}-${i}`} position={s} zIndex={0}>
+        {/* Loose ends: where a trip begins or ends away from any stop (where the phone started or
+            stopped recording, or where you are now). Hover for when. */}
+        {trips.flatMap((t) => {
+          const ends: { at: Spot; label: string }[] = [];
+          if (t.looseStart) ends.push({ at: t.looseStart, label: `Recording picks up here · ${clock(new Date(t.start), tz)}` });
+          if (t.looseEnd) ends.push({ at: t.looseEnd, label: `Last recorded here · ${clock(new Date(t.end), tz)}` });
+          return ends.map(({ at, label }, i) => (
+            <HtmlMarker key={`${t.key}-${i}`} position={at} zIndex={0}>
               <span
-                className={`block size-3 rounded-full border-2 border-[#faf6f0] bg-[#7f5539] shadow transition-opacity ${
+                title={label}
+                aria-label={label}
+                className={`block size-3 cursor-help rounded-full border-2 border-[#faf6f0] bg-[#7f5539] shadow transition-opacity ${
                   dimming && !lit?.trip.has(t.key) ? "opacity-35" : ""
                 }`}
               />
             </HtmlMarker>
-          )),
-        )}
+          ));
+        })}
         {visits.map((v) => {
           const name = v.place ?? v.auto_name;
           const on = lit?.stops.has(v.id) ?? false;
@@ -237,35 +221,6 @@ function Route({ path, dashed, lit, faded }: { path: Spot[]; dashed: boolean; li
     return () => line.setMap(null);
   }, [map, maps, path, dashed, lit, faded]);
   return null;
-}
-
-// A bit of the page pinned to a spot on the map (its bottom-middle sits on the spot).
-function HtmlMarker({ position, zIndex, children }: { position: Spot; zIndex: number; children: ReactNode }) {
-  const map = useMap();
-  const maps = useMapsLibrary("maps");
-  const [el] = useState(() => {
-    const d = document.createElement("div");
-    d.style.position = "absolute";
-    return d;
-  });
-  const { lat, lng } = position;
-  useEffect(() => {
-    if (!map || !maps) return;
-    const o = new maps.OverlayView();
-    o.onAdd = () => o.getPanes()?.overlayMouseTarget.appendChild(el);
-    o.draw = () => {
-      const p = o.getProjection()?.fromLatLngToDivPixel({ lat, lng });
-      if (!p) return;
-      el.style.left = `${p.x}px`;
-      el.style.top = `${p.y}px`;
-    };
-    o.onRemove = () => el.remove();
-    maps.OverlayView.preventMapHitsAndGesturesFrom(el);
-    o.setMap(map);
-    return () => o.setMap(null);
-  }, [map, maps, el, lat, lng]);
-  // (el has no z-index of its own, so this one stacks the markers against each other.)
-  return createPortal(<div style={{ position: "relative", zIndex, transform: "translate(-50%, -100%)" }}>{children}</div>, el);
 }
 
 // Zooms to show the whole day (when the number of spots changes).

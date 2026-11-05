@@ -7,6 +7,7 @@ import { hhmm, zonedTime } from "@/mbm/time";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
 import ActivityInput from "./ActivityInput";
 import ColorRow from "./ColorRow";
+import EntryPlace from "./EntryPlace";
 
 const field = "rounded-control border border-line bg-paper px-3 py-2.5 text-ink focus:border-ink";
 
@@ -138,6 +139,9 @@ export default function BlockEditor({
       {startedEarlier && start === startShown && <p className="-mt-2 text-xs text-muted">It started the day before (that stays as is unless you change the time).</p>}
 
       {going && <p className="-mt-2 text-xs text-muted">Still running (stop it from the page).</p>}
+
+      {/* Where it happened (an entry that's already saved). */}
+      {block && <EntryPlace blockId={block.id} />}
 
       {known && <ColorRow key={known.id} activity={known} />}
 

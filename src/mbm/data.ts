@@ -11,6 +11,7 @@ export type Block = {
   note: string | null;
   source: "manual" | "calendar" | "location" | "health" | "app";
   confirmed: boolean;
+  place_id?: string | null; // where it happened, if you said (009_entry_places.sql)
 };
 // Where you went (from the iPhone app; see supabase/minute-by-minute/005_location.sql).
 export type Visit = {
@@ -48,7 +49,7 @@ export async function getDay(dayKey: string): Promise<Day> {
   const [blocks, activities, running] = await Promise.all([
     client
       .from("blocks")
-      .select("id, started_at, ended_at, activity_id, note, source, confirmed")
+      .select("*")
       .lt("started_at", end.toISOString())
       .or(`ended_at.is.null,ended_at.gt.${start.toISOString()}`)
       .order("started_at"),

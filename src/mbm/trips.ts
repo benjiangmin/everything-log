@@ -93,6 +93,13 @@ export function buildTrips(visits: Visit[], points: RoutePoint[]): Trip[] {
 
     const kept = pieces.filter((p) => p.path.length >= 2);
     if (!kept.length) continue;
+    // A loose bit that never really goes anywhere (a few dots of GPS drift, or wandering around
+    // the stop it's attached to) isn't a trip.
+    if (!from || !to) {
+      const anchor = from ?? to;
+      const reach = anchor ? Math.max(...inside.map((p) => metres(p, anchor))) : Math.max(...inside.map((p) => metres(p, inside[0])));
+      if (reach < (anchor ? 100 : 150)) continue;
+    }
     trips.push({
       key: `${from?.id ?? "start"}-${to?.id ?? "end"}`,
       fromId: from?.id ?? null,
