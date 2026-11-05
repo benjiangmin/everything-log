@@ -74,7 +74,8 @@ const cleanName = (n: unknown) => String(n ?? "").replace(/\s+/g, " ").trim().sl
 // "I'm doing X": starts it, by default since your last entry ended.
 //   since: "last" (when your last entry ended, or now if something's running that you stop),
 //          "now", or an exact moment (ISO).
-//   stopRunning: also end whatever's running, at that same moment (on by default in the panel).
+//   stopRunning: also end whatever's running, at that same moment (the panel doesn't: things run
+//                side by side until you stop each one).
 export async function startEntry(input: { name: string; since: "last" | "now" | string; stopRunning: boolean }): Promise<Result> {
   const activity = cleanName(input.name);
   if (!activity) return fail("What are you doing?");
@@ -86,7 +87,7 @@ export async function startEntry(input: { name: string; since: "last" | "now" | 
     let start: number;
     if (input.since === "now") start = now;
     else if (input.since === "last") {
-      // Stopping what's running: it ends now, so "since the last entry" is now.
+      // When your last finished entry ended (if you're also stopping what's running, that's now).
       start = input.stopRunning && info.running.length ? now : info.lastEnd ? +new Date(info.lastEnd) : now;
     } else {
       start = +new Date(input.since);

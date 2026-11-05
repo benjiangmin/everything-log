@@ -9,9 +9,11 @@ import SidePanel from "./SidePanel";
 
 type Since = "last" | "now" | "custom";
 
-// "What are you doing?": type it (or tap one of your usual ones) and it starts, stopping whatever
-// was running. By default it starts when your last entry ended.
-export default function NowPanel({ onClose }: { onClose: () => void }) {
+// "What are you doing?": type it (or tap one of your usual ones) and it starts.
+//   + Start / the sidebar: what's already running keeps going (stop each one from the page).
+//   Switch (switching): what's running stops, and the new thing takes over from that moment.
+// By default it starts "since last entry": when the last entry ended (switching: now).
+export default function NowPanel({ switching = false, onClose }: { switching?: boolean; onClose: () => void }) {
   const [info, setInfo] = useState<NowInfo | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [text, setText] = useState("");
@@ -43,7 +45,7 @@ export default function NowPanel({ onClose }: { onClose: () => void }) {
   // What "since last entry" means right now, shown on the button.
   const lastLabel = (() => {
     if (!info) return "";
-    if (running.length) return "now"; // what's running stops now, so that's "the last entry"
+    if (switching && running.length) return "now"; // what's running stops now: that's the last entry
     if (!info.lastEnd) return "now";
     const sameDay = dayKeyOf(new Date(info.lastEnd), tz) === dayKeyOf(new Date(info.loadedAt), tz);
     const t = clock(info.lastEnd, tz);
@@ -60,7 +62,7 @@ export default function NowPanel({ onClose }: { onClose: () => void }) {
     }
     setError(null);
     run(async () => {
-      const res = await startEntry({ name, since: sinceValue, stopRunning: true });
+      const res = await startEntry({ name, since: sinceValue, stopRunning: switching });
       if (res.ok) onClose();
       else setError(res.message);
     });
@@ -70,8 +72,18 @@ export default function NowPanel({ onClose }: { onClose: () => void }) {
 
   return (
     <SidePanel
-      title="What are you doing?"
-      subtitle={info ? (running.length ? `Running: ${names.join(", ")}` : "Nothing running right now") : error ? "" : "Loading…"}
+      title={switching && running.length ? "Switch to…" : "What are you doing?"}
+      subtitle={
+        info
+          ? running.length
+            ? switching
+              ? `Stops ${names.join(", ")}`
+              : `Also running: ${names.join(", ")} (keeps going)`
+            : "Nothing running right now"
+          : error
+            ? ""
+            : "Loading…"
+      }
       onClose={onClose}
     >
       {info && (
@@ -133,7 +145,7 @@ export default function NowPanel({ onClose }: { onClose: () => void }) {
             disabled={pending || !text.trim()}
             className="h-11 rounded-control bg-accent font-semibold text-accent-ink transition-opacity hover:opacity-90 disabled:opacity-50"
           >
-            {pending ? "Starting…" : "Start"}
+            {pending ? "Starting…" : switching && running.length ? "Switch" : "Start"}
           </button>
         </form>
       )}
