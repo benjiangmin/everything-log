@@ -8,6 +8,10 @@ import { namePlace } from "@/app/mbm/actions";
 import type { RoutePoint, Visit } from "@/mbm/data";
 import { clock } from "@/mbm/time";
 
+// CARTO's map key. It's meant to be in the page (the browser asks CARTO for the map images
+// with it), so it's a NEXT_PUBLIC_ variable, unlike the site's secret keys.
+const CARTO_KEY = process.env.NEXT_PUBLIC_CARTO_KEY;
+
 // The day on a map: the route you took (from the iPhone's dots) and each stop. Named stops show
 // their name; click any stop to name it (later visits there get the name by themselves).
 export default function DayMapInner({ visits, points, tz }: { visits: Visit[]; points: RoutePoint[]; tz: string }) {
@@ -23,14 +27,22 @@ export default function DayMapInner({ visits, points, tz }: { visits: Visit[]; p
 
   return (
     <MapContainer center={all[0] ?? [43.0731, -89.4012]} zoom={15} scrollWheelZoom={false} className="size-full" attributionControl>
-      {/* OpenStreetMap's own map (free, no key; fine for personal use). Softened toward the
-          site's colors with the "mbm-map" filter in globals.css. */}
-      <TileLayer
-        url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
-        maxZoom={19}
-        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-        className="mbm-map"
-      />
+      {/* CARTO's light map (free for personal use, needs a key: NEXT_PUBLIC_CARTO_KEY). Without a
+          key, OpenStreetMap's own map, softened toward the site's colors ("mbm-map" in globals.css). */}
+      {CARTO_KEY ? (
+        <TileLayer
+          url={`https://basemaps.cartocdn.com/rastertiles/light_all/{z}/{x}/{y}{r}.png?key=${CARTO_KEY}`}
+          maxZoom={20}
+          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
+        />
+      ) : (
+        <TileLayer
+          url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+          maxZoom={19}
+          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+          className="mbm-map"
+        />
+      )}
       <FitTo spots={all} />
       {segments.map((seg, i) => (
         <Polyline key={i} positions={seg} pathOptions={{ color: "#7f5539", weight: 4, opacity: 0.8 }} />
