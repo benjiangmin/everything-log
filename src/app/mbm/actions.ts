@@ -71,50 +71,22 @@ const cleanName = (n: unknown) => String(n ?? "").replace(/\s+/g, " ").trim().sl
 
 // ---------- Entries ----------
 
-// "I'm doing X": starts it, by default since your last entry ended.
-//   since: "last" (when your last entry ended, or now if something's running that you stop),
-//          "now", or an exact moment (ISO).
-//   stopRunning: also end whatever's running, at that same moment (the panel doesn't: things run
-//                side by side until you stop each one).
+// "I'm doing X". The rules live in the database (start_entry, supabase/minute-by-minute/003), so
+// the website and the iPhone app behave the same:
+//   since: "last" (when your last finished entry ended; switching: now), "now", or a moment (ISO).
+//   stopRunning: true = Switch (stop what's running first); false = + Start (run alongside).
 export async function startEntry(input: { name: string; since: "last" | "now" | string; stopRunning: boolean }): Promise<Result> {
   const activity = cleanName(input.name);
   if (!activity) return fail("What are you doing?");
-  try {
-    const client = await mbm();
-    const info = await getNowInfo();
-    const now = Date.now();
-
-    let start: number;
-    if (input.since === "now") start = now;
-    else if (input.since === "last") {
-      // When your last finished entry ended (if you're also stopping what's running, that's now).
-      start = input.stopRunning && info.running.length ? now : info.lastEnd ? +new Date(info.lastEnd) : now;
-    } else {
-      start = +new Date(input.since);
-      if (Number.isNaN(start)) return fail("That time doesn't look right.");
-      if (start > now + 60000) return fail("That's in the future.");
-    }
-    start = Math.min(start, now);
-
-    const id = await activityId(client, activity);
-
-    // Changed your mind within a minute of starting something: fix that one instead.
-    const fresh = info.running.filter((b) => now - +new Date(b.started_at) < 60000);
-    if (input.stopRunning && start >= now - 1000 && fresh.length === 1 && info.running.length === 1) {
-      const { error } = await client.from("blocks").update({ activity_id: id, updated_at: new Date().toISOString() }).eq("id", fresh[0].id);
-      if (error) return fail(error.message);
-      refresh();
-      return { ok: true };
-    }
-
-    if (input.stopRunning && info.running.length) {
-      const { error } = await client.rpc("stop_running", { p_at: new Date(start).toISOString() });
-      if (error) return fail(error.message);
-    }
-    const { error } = await client.rpc("place_block", { p_start: new Date(start).toISOString(), p_end: null, p_activity_id: id });
-    if (error) return fail(error.message);
-  } catch (e) {
-    return fail((e as Error).message);
+  const since = input.since === "last" || input.since === "now" ? input.since : new Date(input.since);
+  if (since instanceof Date && (Number.isNaN(since.getTime()) || since.getTime() > Date.now() + 60000)) return fail("That time doesn't look right.");
+  const { error } = await (await mbm()).rpc("start_entry", {
+    p_name: activity,
+    p_since: since instanceof Date ? since.toISOString() : since,
+    p_switch: input.stopRunning,
+  });
+  if (error) {
+    return fail(/start_entry/.test(error.message) ? "Run supabase/minute-by-minute/003_start_entry.sql in the minute-by-minute project." : error.message);
   }
   refresh();
   return { ok: true };
