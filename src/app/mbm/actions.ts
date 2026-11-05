@@ -239,6 +239,36 @@ export async function newPlaceForEntry(blockId: string, name: string, lat: numbe
   return setEntryPlace(blockId, data as string);
 }
 
+// Move a stop to where it really was. If it's one of your named places, the place moves too (and
+// every stop there), so it's right everywhere.
+export async function moveStop(visitId: string, lat: number, lng: number): Promise<Result> {
+  if (!isUuid(visitId)) return fail("That stop is gone.");
+  if (![lat, lng].every(Number.isFinite) || Math.abs(lat) > 90 || Math.abs(lng) > 180) return fail("Click a spot on the map.");
+  const client = await mbm();
+  const { data: v, error } = await client.from("visits").select("id, place_id").eq("id", visitId).maybeSingle();
+  if (error) return fail(error.message);
+  if (!v) return fail("That stop is gone.");
+  const placeId = (v as { place_id: string | null }).place_id;
+  const moved = placeId
+    ? await Promise.all([
+        client.from("places").update({ lat, lng }).eq("id", placeId),
+        client.from("visits").update({ lat, lng }).eq("place_id", placeId),
+      ]).then((rs) => rs.find((r) => r.error)?.error ?? null)
+    : (await client.from("visits").update({ lat, lng }).eq("id", visitId)).error;
+  if (moved) return fail(moved.message);
+  refresh();
+  return { ok: true };
+}
+
+// Remove a stop the phone made up (the trips around it join up).
+export async function removeStop(visitId: string): Promise<Result> {
+  if (!isUuid(visitId)) return fail("That stop is gone.");
+  const { error } = await (await mbm()).from("visits").delete().eq("id", visitId);
+  if (error) return fail(error.message);
+  refresh();
+  return { ok: true };
+}
+
 // Name a stop on the map ("Home", "Theory"). Later stops there get the name by themselves.
 export async function namePlace(visitId: string, name: string): Promise<Result> {
   if (!isUuid(visitId)) return fail("That stop is gone.");

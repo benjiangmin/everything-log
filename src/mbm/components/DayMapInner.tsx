@@ -2,7 +2,8 @@
 
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { APIProvider, InfoWindow, Map, useMap, useMapsLibrary } from "@vis.gl/react-google-maps";
-import { namePlace, rememberedRoute } from "@/app/mbm/actions";
+import { moveStop, namePlace, rememberedRoute, removeStop } from "@/app/mbm/actions";
+import { useConfirm } from "@/components/ui/ConfirmDialog";
 import type { RoutePoint, Visit } from "@/mbm/data";
 import { clock } from "@/mbm/time";
 import { HtmlMarker, KEY, stylesFor } from "./mapBits";
@@ -15,8 +16,23 @@ export type Focus = { start: number; end: number; kind: "moving" | "still" | "an
 // The day on a map: each stop, and the trips between them (from the iPhone's dots). Stops are
 // labelled with their name (yours, or the one the phone found, like "Noland Hall"). Click a stop to rename it; later
 // visits there get the name by themselves. Hovering the day bar highlights where you were then.
-export default function DayMapInner({ visits, points, tz, focus }: { visits: Visit[]; points: RoutePoint[]; tz: string; focus: Focus | null }) {
+export default function DayMapInner({
+  visits,
+  points,
+  tz,
+  focus,
+  showDots = false,
+}: {
+  visits: Visit[];
+  points: RoutePoint[];
+  tz: string;
+  focus: Focus | null;
+  showDots?: boolean; // every recorded dot, to see what the phone actually got
+}) {
   const [open, setOpen] = useState<Visit | null>(null);
+  const [moving, setMoving] = useState<Visit | null>(null); // "click where it really is"
+  const [moveNote, setMoveNote] = useState<string | null>(null);
+  const [, runMove] = useTransition();
   const [zoom, setZoom] = useState(15);
   const built = useMemo(() => buildTrips(visits, points), [visits, points]);
   const trips = useFilledTrips(built);
@@ -55,9 +71,21 @@ export default function DayMapInner({ visits, points, tz, focus }: { visits: Vis
         disableDefaultUI
         zoomControl
         clickableIcons={false}
+        draggableCursor={moving ? "crosshair" : undefined}
+        onClick={(e) => {
+          const at = e.detail.latLng;
+          if (!moving || !at) return;
+          const v = moving;
+          setMoving(null);
+          runMove(async () => {
+            const res = await moveStop(v.id, at.lat, at.lng);
+            setMoveNote(res.ok ? null : res.message);
+          });
+        }}
         className="size-full"
       >
         <FitTo spots={all} />
+        {showDots && <Dots points={points} tz={tz} />}
         {trips.map((t) => {
           const on = lit?.trip.has(t.key) ?? false;
           return (
@@ -115,11 +143,29 @@ export default function DayMapInner({ visits, points, tz, focus }: { visits: Vis
         })}
         {open && (
           <InfoWindow position={{ lat: open.lat, lng: open.lng }} pixelOffset={[0, -28]} onCloseClick={() => setOpen(null)} headerDisabled>
-            <NameStop key={open.id} visit={open} tz={tz} onDone={() => setOpen(null)} />
+            <NameStop
+              key={open.id}
+              visit={open}
+              tz={tz}
+              onDone={() => setOpen(null)}
+              onMove={() => {
+                setMoving(open);
+                setOpen(null);
+              }}
+            />
           </InfoWindow>
         )}
       </Map>
-      {nothingLit && (
+      {moving && (
+        <div className="absolute inset-x-3 top-3 flex items-center justify-between gap-3 rounded-control bg-accent px-3 py-2 text-sm text-accent-ink shadow-lg">
+          <span>Click where {moving.place ?? moving.auto_name ?? "this stop"} really is</span>
+          <button type="button" onClick={() => setMoving(null)} className="rounded-control px-2 py-0.5 font-semibold hover:bg-accent-ink/10">
+            Cancel
+          </button>
+        </div>
+      )}
+      {moveNote && <p className="absolute inset-x-3 top-3 rounded-control bg-paper px-3 py-2 text-sm text-danger shadow">{moveNote}</p>}
+      {nothingLit && !moving && (
         <p className="pointer-events-none absolute left-3 top-3 rounded-full bg-paper/95 px-3 py-1 text-xs text-muted shadow-sm ring-1 ring-line">
           {focus?.kind === "moving" ? "No route recorded then" : "No location recorded then"}
         </p>
@@ -223,6 +269,27 @@ function Route({ path, dashed, lit, faded }: { path: Spot[]; dashed: boolean; li
   return null;
 }
 
+// Every recorded dot, small, with its time on hover (one map layer, so thousands are fine).
+function Dots({ points, tz }: { points: RoutePoint[]; tz: string }) {
+  const map = useMap();
+  const maps = useMapsLibrary("maps");
+  useEffect(() => {
+    if (!map || !maps) return;
+    const layer = new maps.Data({ map });
+    for (const p of points) {
+      const acc = p.accuracy_m != null ? ` · ±${Math.round(p.accuracy_m)} m` : "";
+      layer.add({ geometry: { lat: p.lat, lng: p.lng }, properties: { title: `${clock(p.at, tz)}${acc}` } });
+    }
+    layer.setStyle((f) => ({
+      title: String(f.getProperty("title")),
+      icon: { path: google.maps.SymbolPath.CIRCLE, scale: 3, fillColor: "#3e281b", fillOpacity: 0.9, strokeColor: "#faf6f0", strokeWeight: 1 },
+      zIndex: 3,
+    }));
+    return () => layer.setMap(null);
+  }, [map, maps, points, tz]);
+  return null;
+}
+
 // Zooms to show the whole day (when the number of spots changes).
 function FitTo({ spots }: { spots: Spot[] }) {
   const map = useMap();
@@ -243,8 +310,9 @@ function FitTo({ spots }: { spots: Spot[] }) {
   return null;
 }
 
-function NameStop({ visit, tz, onDone }: { visit: Visit; tz: string; onDone: () => void }) {
+function NameStop({ visit, tz, onDone, onMove }: { visit: Visit; tz: string; onDone: () => void; onMove: () => void }) {
   const [name, setName] = useState(visit.place ?? visit.auto_name ?? "");
+  const confirm = useConfirm();
   const [message, setMessage] = useState<string | null>(null);
   const [pending, run] = useTransition();
   return (
@@ -278,6 +346,32 @@ function NameStop({ visit, tz, onDone }: { visit: Visit; tz: string; onDone: () 
         </button>
         <button type="button" onClick={onDone} className="rounded-[10px] px-3 py-2 text-sm text-[#86705f] hover:bg-[#f0e7db]">
           Close
+        </button>
+      </div>
+      {/* Wrong spot, or not a real stop at all. */}
+      <div className="flex gap-2 border-t border-[#e2d5c4] pt-2">
+        <button type="button" onClick={onMove} className="flex-1 rounded-[10px] py-1.5 text-sm text-[#3e281b] hover:bg-[#f0e7db]">
+          Move
+        </button>
+        <button
+          type="button"
+          disabled={pending}
+          onClick={async () => {
+            const ok = await confirm({
+              title: "Remove this stop?",
+              body: "For a stop the phone made up. The trips on either side join up. Your entries stay as they are.",
+              confirmLabel: "Remove",
+            });
+            if (!ok) return;
+            run(async () => {
+              const res = await removeStop(visit.id);
+              if (res.ok) onDone();
+              else setMessage(res.message);
+            });
+          }}
+          className="flex-1 rounded-[10px] py-1.5 text-sm text-[#a3473a] hover:bg-[#f0e7db]"
+        >
+          Remove
         </button>
       </div>
       {message && <p className="text-xs text-[#a3473a]">{message}</p>}
