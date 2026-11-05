@@ -24,6 +24,7 @@ export default function DayView({ day, today, renderedAt }: { day: Day; today: b
       <section aria-label="The day" className="rounded-card border-[1.5px] border-ink px-4 pb-4 pt-4 sm:px-6 sm:pb-5">
         <h2 className="mb-4 font-display text-lg font-semibold">The day</h2>
         <DayBar
+          key={day.dayKey}
           placed={placed}
           lanes={lanes}
           gaps={gaps}

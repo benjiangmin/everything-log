@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState, type PointerEvent, type ReactNode } from "react";
 import type { Activity, Block } from "@/mbm/data";
 import { clock, span, zonedTime } from "@/mbm/time";
 import type { Placed } from "./segments";
@@ -8,6 +8,8 @@ import type { Placed } from "./segments";
 // The whole day (midnight to midnight) as one bar: each entry in its activity's color, untracked
 // time striped, the rest of today plain, and a line at "now". Overlapping entries stack in rows.
 // Hover an entry for what it was; click it to change it.
+// On the day page (not compact) you can zoom in: pinch or Ctrl+scroll over the bar, or the − / +
+// buttons. Drag (or scroll sideways) to move around. The time marks get finer as you zoom.
 export default function DayBar({
   placed,
   lanes,
@@ -39,16 +41,86 @@ export default function DayBar({
   // What the bubble is about: an entry, or an untracked stretch.
   const [hover, setHover] = useState<{ start: number; end: number; block?: Block } | null>(null);
   const total = dayEnd - dayStart;
-  const at = (t: number) => ((t - dayStart) / total) * 100;
-  const showNow = now > dayStart && now < dayEnd;
-  // Labels every 3 hours, tick marks every 2, placed by the real clock time (daylight-saving days line up).
-  const hourAt = (h: number) => (h === 24 ? dayEnd : +zonedTime(dayKey, h * 60, tz));
-  const marks = [0, 3, 6, 9, 12, 15, 18, 21, 24].map((h) => ({ h, at: hourAt(h) }));
-  const ticks = [2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22].map(hourAt);
+  const zoomable = !compact;
+  // The part of the day on screen. Whole day unless zoomed in.
+  const [view, setView] = useState<[number, number]>([dayStart, dayEnd]);
+  const [from, to] = zoomable ? view : [dayStart, dayEnd];
+  const shown = to - from;
+  const zoomed = shown < total - 1000;
+  const at = (t: number) => ((t - from) / shown) * 100;
+  const showNow = now > from && now < to;
+
+  // Keep the view inside the day, no closer than 10 minutes.
+  const fit = (a: number, b: number): [number, number] => {
+    const len = Math.min(total, Math.max(MIN_VIEW, b - a));
+    const start = Math.min(dayEnd - len, Math.max(dayStart, a));
+    return [start, start + len];
+  };
+  const zoomAround = (factor: number, frac = 0.5) =>
+    setView(([a, b]) => {
+      const len = b - a;
+      const pivot = a + len * frac;
+      return fit(pivot - (pivot - a) * factor, pivot + (b - pivot) * factor);
+    });
+
+  // Pinch / Ctrl+scroll zooms around the pointer; sideways scroll pans. A plain scroll still
+  // scrolls the page. (Needs a non-passive listener so the browser doesn't zoom the page too.)
+  const barRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = barRef.current;
+    if (!el || !zoomable) return;
+    const onWheel = (e: WheelEvent) => {
+      const rect = el.getBoundingClientRect();
+      if (e.ctrlKey || e.metaKey) {
+        e.preventDefault();
+        const frac = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width));
+        zoomAround(Math.exp(Math.max(-0.25, Math.min(0.25, e.deltaY * 0.01))), frac);
+        return;
+      }
+      // Sideways (trackpad swipe, or Shift+scroll) moves around while zoomed in.
+      const dx = e.shiftKey ? e.deltaY : e.deltaX;
+      if (!zoomed || Math.abs(dx) <= Math.abs(e.shiftKey ? 0 : e.deltaY)) return;
+      e.preventDefault();
+      const move = (dx / rect.width) * shown;
+      setView(fit(from + move, to + move));
+    };
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel);
+  });
+
+  // Drag to move around while zoomed in (a drag never counts as a click on an entry).
+  const drag = useRef<{ x: number; view: [number, number]; moved: boolean } | null>(null);
+  const dragged = useRef(false);
+  const onPointerDown = (e: PointerEvent) => {
+    if (!zoomed || e.button !== 0) return;
+    drag.current = { x: e.clientX, view: [from, to], moved: false };
+  };
+  const onPointerMove = (e: PointerEvent) => {
+    const d = drag.current;
+    if (!d || !barRef.current) return;
+    const dx = e.clientX - d.x;
+    if (!d.moved && Math.abs(dx) < 4) return;
+    if (!d.moved) {
+      d.moved = true;
+      barRef.current.setPointerCapture(e.pointerId);
+      setHover(null);
+    }
+    const move = -(dx / barRef.current.getBoundingClientRect().width) * (d.view[1] - d.view[0]);
+    setView(fit(d.view[0] + move, d.view[1] + move));
+  };
+  const onPointerUp = () => {
+    dragged.current = Boolean(drag.current?.moved);
+    drag.current = null;
+  };
+
+  // Time marks for what's on screen: labels and faint lines, finer as you zoom in. Placed by
+  // the real clock time, so daylight-saving days still line up.
+  const { labels, lines } = marksFor(dayKey, tz, dayStart, dayEnd, from, to);
   const height = compact ? Math.max(48, lanes * 24) : Math.max(56, lanes * 26);
 
   const nameOf = (b: Block) => (b.activity_id ? byId.get(b.activity_id) : undefined);
-  const hoverMid = hover ? at((hover.start + hover.end) / 2) : 0;
+  // Middle of the part of it that's on screen.
+  const hoverMid = hover ? at((Math.max(hover.start, from) + Math.min(hover.end, to)) / 2) : 0;
   // The bubble sits over the tail, sliding sideways near the ends so it stays on screen
   // (the tail is always inside it).
   const slide = Math.min(90, Math.max(10, hoverMid));
@@ -95,9 +167,20 @@ export default function DayBar({
       )}
 
       <div
-        className="relative overflow-hidden rounded-control bg-surface/60 ring-1 ring-line"
+        ref={barRef}
+        className={`relative overflow-hidden rounded-control bg-surface/60 ring-1 ring-line ${zoomed ? "cursor-grab touch-pan-y active:cursor-grabbing" : ""}`}
         style={{ height }}
         onMouseLeave={() => setHover(null)}
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
+        onPointerCancel={onPointerUp}
+        onClickCapture={(e) => {
+          if (!dragged.current) return;
+          dragged.current = false;
+          e.stopPropagation();
+          e.preventDefault();
+        }}
       >
         {/* Untracked: striped, full height. The rest of today (not happened yet): plain. */}
         {gaps.map((g) => {
@@ -149,27 +232,108 @@ export default function DayBar({
             <div key={p.block.id} aria-label={label} onMouseEnter={() => setHover(p)} className={cls} style={style} />
           );
         })}
-        {/* A faint line every 2 hours. */}
+        {/* Faint lines at the time marks. */}
         {!compact &&
-          ticks.map((t) => (
+          lines.map((t) => (
             <div key={t} aria-hidden="true" className="pointer-events-none absolute inset-y-0 z-10 w-px bg-ink/10" style={{ left: `${at(t)}%` }} />
           ))}
         {showNow && <div aria-hidden="true" className="pointer-events-none absolute inset-y-0 z-20 w-0.5 -translate-x-1/2 bg-ink" style={{ left: `${at(now)}%` }} />}
       </div>
 
       {!compact && (
-        <div className="relative mt-1 h-4 text-[11px] text-muted">
-          {/* Small notches under the bar every 2 hours. */}
-          {ticks.map((t) => (
-            <span key={`n${t}`} aria-hidden="true" className="absolute -top-1 h-1 w-px bg-muted/40" style={{ left: `${at(t)}%` }} />
+        <div className="relative mt-1 h-4 overflow-hidden text-[11px] text-muted">
+          {/* Small notches under the bar, and the times. */}
+          {lines.map((t) => (
+            <span key={`n${t}`} aria-hidden="true" className="absolute top-0 h-1 w-px bg-muted/40" style={{ left: `${at(t)}%` }} />
           ))}
-          {marks.map(({ h, at: t }) => (
-            <span key={h} className={`num absolute ${h === 0 ? "" : h === 24 ? "-translate-x-full" : "-translate-x-1/2"}`} style={{ left: `${at(t)}%` }}>
-              {h === 0 || h === 24 ? "12a" : h === 12 ? "12p" : h < 12 ? `${h}a` : `${h - 12}p`}
-            </span>
-          ))}
+          {labels.map(({ t, text }) => {
+            const x = at(t);
+            return (
+              <span
+                key={t}
+                className={`num absolute whitespace-nowrap ${x < 2 ? "" : x > 98 ? "-translate-x-full" : "-translate-x-1/2"}`}
+                style={{ left: `${x}%` }}
+              >
+                {text}
+              </span>
+            );
+          })}
+        </div>
+      )}
+
+      {zoomable && (
+        <div className="mt-2 flex items-center justify-between gap-3 text-xs text-muted">
+          <span className="num">
+            {zoomed ? `${clock(new Date(from), tz)} – ${clock(new Date(to), tz)}` : "Pinch or Ctrl+scroll on the bar to zoom"}
+          </span>
+          <span className="flex items-center gap-1">
+            {zoomed && (
+              <button type="button" onClick={() => setView([dayStart, dayEnd])} className="rounded-control px-2 py-1 hover:bg-surface hover:text-ink">
+                Whole day
+              </button>
+            )}
+            <ZoomButton label="Zoom out" disabled={!zoomed} onClick={() => zoomAround(2)}>
+              −
+            </ZoomButton>
+            <ZoomButton label="Zoom in" disabled={shown <= MIN_VIEW} onClick={() => zoomAround(0.5, showNow && !zoomed ? at(now) / 100 : 0.5)}>
+              +
+            </ZoomButton>
+          </span>
         </div>
       )}
     </div>
   );
+}
+
+const MIN_VIEW = 10 * 60000; // zoom in as far as 10 minutes across
+
+function ZoomButton({ label, disabled, onClick, children }: { label: string; disabled: boolean; onClick: () => void; children: ReactNode }) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      title={label}
+      disabled={disabled}
+      onClick={onClick}
+      className="grid size-7 place-items-center rounded-control text-base leading-none ring-1 ring-line transition-colors hover:bg-surface hover:text-ink disabled:opacity-40 disabled:hover:bg-transparent"
+    >
+      {children}
+    </button>
+  );
+}
+
+// Label spacing (minutes) by how much is on screen: the finest that keeps about 8 labels.
+const STEPS = [1, 2, 5, 10, 15, 30, 60, 120, 180, 360];
+
+function marksFor(dayKey: string, tz: string, dayStart: number, dayEnd: number, from: number, to: number) {
+  const mins = (to - from) / 60000;
+  const found = STEPS.findIndex((s) => mins / s <= 8);
+  const li = found === -1 ? STEPS.length - 1 : found;
+  const labelStep = STEPS[li];
+  const lineStep = li > 0 && mins / STEPS[li - 1] <= 16 ? STEPS[li - 1] : labelStep;
+  const step = gcd(labelStep, lineStep);
+  // Clock minutes into the day (0 = midnight); a little extra room for daylight-saving days.
+  const first = Math.floor(Math.max(0, (from - dayStart) / 60000 - 90) / step) * step;
+  const lines: number[] = [];
+  const labels: { t: number; text: string }[] = [];
+  for (let m = first; m <= 1500; m += step) {
+    const isLabel = m % labelStep === 0;
+    if (!isLabel && m % lineStep !== 0) continue;
+    const t = m === 1440 ? dayEnd : +zonedTime(dayKey, m, tz);
+    if (t > to || t > dayEnd) break;
+    if (t < from) continue;
+    if (isLabel) labels.push({ t, text: timeLabel(m) });
+    if (m > 0 && m < 1440) lines.push(t);
+  }
+  return { labels, lines };
+}
+
+const gcd = (a: number, b: number): number => (b ? gcd(b, a % b) : a);
+
+// 0 → "12a", 810 → "1:30p"
+function timeLabel(m: number) {
+  const h = Math.floor(m / 60) % 24;
+  const mm = m % 60;
+  const hr = h % 12 === 0 ? 12 : h % 12;
+  return `${hr}${mm ? `:${String(mm).padStart(2, "0")}` : ""}${h < 12 ? "a" : "p"}`;
 }
