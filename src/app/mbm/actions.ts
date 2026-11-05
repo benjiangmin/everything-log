@@ -150,6 +150,16 @@ export async function deleteBlock(id: string): Promise<Result> {
   return { ok: true };
 }
 
+// Change an activity's color (every entry of it, everywhere: the bar, the map, the phone).
+export async function setActivityColor(id: string, color: string): Promise<Result> {
+  if (!isUuid(id)) return fail("That activity is gone.");
+  if (!/^#[0-9a-f]{6}$/i.test(color)) return fail("That isn't a color.");
+  const { error } = await (await mbm()).from("activities").update({ color: color.toLowerCase() }).eq("id", id);
+  if (error) return fail(error.message);
+  refresh();
+  return { ok: true };
+}
+
 // Name a stop on the map ("Home", "Theory"). Later stops there get the name by themselves.
 export async function namePlace(visitId: string, name: string): Promise<Result> {
   if (!isUuid(visitId)) return fail("That stop is gone.");

@@ -6,6 +6,7 @@ import type { Activity, Block } from "@/mbm/data";
 import { hhmm, zonedTime } from "@/mbm/time";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
 import ActivityInput from "./ActivityInput";
+import ColorRow from "./ColorRow";
 
 const field = "rounded-control border border-line bg-paper px-3 py-2.5 text-ink focus:border-ink";
 
@@ -39,6 +40,8 @@ export default function BlockEditor({
   const [message, setMessage] = useState<string | null>(null);
   const [pending, run] = useTransition();
   const confirm = useConfirm();
+  // The activity typed in, if it already exists: its color can be changed here.
+  const known = activities.find((a) => a.name.trim().toLowerCase() === name.trim().toLowerCase());
 
   const startedEarlier = block && +new Date(block.started_at) < from;
   const endsLater = block?.ended_at && to !== null && +new Date(block.ended_at) > to;
@@ -135,6 +138,8 @@ export default function BlockEditor({
       {startedEarlier && start === startShown && <p className="-mt-2 text-xs text-muted">It started the day before (that stays as is unless you change the time).</p>}
 
       {going && <p className="-mt-2 text-xs text-muted">Still running (stop it from the page).</p>}
+
+      {known && <ColorRow key={known.id} activity={known} />}
 
       <div className="flex items-center gap-2">
         <button type="submit" disabled={pending} className="h-11 flex-1 rounded-control bg-accent px-4 font-semibold text-accent-ink transition-opacity hover:opacity-90 disabled:opacity-60">
