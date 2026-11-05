@@ -3,14 +3,16 @@
 import Link from "next/link";
 import type { Day } from "@/mbm/data";
 import DayBar from "./DayBar";
-import NowCard from "./NowCard";
-import { segmentsOf } from "./segments";
+import NowStatus from "./NowStatus";
+import { layOut } from "./segments";
 import { useNow } from "./useNow";
 
+// The home page's Minute by Minute: what's running and today's bar (click it for the full day).
 export default function HomeMbmCard({ day, renderedAt }: { day: Day; renderedAt: number }) {
   const now = useNow(renderedAt);
   const dayStart = +new Date(day.start);
   const dayEnd = +new Date(day.end);
+  const { placed, lanes, gaps } = layOut(day.blocks, dayStart, dayEnd, now);
   return (
     <section aria-label="Minute by Minute" className="mt-6">
       <div className="mb-2 flex items-baseline justify-between px-1">
@@ -19,10 +21,11 @@ export default function HomeMbmCard({ day, renderedAt }: { day: Day; renderedAt:
           Open today →
         </Link>
       </div>
-      <NowCard activities={day.activities} now={day.now} tz={day.tz} renderedAt={renderedAt} compact />
-      <Link href="/mbm" aria-label="Open today" className="mt-2 block">
+      <Link href="/mbm" aria-label="Open today" className="mb-2 block">
         <DayBar
-          segments={segmentsOf(day.blocks, dayStart, dayEnd, now)}
+          placed={placed}
+          lanes={lanes}
+          gaps={gaps}
           dayKey={day.dayKey}
           dayStart={dayStart}
           dayEnd={dayEnd}
@@ -32,6 +35,7 @@ export default function HomeMbmCard({ day, renderedAt }: { day: Day; renderedAt:
           compact
         />
       </Link>
+      <NowStatus activities={day.activities} running={day.running} tz={day.tz} renderedAt={renderedAt} compact />
     </section>
   );
 }

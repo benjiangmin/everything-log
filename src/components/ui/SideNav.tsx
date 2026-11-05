@@ -12,6 +12,8 @@ import LettersInboxPanel from "@/components/letters/LettersInboxPanel";
 import SealedLettersPanel from "@/components/letters/SealedLettersPanel";
 import FindCoversPanel from "@/components/board/FindCoversPanel";
 import SeasonsPanel from "@/components/board/SeasonsPanel";
+import MbmPanels from "@/mbm/components/MbmPanels";
+import { openMbm } from "@/mbm/components/open";
 import { useEffect, useState, useSyncExternalStore, useTransition, type ReactNode } from "react";
 
 // The navigation bar on the left of every page (not the login page).
@@ -93,6 +95,19 @@ export default function SideNav() {
           <SealedLettersButton showLabel={labels} />
         </>
       )}
+      {/* Minute by Minute only: say what you're doing, or add something you missed. */}
+      {pathname === "/mbm" && (
+        <>
+          <NavButton label="What are you doing?" showLabel={labels} onClick={() => openMbm({ kind: "now" })}>
+            <circle cx="12" cy="12" r="9" />
+            <path d="M12 7v5l3 2" />
+          </NavButton>
+          <NavButton label="Add a missed entry" showLabel={labels} onClick={() => openMbm({ kind: "add" })}>
+            <path d="M5 4h14v16H5z" />
+            <path d="M12 9v6M9 12h6" />
+          </NavButton>
+        </>
+      )}
       {/* Home only: search every app. */}
       {pathname === "/" && <SearchButton showLabel={labels} />}
       {/* Anime / Games only: match older titles to their standard name + cover. */}
@@ -116,6 +131,8 @@ export default function SideNav() {
 
   return (
     <div data-side-nav>
+      {/* Minute by Minute's panels (opened from its sidebar buttons or the page itself). */}
+      <MbmPanels />
       {/* ---------- Wide screens: the rail ---------- */}
       <nav
         aria-label="Navigation"

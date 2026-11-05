@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { mbm, mbmReady } from "@/mbm/supabase";
+import { getDay, getNowInfo, type Day, type NowInfo } from "@/mbm/data";
 import { PALETTE } from "@/mbm/colors";
 
 // NOTE: the whole site also sits behind the password lock (src/proxy.ts). On top of that,
@@ -37,6 +38,25 @@ export async function signOut() {
   redirect("/mbm/login");
 }
 
+// ---------- For the side panels (they load when opened) ----------
+
+export async function nowInfo(): Promise<{ ok: true; info: NowInfo } | { ok: false; message: string }> {
+  try {
+    return { ok: true, info: await getNowInfo() };
+  } catch (e) {
+    return { ok: false, message: (e as Error).message };
+  }
+}
+
+export async function dayData(dayKey: string): Promise<{ ok: true; day: Day } | { ok: false; message: string }> {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dayKey)) return { ok: false, message: "Pick a day." };
+  try {
+    return { ok: true, day: await getDay(dayKey) };
+  } catch (e) {
+    return { ok: false, message: (e as Error).message };
+  }
+}
+
 // ---------- Activities ----------
 
 // Find-or-create by name; a new one gets the next color in the palette.
@@ -49,34 +69,48 @@ async function activityId(client: Awaited<ReturnType<typeof mbm>>, name: string)
 
 const cleanName = (n: unknown) => String(n ?? "").replace(/\s+/g, " ").trim().slice(0, 60);
 
-// ---------- The timeline ----------
+// ---------- Entries ----------
 
-// "I'm doing X now" (or since a few minutes ago): ends whatever you were doing.
-export async function switchTo(name: string, minutesAgo = 0): Promise<Result> {
-  const activity = cleanName(name);
+// "I'm doing X": starts it, by default since your last entry ended.
+//   since: "last" (when your last entry ended, or now if something's running that you stop),
+//          "now", or an exact moment (ISO).
+//   stopRunning: also end whatever's running, at that same moment (on by default in the panel).
+export async function startEntry(input: { name: string; since: "last" | "now" | string; stopRunning: boolean }): Promise<Result> {
+  const activity = cleanName(input.name);
   if (!activity) return fail("What are you doing?");
-  const ago = Math.min(Math.max(0, Math.round(Number(minutesAgo) || 0)), 24 * 60);
   try {
     const client = await mbm();
-    const id = await activityId(client, activity);
-    // Switched again within a minute (a mis-tap, or changing your mind): fix that block instead
-    // of leaving a sliver behind.
-    if (!ago) {
-      const { data: current } = await client.from("blocks").select("id, started_at, activity_id").is("ended_at", null).maybeSingle();
-      if (current && Date.now() - +new Date(current.started_at) < 60000) {
-        if (current.activity_id !== id) {
-          const { error } = await client.from("blocks").update({ activity_id: id, updated_at: new Date().toISOString() }).eq("id", current.id);
-          if (error) return fail(error.message);
-        }
-        refresh();
-        return { ok: true };
-      }
+    const info = await getNowInfo();
+    const now = Date.now();
+
+    let start: number;
+    if (input.since === "now") start = now;
+    else if (input.since === "last") {
+      // Stopping what's running: it ends now, so "since the last entry" is now.
+      start = input.stopRunning && info.running.length ? now : info.lastEnd ? +new Date(info.lastEnd) : now;
+    } else {
+      start = +new Date(input.since);
+      if (Number.isNaN(start)) return fail("That time doesn't look right.");
+      if (start > now + 60000) return fail("That's in the future.");
     }
-    const { error } = await client.rpc("place_block", {
-      p_start: new Date(Date.now() - ago * 60000).toISOString(),
-      p_end: null,
-      p_activity_id: id,
-    });
+    start = Math.min(start, now);
+
+    const id = await activityId(client, activity);
+
+    // Changed your mind within a minute of starting something: fix that one instead.
+    const fresh = info.running.filter((b) => now - +new Date(b.started_at) < 60000);
+    if (input.stopRunning && start >= now - 1000 && fresh.length === 1 && info.running.length === 1) {
+      const { error } = await client.from("blocks").update({ activity_id: id, updated_at: new Date().toISOString() }).eq("id", fresh[0].id);
+      if (error) return fail(error.message);
+      refresh();
+      return { ok: true };
+    }
+
+    if (input.stopRunning && info.running.length) {
+      const { error } = await client.rpc("stop_running", { p_at: new Date(start).toISOString() });
+      if (error) return fail(error.message);
+    }
+    const { error } = await client.rpc("place_block", { p_start: new Date(start).toISOString(), p_end: null, p_activity_id: id });
     if (error) return fail(error.message);
   } catch (e) {
     return fail((e as Error).message);
@@ -85,18 +119,24 @@ export async function switchTo(name: string, minutesAgo = 0): Promise<Result> {
   return { ok: true };
 }
 
-// Stop tracking: ends what you're doing now (the time after it shows as untracked).
-export async function stopNow(): Promise<Result> {
+// Stop one running entry now (or all of them, with no id).
+export async function stopEntry(id?: string): Promise<Result> {
   const client = await mbm();
-  const { error } = await client.from("blocks").update({ ended_at: new Date().toISOString(), updated_at: new Date().toISOString() }).is("ended_at", null);
+  let q = client.from("blocks").update({ ended_at: new Date().toISOString(), updated_at: new Date().toISOString() }).is("ended_at", null);
+  if (id) {
+    if (!isUuid(id)) return fail("That entry is gone.");
+    q = q.eq("id", id);
+  }
+  const { error } = await q;
   if (error) return fail(error.message);
   refresh();
   return { ok: true };
 }
 
-// Add or change a block. start / end are moments (ISO); end null = still going on now.
-// An end that's later than now gets pulled back to now (the future isn't tracked yet).
-export async function saveBlock(input: { id?: string; name: string; start: string; end: string | null; note?: string }): Promise<Result> {
+// Add a missed entry, or change one. start / end are moments (ISO); end null = still going.
+// An end later than now is pulled back to now (the future isn't tracked).
+// stopRunning (new entries that are still going): end whatever else is running at its start.
+export async function saveBlock(input: { id?: string; name: string; start: string; end: string | null; note?: string; stopRunning?: boolean }): Promise<Result> {
   const activity = cleanName(input.name);
   if (!activity) return fail("What were you doing?");
   const start = new Date(input.start);
@@ -110,6 +150,10 @@ export async function saveBlock(input: { id?: string; name: string; start: strin
   try {
     const client = await mbm();
     const id = await activityId(client, activity);
+    if (!input.id && endAt === null && input.stopRunning) {
+      const { error } = await client.rpc("stop_running", { p_at: start.toISOString() });
+      if (error) return fail(error.message);
+    }
     const { error } = await client.rpc("place_block", {
       p_start: start.toISOString(),
       p_end: endAt?.toISOString() ?? null,
@@ -126,7 +170,7 @@ export async function saveBlock(input: { id?: string; name: string; start: strin
 }
 
 export async function deleteBlock(id: string): Promise<Result> {
-  if (!isUuid(id)) return fail("That block is gone.");
+  if (!isUuid(id)) return fail("That entry is gone.");
   const { error } = await (await mbm()).from("blocks").delete().eq("id", id);
   if (error) return fail(error.message);
   refresh();

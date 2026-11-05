@@ -1,76 +1,53 @@
 "use client";
 
-import { useState } from "react";
 import type { Day } from "@/mbm/data";
-import { clock, span } from "@/mbm/time";
-import BlockEditor from "./BlockEditor";
+import { span } from "@/mbm/time";
 import DayBar from "./DayBar";
-import NowCard from "./NowCard";
-import { segmentsOf, type Segment } from "./segments";
+import NowStatus from "./NowStatus";
+import { openMbm } from "./open";
+import { layOut } from "./segments";
 import { useNow } from "./useNow";
 
-// One day: (today) what you're doing now, the 24-hour bar, where the time went, and the list of
-// blocks and gaps. Click a block (on the bar or the list) to change it; click a gap to fill it.
+// One day: (today) what's running, the 24-hour bar with where the time went, and the map.
+// Click an entry on the bar to change it; add missed ones from the sidebar.
 export default function DayView({ day, today, renderedAt }: { day: Day; today: boolean; renderedAt: number }) {
   const now = useNow(renderedAt);
   const dayStart = +new Date(day.start);
   const dayEnd = +new Date(day.end);
   const byId = new Map(day.activities.map((a) => [a.id, a]));
-  const segments = segmentsOf(day.blocks, dayStart, dayEnd, now);
-  // Which row is open: a block's id, "gap:<start>", or "new".
-  const [open, setOpen] = useState<string | null>(null);
-  const keyOf = (s: Segment) => (s.kind === "block" ? s.block.id : `gap:${s.start}`);
+  const { placed, lanes, gaps, covered, until } = layOut(day.blocks, dayStart, dayEnd, now);
 
-  // Totals: time per activity today, biggest first.
+  // Time per activity, biggest first (overlapping entries each count their own time).
   const totals = new Map<string, number>();
-  let tracked = 0;
-  for (const s of segments) {
-    if (s.kind !== "block") continue;
-    const id = s.block.activity_id ?? "?";
-    totals.set(id, (totals.get(id) ?? 0) + (s.end - s.start));
-    tracked += s.end - s.start;
-  }
+  for (const p of placed) totals.set(p.block.activity_id ?? "?", (totals.get(p.block.activity_id ?? "?") ?? 0) + (p.end - p.start));
   const sorted = [...totals.entries()].sort((a, b) => b[1] - a[1]);
-  const soFar = Math.min(now, dayEnd) - dayStart;
-
-  const editorFor = (s: Segment) => (
-    <BlockEditor
-      key={keyOf(s)}
-      dayKey={day.dayKey}
-      tz={day.tz}
-      activities={day.activities}
-      block={s.kind === "block" ? s.block : undefined}
-      from={s.start}
-      to={s.kind === "block" && !s.block.ended_at ? null : s.end}
-      onDone={() => setOpen(null)}
-    />
-  );
+  const soFar = until - dayStart;
 
   return (
     <div className="flex flex-col gap-5">
-      {today && <NowCard activities={day.activities} now={day.now} tz={day.tz} renderedAt={renderedAt} />}
+      {today && <NowStatus activities={day.activities} running={day.running} tz={day.tz} renderedAt={renderedAt} />}
 
-      <section aria-label="The day" className="rounded-card border-[1.5px] border-ink p-4 sm:p-5">
-        <div className="mb-3 flex items-baseline justify-between gap-3">
+      <section aria-label="The day" className="rounded-card border-[1.5px] border-ink px-4 pb-4 pt-4 sm:px-6 sm:pb-5">
+        <div className="mb-4 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
           <h2 className="font-display text-lg font-semibold">The day</h2>
           <p className="num text-sm text-muted">
-            {span(tracked)} tracked{soFar > 0 && ` of ${span(soFar)}`}
+            {span(covered)} tracked{soFar > 0 && ` of ${span(soFar)}`}
           </p>
         </div>
         <DayBar
-          segments={segments}
+          placed={placed}
+          lanes={lanes}
+          gaps={gaps}
           dayKey={day.dayKey}
           dayStart={dayStart}
           dayEnd={dayEnd}
           now={now}
           tz={day.tz}
           byId={byId}
-          selected={open}
-          onSelect={(s) => s.kind !== "future" && setOpen(keyOf(s))}
+          onSelect={(b) => openMbm({ kind: "edit", dayKey: day.dayKey, blockId: b.id })}
         />
-
-        {sorted.length > 0 && (
-          <ul className="mt-4 flex flex-wrap gap-x-4 gap-y-1.5">
+        {sorted.length > 0 ? (
+          <ul className="mt-4 flex flex-wrap gap-x-5 gap-y-1.5">
             {sorted.map(([id, ms]) => {
               const a = byId.get(id);
               return (
@@ -82,76 +59,19 @@ export default function DayView({ day, today, renderedAt }: { day: Day; today: b
               );
             })}
           </ul>
+        ) : (
+          <p className="mt-4 text-sm text-muted">Nothing tracked {today ? "yet today" : "this day"}.</p>
         )}
       </section>
 
-      <section aria-label="Timeline">
-        <div className="mb-2 flex items-center justify-between gap-3 px-1">
-          <h2 className="font-display text-lg font-semibold">Timeline</h2>
-          <button
-            type="button"
-            onClick={() => setOpen(open === "new" ? null : "new")}
-            className="rounded-control px-3 py-1.5 text-sm font-semibold text-ink ring-1 ring-line transition-colors hover:bg-surface"
-          >
-            + Add
-          </button>
-        </div>
-        {open === "new" && (
-          <div className="mb-3">
-            <BlockEditor
-              dayKey={day.dayKey}
-              tz={day.tz}
-              activities={day.activities}
-              from={Math.max(dayStart, Math.min(now, dayEnd) - 30 * 60000)}
-              to={Math.min(now, dayEnd)}
-              onDone={() => setOpen(null)}
-            />
-          </div>
-        )}
-        <ol className="flex flex-col gap-1.5">
-          {segments
-            .filter((s) => s.kind !== "future")
-            .map((s) => {
-              const k = keyOf(s);
-              if (open === k) return <li key={k}>{editorFor(s)}</li>;
-              const label = `${clock(new Date(s.start), day.tz)} – ${s.kind === "block" && !s.block.ended_at ? "now" : clock(new Date(s.end), day.tz)}`;
-              if (s.kind === "gap") {
-                return (
-                  <li key={k}>
-                    <button
-                      type="button"
-                      onClick={() => setOpen(k)}
-                      className="group flex w-full items-center gap-3 rounded-control border border-dashed border-line px-3 py-2 text-left text-sm text-muted transition-colors hover:border-muted hover:text-ink"
-                    >
-                      <span className="num w-[7.5rem] shrink-0 whitespace-nowrap text-xs sm:w-[8.25rem] sm:text-sm">{label}</span>
-                      <span className="flex-1">Untracked</span>
-                      <span className="num whitespace-nowrap">{span(s.end - s.start)}</span>
-                      <span className="hidden font-semibold opacity-0 transition-opacity group-hover:opacity-100 sm:inline">+ Fill</span>
-                    </button>
-                  </li>
-                );
-              }
-              const a = s.block.activity_id ? byId.get(s.block.activity_id) : undefined;
-              return (
-                <li key={k}>
-                  <button
-                    type="button"
-                    onClick={() => setOpen(k)}
-                    className="flex w-full items-center gap-3 rounded-control bg-surface/80 px-3 py-2.5 text-left transition-colors hover:bg-surface"
-                  >
-                    <span className="h-8 w-1 shrink-0 rounded-full" style={{ background: a?.color ?? "#a98467" }} />
-                    <span className="num w-[7.5rem] shrink-0 whitespace-nowrap text-xs text-muted sm:w-[8.25rem] sm:text-sm">{label}</span>
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate font-medium text-ink">{a?.name ?? "Something"}</span>
-                      {s.block.note && <span className="block truncate text-xs text-muted">{s.block.note}</span>}
-                    </span>
-                    <span className="num shrink-0 whitespace-nowrap text-sm text-muted">{span(s.end - s.start)}</span>
-                  </button>
-                </li>
-              );
-            })}
-        </ol>
-        {segments.every((s) => s.kind === "future") && <p className="px-1 text-sm text-muted">This day hasn&apos;t started yet.</p>}
+      {/* The map: where you went and the routes between. Fills in once the iPhone app is tracking. */}
+      <section aria-label="Map" className="rounded-card border-[1.5px] border-dashed border-line px-5 py-10 text-center">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="mx-auto text-muted" aria-hidden="true">
+          <path d="M9 4L3 6v14l6-2 6 2 6-2V4l-6 2-6-2z" />
+          <path d="M9 4v14M15 6v14" />
+        </svg>
+        <p className="mt-2 font-display text-lg font-semibold text-ink">Map</p>
+        <p className="mx-auto mt-1 max-w-md text-sm text-muted">Where you went and the routes between will show up here once the iPhone app is tracking your location.</p>
       </section>
     </div>
   );

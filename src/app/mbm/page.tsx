@@ -14,7 +14,8 @@ export const metadata = { title: "Minute by Minute" };
 // Minute by Minute: every minute of a day, midnight to midnight. ?day=YYYY-MM-DD for another day.
 export default function MbmPage(props: PageProps<"/mbm">) {
   return (
-    <main className="mx-auto w-full max-w-4xl px-4 pb-24 pt-8 sm:pt-10">
+    // Wide: the day bar gets about 90% of the screen.
+    <main className="mx-auto w-full px-4 pb-24 pt-8 sm:w-[92%] sm:px-0 sm:pt-10">
       <BackLink className="mb-4 inline-block text-sm text-muted underline-offset-4 hover:text-ink hover:underline" />
       <Suspense fallback={<Skeleton />}>
         {props.searchParams.then((sp) => (

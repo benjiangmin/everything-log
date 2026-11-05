@@ -19,19 +19,19 @@ export type Day = {
   end: string;
   blocks: Block[];
   activities: Activity[];
-  now: Block | null;
+  running: Block[]; // what's going on right now (can be more than one)
   loadedAt: number; // when the server read it (the live clock starts from here)
 };
 
 export const mbmTz = () => process.env.MBM_TIMEZONE || DEFAULT_TZ;
 
-// One day (midnight to midnight): every block touching it, your activities (most recently used
-// first, for the quick picks), and what you're doing right now.
+// One day (midnight to midnight): every entry touching it, your activities (most recently used
+// first, for the quick picks), and what's running right now.
 export async function getDay(dayKey: string): Promise<Day> {
   const tz = mbmTz();
   const { start, end } = dayRange(dayKey, tz);
   const client = await mbm();
-  const [blocks, activities, now] = await Promise.all([
+  const [blocks, activities, running] = await Promise.all([
     client
       .from("blocks")
       .select("id, started_at, ended_at, activity_id, note, source, confirmed")
@@ -39,9 +39,9 @@ export async function getDay(dayKey: string): Promise<Day> {
       .or(`ended_at.is.null,ended_at.gt.${start.toISOString()}`)
       .order("started_at"),
     client.from("activities").select("id, name, color, last_used_at").order("last_used_at", { ascending: false }),
-    client.from("blocks").select("id, started_at, ended_at, activity_id, note, source, confirmed").is("ended_at", null).maybeSingle(),
+    client.from("blocks").select("id, started_at, ended_at, activity_id, note, source, confirmed").is("ended_at", null).order("started_at"),
   ]);
-  const error = blocks.error ?? activities.error ?? now.error;
+  const error = blocks.error ?? activities.error ?? running.error;
   if (error) {
     throw new Error(
       /relation .* does not exist|schema cache/i.test(error.message)
@@ -56,7 +56,29 @@ export async function getDay(dayKey: string): Promise<Day> {
     end: end.toISOString(),
     blocks: blocks.data as Block[],
     activities: activities.data as Activity[],
-    now: (now.data as Block | null) ?? null,
+    running: running.data as Block[],
+    loadedAt: Date.now(),
+  };
+}
+
+// For the "What are you doing?" panel: your activities, what's running, and when your last
+// finished entry ended ("since last entry").
+export type NowInfo = { tz: string; activities: Activity[]; running: Block[]; lastEnd: string | null; loadedAt: number };
+
+export async function getNowInfo(): Promise<NowInfo> {
+  const client = await mbm();
+  const [activities, running, last] = await Promise.all([
+    client.from("activities").select("id, name, color, last_used_at").order("last_used_at", { ascending: false }),
+    client.from("blocks").select("id, started_at, ended_at, activity_id, note, source, confirmed").is("ended_at", null).order("started_at"),
+    client.from("blocks").select("ended_at").not("ended_at", "is", null).order("ended_at", { ascending: false }).limit(1).maybeSingle(),
+  ]);
+  const error = activities.error ?? running.error ?? last.error;
+  if (error) throw new Error(error.message);
+  return {
+    tz: mbmTz(),
+    activities: activities.data as Activity[],
+    running: running.data as Block[],
+    lastEnd: (last.data as { ended_at: string } | null)?.ended_at ?? null,
     loadedAt: Date.now(),
   };
 }

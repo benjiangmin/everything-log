@@ -1,83 +1,130 @@
 "use client";
 
-import type { Activity } from "@/mbm/data";
+import { useState } from "react";
+import type { Activity, Block } from "@/mbm/data";
 import { clock, span, zonedTime } from "@/mbm/time";
-import type { Segment } from "./segments";
+import type { Placed } from "./segments";
 
-// The whole day (midnight to midnight) as one bar: each block in its activity's color, untracked
-// time striped, the rest of today plain, and a line at "now". Click a block to open it.
+// The whole day (midnight to midnight) as one bar: each entry in its activity's color, untracked
+// time striped, the rest of today plain, and a line at "now". Overlapping entries stack in rows.
+// Hover an entry for what it was; click it to change it.
 export default function DayBar({
-  segments,
+  placed,
+  lanes,
+  gaps,
   dayKey,
   dayStart,
   dayEnd,
   now,
   tz,
   byId,
-  selected,
   onSelect,
   compact = false,
 }: {
-  segments: Segment[];
+  placed: Placed[];
+  lanes: number;
+  gaps: { start: number; end: number }[]; // untracked: nothing at all going on
+
   dayKey: string;
   dayStart: number;
   dayEnd: number;
   now: number;
   tz: string;
   byId: Map<string, Activity>;
-  selected?: string | null;
-  onSelect?: (s: Segment) => void;
+  onSelect?: (b: Block) => void;
   compact?: boolean; // the home page's smaller version
 }) {
+  const [hover, setHover] = useState<Placed | null>(null);
   const total = dayEnd - dayStart;
-  const pct = (t: number) => `${((t - dayStart) / total) * 100}%`;
+  const at = (t: number) => ((t - dayStart) / total) * 100;
   const showNow = now > dayStart && now < dayEnd;
   // Hour marks every 3 hours, placed by the real clock time (so daylight-saving days line up).
   const marks = [0, 3, 6, 9, 12, 15, 18, 21, 24].map((h) => ({ h, at: h === 24 ? dayEnd : +zonedTime(dayKey, h * 60, tz) }));
+  const height = compact ? Math.max(28, lanes * 14) : Math.max(56, lanes * 26);
+
+  const nameOf = (b: Block) => (b.activity_id ? byId.get(b.activity_id) : undefined);
+  const hoverMid = hover ? at((hover.start + hover.end) / 2) : 0;
 
   return (
-    <div>
+    <div className="relative">
+      {/* The speech bubble over the bar: what it was, when, for how long. */}
+      {hover && (
+        <div
+          role="tooltip"
+          className="pointer-events-none absolute bottom-full z-30 mb-2.5 w-max max-w-[16rem] -translate-x-1/2 rounded-control bg-accent px-3 py-2 text-accent-ink shadow-lg shadow-ink/25"
+          style={{ left: `clamp(7rem, ${hoverMid}%, calc(100% - 7rem))` }}
+        >
+          <p className="flex items-center gap-1.5 text-sm font-semibold">
+            <span className="size-2 rounded-full ring-1 ring-accent-ink/40" style={{ background: nameOf(hover.block)?.color ?? "#a98467" }} />
+            {nameOf(hover.block)?.name ?? "Something"}
+          </p>
+          <p className="num text-xs opacity-80">
+            {clock(new Date(+new Date(hover.block.started_at)), tz)} – {hover.block.ended_at ? clock(new Date(hover.block.ended_at), tz) : "now"} ·{" "}
+            {span((hover.block.ended_at ? +new Date(hover.block.ended_at) : now) - +new Date(hover.block.started_at))}
+          </p>
+          {hover.block.note && <p className="mt-0.5 line-clamp-2 text-xs opacity-80">{hover.block.note}</p>}
+        </div>
+      )}
+      {/* The bubble's tail, pointing right at the entry (the bubble itself stays on screen). */}
+      {hover && (
+        <span
+          aria-hidden="true"
+          className="pointer-events-none absolute bottom-full z-30 mb-[3px] size-0 -translate-x-1/2 border-x-[7px] border-t-[7px] border-x-transparent border-t-accent"
+          style={{ left: `${hoverMid}%` }}
+        />
+      )}
+
       <div
-        className={`relative overflow-hidden rounded-control bg-[repeating-linear-gradient(135deg,var(--line)_0_6px,transparent_6px_12px)] ring-1 ring-line ${
-          compact ? "h-7" : "h-12"
-        }`}
+        className="relative overflow-hidden rounded-control bg-surface/60 ring-1 ring-line"
+        style={{ height }}
+        onMouseLeave={() => setHover(null)}
       >
-        {segments.map((s) => {
-          const style = { left: pct(s.start), width: `${((s.end - s.start) / total) * 100}%` };
-          if (s.kind === "future") return <div key={`f${s.start}`} className="absolute inset-y-0 bg-paper" style={style} />;
-          if (s.kind === "gap") {
-            return onSelect ? (
-              <button
-                key={`g${s.start}`}
-                type="button"
-                title={`Untracked · ${clock(new Date(s.start), tz)} – ${clock(new Date(s.end), tz)} · ${span(s.end - s.start)}`}
-                onClick={() => onSelect(s)}
-                className="absolute inset-y-0 transition-colors hover:bg-accent/10"
-                style={style}
-              />
-            ) : null;
-          }
-          const a = s.block.activity_id ? byId.get(s.block.activity_id) : undefined;
-          const label = `${a?.name ?? "Something"} · ${clock(new Date(s.start), tz)} – ${s.block.ended_at ? clock(new Date(s.end), tz) : "now"} · ${span(s.end - s.start)}`;
-          const cls = `absolute inset-y-0 border-r border-paper/70 transition-[filter] ${selected === s.block.id ? "z-10 ring-2 ring-inset ring-ink" : ""} ${
-            s.block.confirmed ? "" : "opacity-60"
+        {/* Untracked: striped, full height. The rest of today (not happened yet): plain. */}
+        {gaps.map((g) => (
+          <div
+            key={g.start}
+            aria-hidden="true"
+            className="absolute inset-y-0 bg-[repeating-linear-gradient(135deg,var(--line)_0_6px,transparent_6px_12px)] bg-paper"
+            style={{ left: `${at(g.start)}%`, width: `${at(g.end) - at(g.start)}%` }}
+          />
+        ))}
+        {now < dayEnd && <div className="absolute inset-y-0 right-0 bg-paper" style={{ left: `${Math.max(0, at(now))}%` }} />}
+        {placed.map((p) => {
+          const a = nameOf(p.block);
+          const style = {
+            left: `${at(p.start)}%`,
+            width: `${at(p.end) - at(p.start)}%`,
+            top: `${(p.lane / lanes) * 100}%`,
+            height: `${100 / lanes}%`,
+            background: a?.color ?? "#a98467",
+          };
+          const cls = `absolute border-r border-paper/70 transition-[filter] ${lanes > 1 ? "border-b" : ""} ${p.block.confirmed ? "" : "opacity-60"} ${
+            hover?.block.id === p.block.id ? "brightness-110" : ""
           }`;
+          const label = `${a?.name ?? "Something"}, ${clock(new Date(p.start), tz)} to ${p.block.ended_at ? clock(new Date(p.end), tz) : "now"}`;
           return onSelect ? (
-            <button key={s.block.id} type="button" title={label} aria-label={label} onClick={() => onSelect(s)} className={`${cls} hover:brightness-110`} style={{ ...style, background: a?.color ?? "#a98467" }} />
+            <button
+              key={p.block.id}
+              type="button"
+              aria-label={label}
+              onMouseEnter={() => setHover(p)}
+              onFocus={() => setHover(p)}
+              onBlur={() => setHover(null)}
+              onClick={() => onSelect(p.block)}
+              className={cls}
+              style={style}
+            />
           ) : (
-            <div key={s.block.id} title={label} className={cls} style={{ ...style, background: a?.color ?? "#a98467" }} />
+            <div key={p.block.id} aria-label={label} onMouseEnter={() => setHover(p)} className={cls} style={style} />
           );
         })}
-        {showNow && <div aria-hidden="true" className="absolute inset-y-0 z-20 w-0.5 -translate-x-1/2 bg-ink" style={{ left: pct(now) }} />}
+        {showNow && <div aria-hidden="true" className="pointer-events-none absolute inset-y-0 z-20 w-0.5 -translate-x-1/2 bg-ink" style={{ left: `${at(now)}%` }} />}
       </div>
+
       {!compact && (
         <div className="relative mt-1 h-4 text-[11px] text-muted">
-          {marks.map(({ h, at }) => (
-            <span
-              key={h}
-              className={`num absolute ${h === 0 ? "" : h === 24 ? "-translate-x-full" : "-translate-x-1/2"}`}
-              style={{ left: pct(at) }}
-            >
+          {marks.map(({ h, at: t }) => (
+            <span key={h} className={`num absolute ${h === 0 ? "" : h === 24 ? "-translate-x-full" : "-translate-x-1/2"}`} style={{ left: `${at(t)}%` }}>
               {h === 0 || h === 24 ? "12a" : h === 12 ? "12p" : h < 12 ? `${h}a` : `${h - 12}p`}
             </span>
           ))}
