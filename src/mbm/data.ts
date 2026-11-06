@@ -69,14 +69,21 @@ export async function getDay(dayKey: string): Promise<Day> {
       .or(`departed_at.is.null,departed_at.gt.${start.toISOString()}`)
       .order("arrived_at");
   const [firstVisits, pointRows] = await Promise.all([
-    visitsOn("id, arrived_at, departed_at, lat, lng, auto_name, places(name)"),
+    visitsOn("id, arrived_at, departed_at, lat, lng, auto_name, places(name, lat, lng)"),
     client.from("points").select("*").gte("at", start.toISOString()).lt("at", end.toISOString()).order("at").limit(5000),
   ]);
   const visitRows = firstVisits.error ? await visitsOn("id, arrived_at, departed_at, lat, lng, places(name)") : firstVisits; // 006 not run yet
-  type VisitRow = Omit<Visit, "place" | "auto_name"> & { auto_name?: string | null; places: { name: string } | { name: string }[] | null };
+  type PlaceRow = { name: string; lat?: number; lng?: number };
+  type VisitRow = Omit<Visit, "place" | "auto_name"> & { auto_name?: string | null; places: PlaceRow | PlaceRow[] | null };
   const visits: Visit[] = visitRows.error
     ? []
-    : (visitRows.data as unknown as VisitRow[]).map(({ places, ...v }) => ({ ...v, auto_name: v.auto_name ?? null, place: (Array.isArray(places) ? places[0]?.name : places?.name) ?? null }));
+    : (visitRows.data as unknown as VisitRow[]).map(({ places, ...v }) => {
+        // A stop at one of your named places is drawn at the place's pin (so home is one node,
+        // not a few close together wherever the phone happened to put each stop).
+        const place = Array.isArray(places) ? places[0] : places;
+        const pin = place && typeof place.lat === "number" && typeof place.lng === "number" ? { lat: place.lat, lng: place.lng } : {};
+        return { ...v, ...pin, auto_name: v.auto_name ?? null, place: place?.name ?? null };
+      });
   const points: RoutePoint[] = pointRows.error ? [] : (pointRows.data as RoutePoint[]);
 
   const error = blocks.error ?? activities.error ?? running.error;

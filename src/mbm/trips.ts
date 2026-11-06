@@ -78,6 +78,10 @@ export function buildTrips(visits: Visit[], points: RoutePoint[]): Trip[] {
     const hi = to ? ms(to.arrived_at) : Infinity;
     if (hi <= lo) continue;
     const inside = pts.filter((p) => p.t >= lo && p.t <= hi);
+    // Dots right by the stop at either end are you still in (or around) the building, not the
+    // trip: the trip starts and ends at the stop's node instead.
+    while (from && inside.length && metres(inside[0], from) <= 75) inside.shift();
+    while (to && inside.length && metres(inside[inside.length - 1], to) <= 75) inside.pop();
     if (!inside.length && !(from && to)) continue;
     if (!inside.length && from && to && metres(from, to) < 60) continue; // back to the same place
 

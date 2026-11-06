@@ -82,7 +82,7 @@ begin
     where user_id = auth.uid() and id is distinct from v.id and meters_between(lat, lng, p_lat, p_lng) > 75
       and arrived_at < v_e and coalesce(departed_at, 'infinity') > p_s
       -- (really overlapping: 2+ minutes, not just touching)
-      and least(v_e, coalesce(departed_at, 'infinity')) - greatest(p_s, arrived_at) >= interval '2 minutes'
+      and least(coalesce(p_e, now()), coalesce(departed_at, now())) - greatest(p_s, arrived_at) >= interval '2 minutes'
     order by arrived_at
   loop
     v_dep := coalesce(o.departed_at, 'infinity');

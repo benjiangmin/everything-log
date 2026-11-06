@@ -8,7 +8,7 @@ import type { Activity, Block, RoutePoint, Visit } from "@/mbm/data";
 import { clock, span } from "@/mbm/time";
 import { HtmlMarker, KEY, stylesFor } from "./mapBits";
 import { buildTrips, decodePolyline, metres, type Piece, type Spot, type Trip } from "@/mbm/trips";
-import { snapTrip } from "@/mbm/snap";
+import { snapPath } from "@/mbm/snap";
 import { isMoving } from "@/mbm/moving";
 
 // The stretch you're hovering on the day bar. moving: light up the route (Commute); still: the
@@ -362,65 +362,47 @@ function PointerTrack({ trips, onHit }: { trips: Trip[]; onHit: (keys: string[],
   return null;
 }
 
-// Trips drawn as realistically as we can: first snapped onto real walkways and roads (your dots,
-// matched to the paths you took; see snap.ts). If that isn't possible, bits the phone missed are
-// filled in: a whole missed trip uses a walk you recorded before between the same two places;
-// otherwise Google's walking route. Those stay dashed. Answers are kept in this browser.
+// Trips drawn as realistically as we can, piece by piece. Stretches the phone recorded are
+// snapped onto the real paths and roads (solid; see snap.ts). Bits it missed are filled in and
+// stay dashed: a whole missed trip uses a walk you recorded before between the same two places,
+// otherwise Google's walking route. Answers are kept in this browser.
 function useFilledTrips(trips: Trip[]): Trip[] {
-  const [filled, setFilled] = useState<Record<string, Spot[]>>({});
-  const [snapped, setSnapped] = useState<Record<string, Spot[]>>({});
+  const [better, setBetter] = useState<Record<string, Spot[]>>({});
   const asked = useRef(new Set<string>());
-  // (Answers are kept even if the trips change meanwhile: each trip is only asked about once.)
+  // (Answers are kept even if the trips change meanwhile: each piece is only asked about once.)
   useEffect(() => {
     for (const t of trips) {
-      if (asked.current.has(t.key)) continue;
-      asked.current.add(t.key);
-      const recorded = t.pieces.some((p) => !p.missing);
-      (async () => {
-        if (recorded) {
-          const path = await snapTrip(t);
-          if (path) {
-            setSnapped((m) => ({ ...m, [t.key]: path }));
-            return;
-          }
-        }
-        // Couldn't snap: fill the missing bits.
-        t.pieces.forEach(async (p, i) => {
-          if (!p.missing) return;
-          const a = p.path[0];
-          const b = p.path[p.path.length - 1];
-          if (metres(a, b) < 120) return; // short: a straight dash is fine
+      t.pieces.forEach(async (p, i) => {
+        const key = pieceKey(t, i);
+        if (asked.current.has(key)) return;
+        asked.current.add(key);
+        const a = p.path[0];
+        const b = p.path[p.path.length - 1];
+        let path: Spot[] | null = null;
+        if (!p.missing) {
+          const snapped = await snapPath(p.path, t.pace);
+          if (snapped) path = [a, ...snapped, b]; // (joined back to where it really starts and ends)
+        } else if (metres(a, b) >= 120) {
           const whole = t.pieces.length === 1 && t.fromId && t.toId;
-          let path = whole ? await rememberedRoute(t.fromId!, t.toId!).catch(() => null) : null;
-          if (path) path = [a, ...path, b];
-          else path = await walkingRoute(a, b);
-          if (path && path.length >= 2) setFilled((f) => ({ ...f, [`${t.key}:${i}`]: path! }));
-        });
-      })();
+          const remembered = whole ? await rememberedRoute(t.fromId!, t.toId!).catch(() => null) : null;
+          path = remembered ? [a, ...remembered, b] : await walkingRoute(a, b);
+        }
+        if (path && path.length >= 2) setBetter((m) => ({ ...m, [key]: path! }));
+      });
     }
   }, [trips]);
   return useMemo(
-    () =>
-      trips.map((t) =>
-        snapped[t.key]
-          ? { ...t, pieces: [{ path: joinEnds(t, snapped[t.key]), missing: false }] }
-          : { ...t, pieces: t.pieces.map((p, i) => (filled[`${t.key}:${i}`] ? { ...p, path: filled[`${t.key}:${i}`] } : p)) },
-      ),
-    [trips, filled, snapped],
+    () => trips.map((t) => ({ ...t, pieces: t.pieces.map((p, i) => (better[pieceKey(t, i)] ? { ...p, path: better[pieceKey(t, i)] } : p)) })),
+    [trips, better],
   );
 }
 
-// A snapped route starts and ends on the road or path; join it back to where the trip really
-// starts and ends (the stop, or the first / last dot), so it always runs node to node.
-function joinEnds(t: Trip, path: Spot[]): Spot[] {
-  const first = t.pieces[0]?.path[0];
-  const lastPiece = t.pieces[t.pieces.length - 1]?.path;
-  const last = lastPiece?.[lastPiece.length - 1];
-  const out = [...path];
-  if (first && metres(first, out[0]) > 3) out.unshift(first);
-  if (last && metres(last, out[out.length - 1]) > 3) out.push(last);
-  return out;
-}
+// A piece, by what it covers (so a changed trip asks again only for pieces that changed).
+const pieceKey = (t: Trip, i: number) => {
+  const p = t.pieces[i].path;
+  const f = (s: Spot) => `${s.lat.toFixed(5)},${s.lng.toFixed(5)}`;
+  return `${t.key}:${p.length}:${f(p[0])}:${f(p[p.length - 1])}:${t.pieces[i].missing ? "m" : "r"}`;
+};
 
 // Google's walking route between two spots (Routes API; it has to be allowed on the key).
 async function walkingRoute(a: Spot, b: Spot): Promise<Spot[] | null> {
