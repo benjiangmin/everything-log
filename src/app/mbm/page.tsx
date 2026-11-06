@@ -16,7 +16,10 @@ export default function MbmPage(props: PageProps<"/mbm">) {
   return (
     // Wide: the day bar gets about 90% of the screen.
     <main className="mx-auto w-full px-4 pb-24 pt-8 sm:w-[92%] sm:px-0 sm:pt-10">
-      <BackLink className="mb-4 inline-block text-sm text-muted underline-offset-4 hover:text-ink hover:underline" />
+      {/* The "Day" screen starts here (the page snaps between it and the map). */}
+      <div data-screen="day" className="snap-start scroll-mt-10">
+        <BackLink className="mb-4 inline-block text-sm text-muted underline-offset-4 hover:text-ink hover:underline" />
+      </div>
       <Suspense fallback={<Skeleton />}>
         {props.searchParams.then((sp) => (
           <MbmDay day={typeof sp.day === "string" ? sp.day : undefined} />
@@ -48,6 +51,11 @@ async function MbmDay({ day: asked }: { day?: string }) {
           <h1 className="font-display text-2xl font-semibold tracking-tight sm:text-3xl">Minute by Minute</h1>
           <p className="text-sm opacity-70">{isToday ? `Today · ${dayTitle(dayKey)}` : dayTitle(dayKey)}</p>
         </div>
+        <form action={signOut} className="hidden sm:block">
+          <button type="submit" title={`Signed in as ${user.email ?? "you"}`} className="rounded-control px-3 py-2 text-sm opacity-70 transition hover:bg-accent-ink/10 hover:opacity-100">
+            Sign out
+          </button>
+        </form>
         <nav aria-label="Days" className="flex items-center gap-1">
           <Link href={`/mbm?day=${shiftDay(dayKey, -1)}`} aria-label="The day before" className={arrow}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -73,15 +81,6 @@ async function MbmDay({ day: asked }: { day?: string }) {
       </header>
 
       <DayView key={dayKey} day={day} today={isToday} renderedAt={day.loadedAt} />
-
-      <form action={signOut} className="mt-10 text-center">
-        <p className="text-xs text-muted">
-          Signed in as {user.email ?? "you"} ·{" "}
-          <button type="submit" className="underline underline-offset-2 hover:text-ink">
-            Sign out
-          </button>
-        </p>
-      </form>
     </>
   );
 }

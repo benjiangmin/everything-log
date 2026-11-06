@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { Day } from "@/mbm/data";
 import DayBar from "./DayBar";
 import DayMap from "./DayMap";
@@ -21,6 +21,7 @@ export default function DayView({ day, today, renderedAt }: { day: Day; today: b
   const { placed, lanes, gaps } = layOut(day.blocks, dayStart, dayEnd, now);
   const [focus, setFocus] = useState<Focus | null>(null); // hovering the bar → lit up on the map
   const [marks, setMarks] = useState<{ start: number; end: number }[] | null>(null); // hovering the map → outlined on the bar
+  const screen = useScreens(day.visits.length > 0 || day.points.length > 0);
 
   return (
     <div className="flex flex-col gap-5">
@@ -59,9 +60,66 @@ export default function DayView({ day, today, renderedAt }: { day: Day; today: b
         day={day}
         focus={focus}
         onPointer={setMarks}
+        gestures={screen === "map" ? "greedy" : "cooperative"}
         // Today: where you are now pulses, in the color of what you're doing.
         liveColor={today ? ((day.running[0]?.activity_id && byId.get(day.running[0].activity_id)?.color) || "#7f5539") : null}
       />
+      {screen && <ScreenSwitch screen={screen} />}
     </div>
+  );
+}
+
+// The page has two screens: the Day (the bar) and the Map. Scrolling snaps to one or the other,
+// pinching never zooms the whole page (only the bar or the map), and on the Map screen scrolling
+// and pinching zoom the map. Returns which screen you're on (null: no map today, just a page).
+function useScreens(hasMap: boolean): "day" | "map" | null {
+  const [screen, setScreen] = useState<"day" | "map">("day");
+  useEffect(() => {
+    if (!hasMap) return;
+    const root = document.documentElement;
+    const before = root.style.scrollSnapType;
+    root.style.scrollSnapType = "y mandatory";
+    const update = () => {
+      const map = document.querySelector<HTMLElement>('[data-screen="map"]');
+      if (map) setScreen(map.getBoundingClientRect().top < window.innerHeight / 2 ? "map" : "day");
+    };
+    // Pinch on a trackpad (Ctrl+scroll) zooms the bar or the map, never the page.
+    const noPageZoom = (e: WheelEvent) => e.ctrlKey && e.preventDefault();
+    const noGesture = (e: Event) => e.preventDefault(); // Safari's pinch
+    update();
+    window.addEventListener("scroll", update, { passive: true });
+    window.addEventListener("resize", update);
+    window.addEventListener("wheel", noPageZoom, { passive: false });
+    document.addEventListener("gesturestart", noGesture);
+    document.addEventListener("gesturechange", noGesture);
+    return () => {
+      root.style.scrollSnapType = before;
+      window.removeEventListener("scroll", update);
+      window.removeEventListener("resize", update);
+      window.removeEventListener("wheel", noPageZoom);
+      document.removeEventListener("gesturestart", noGesture);
+      document.removeEventListener("gesturechange", noGesture);
+    };
+  }, [hasMap]);
+  return hasMap ? screen : null;
+}
+
+function ScreenSwitch({ screen }: { screen: "day" | "map" }) {
+  const go = (to: "day" | "map") => document.querySelector(`[data-screen="${to}"]`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+  const tab = (to: "day" | "map", label: string) => (
+    <button
+      type="button"
+      onClick={() => go(to)}
+      aria-pressed={screen === to}
+      className={`rounded-full px-4 py-1.5 text-sm font-semibold transition-colors ${screen === to ? "bg-paper text-ink shadow-sm" : "text-accent-ink/80 hover:text-accent-ink"}`}
+    >
+      {label}
+    </button>
+  );
+  return (
+    <nav aria-label="Jump to" className="fixed bottom-5 left-1/2 z-40 flex -translate-x-1/2 gap-1 rounded-full bg-accent p-1 shadow-xl shadow-ink/25">
+      {tab("day", "Day")}
+      {tab("map", "Map")}
+    </nav>
   );
 }

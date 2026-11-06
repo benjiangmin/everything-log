@@ -169,6 +169,29 @@ export async function rememberedRoute(fromId: string, toId: string): Promise<{ l
   return (data as { lat: number; lng: number }[]).map((p) => ({ lat: Number(p.lat), lng: Number(p.lng) }));
 }
 
+// Move entries' start / end (dragging their edges on the day bar). Everything else about them
+// stays. end undefined = leave it (a running entry keeps running).
+export async function retimeBlocks(changes: { id: string; start?: string; end?: string }[]): Promise<Result> {
+  const now = Date.now() + 60000;
+  for (const c of changes) {
+    if (!isUuid(c.id)) return fail("That entry is gone.");
+    for (const t of [c.start, c.end]) {
+      if (t !== undefined && (Number.isNaN(new Date(t).getTime()) || new Date(t).getTime() > now)) return fail("That time doesn't work.");
+    }
+    if (c.start && c.end && new Date(c.end) <= new Date(c.start)) return fail("The end has to be after the start.");
+  }
+  const client = await mbm();
+  for (const c of changes) {
+    const patch: Record<string, string> = { updated_at: new Date().toISOString() };
+    if (c.start) patch.started_at = new Date(c.start).toISOString();
+    if (c.end) patch.ended_at = new Date(c.end).toISOString();
+    const { error } = await client.from("blocks").update(patch).eq("id", c.id);
+    if (error) return fail(/check/.test(error.message) ? "The end has to be after the start." : error.message);
+  }
+  refresh();
+  return { ok: true };
+}
+
 // ---------- Where an entry happened ----------
 
 export type PlaceLite = { id: string; name: string; lat: number; lng: number };

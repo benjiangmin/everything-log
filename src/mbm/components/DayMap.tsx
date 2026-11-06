@@ -16,7 +16,9 @@ export default function DayMap({
   focus = null,
   liveColor = null,
   onPointer,
+  gestures = "cooperative",
 }: {
+  gestures?: "cooperative" | "greedy"; // greedy: scroll / pinch zooms the map (when it's the screen you're on)
   day: Day;
   focus?: Focus | null;
   liveColor?: string | null;
@@ -25,9 +27,21 @@ export default function DayMap({
   const empty = day.visits.length === 0 && day.points.length === 0;
   const [showDots, setShowDots] = useState(false);
   return (
-    <section aria-label="Map" className="overflow-hidden rounded-card border-[1.5px] border-ink">
+    // The "Map" screen: fills the window, so the page snaps to it and gestures go to the map.
+    <section
+      aria-label="Map"
+      data-screen={empty ? undefined : "map"}
+      className={`overflow-hidden rounded-card border-[1.5px] border-ink ${empty ? "" : "flex h-[calc(100dvh-2rem)] min-h-[30rem] snap-start scroll-mt-4 flex-col"}`}
+    >
       <div className="flex items-baseline justify-between gap-3 px-4 pb-3 pt-4 sm:px-6">
-        <h2 className="font-display text-lg font-semibold">Where you went</h2>
+        <div className="min-w-0">
+          <h2 className="font-display text-lg font-semibold">Where you went</h2>
+          {!empty && (
+            <p className="text-xs text-muted">
+              Hover a route or stop to see it on the bar. Dashed: the phone missed that bit. Click a stop to rename, move or remove it.
+            </p>
+          )}
+        </div>
         {!empty && (
           <div className="flex items-center gap-3 text-sm text-muted">
             <span>
@@ -54,7 +68,7 @@ export default function DayMap({
         </p>
       ) : (
         // isolate: keeps the map's own layers under the page's popups and panels.
-        <div className="relative isolate h-[22rem] border-t border-line sm:h-[26rem]">
+        <div className="relative isolate min-h-0 flex-1 border-t border-line">
           <Inner
             visits={day.visits}
             points={day.points}
@@ -65,14 +79,9 @@ export default function DayMap({
             showDots={showDots}
             liveColor={liveColor}
             onPointer={onPointer}
+            gestures={gestures}
           />
         </div>
-      )}
-      {!empty && (
-        <p className="border-t border-line px-4 py-2 text-xs text-muted sm:px-6">
-          Dashed: the phone missed that bit, so it&apos;s drawn from a walk you took before, or Google&apos;s walking route. Click a
-          stop to rename, move or remove it.
-        </p>
       )}
     </section>
   );

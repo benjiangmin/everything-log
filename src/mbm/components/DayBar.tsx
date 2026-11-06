@@ -4,10 +4,12 @@ import { useEffect, useRef, useState, type CSSProperties, type PointerEvent, typ
 import type { Activity, Block } from "@/mbm/data";
 import { clock, span, zonedTime } from "@/mbm/time";
 import type { Placed } from "./segments";
+import { retimeBlocks } from "@/app/mbm/actions";
 
 // The whole day (midnight to midnight) as one bar: each entry in its activity's color, untracked
 // time striped, the rest of today plain, and a line at "now". Overlapping entries stack in rows.
-// Hover an entry for what it was; click it to change it.
+// Hover an entry for what it was; click it to change it; drag either end of it to change its
+// times (it snaps to round times, and to the entries next to it).
 // On the day page (not compact) you can zoom in: pinch or Ctrl+scroll over the bar, or the − / +
 // buttons. Drag (or scroll sideways) to move around. The time marks get finer as you zoom.
 export default function DayBar({
@@ -120,14 +122,116 @@ export default function DayBar({
     drag.current = null;
   };
 
+  // ---------- Dragging an entry's edge to change its time ----------
+  // linked: the entry right next to it, sharing that edge (both move together).
+  type Edge = { id: string; side: "start" | "end"; linked: { id: string; side: "start" | "end" } | null; min: number; max: number; at: number; orig: number };
+  const [edge, setEdge] = useState<Edge | null>(null);
+  // Saved changes, shown until the page's data catches up (was: the entry's times before).
+  const [moves, setMoves] = useState<Record<string, { start: number; end: number; was: string }>>({});
+  const [edgeError, setEdgeError] = useState<string | null>(null);
+  const resizable = !compact && Boolean(onSelect);
+  const MIN = 60000;
+
+  function withMoves(p: Placed): Placed {
+    let { start, end } = p;
+    const m = moves[p.block.id];
+    if (m && m.was === `${p.start}-${p.end}`) ({ start, end } = m);
+    if (edge) {
+      const side = edge.id === p.block.id ? edge.side : edge.linked?.id === p.block.id ? edge.linked.side : null;
+      if (side === "start") start = edge.at;
+      if (side === "end") end = edge.at;
+    }
+    return start === p.start && end === p.end ? p : { ...p, start, end };
+  }
+
+  const beginEdge = (e: PointerEvent, p: Placed, side: "start" | "end") => {
+    if (e.button !== 0) return;
+    e.stopPropagation(); // (not a pan)
+    e.preventDefault();
+    const others = placed.filter((q) => q.lane === 0 && q.block.id !== p.block.id);
+    let linked: Edge["linked"] = null;
+    let min: number;
+    let max: number;
+    if (side === "end") {
+      const next = others.filter((q) => q.start >= p.end - MIN).sort((a, b) => a.start - b.start)[0];
+      min = p.start + MIN;
+      if (next && Math.abs(next.start - p.end) < MIN) {
+        linked = { id: next.block.id, side: "start" };
+        max = next.end - MIN;
+      } else max = Math.min(next ? next.start : Infinity, now, dayEnd);
+    } else {
+      const prev = others.filter((q) => q.end <= p.start + MIN).sort((a, b) => b.end - a.end)[0];
+      max = p.end - MIN;
+      if (prev && Math.abs(prev.end - p.start) < MIN) {
+        linked = { id: prev.block.id, side: "end" };
+        min = prev.start + MIN;
+      } else min = Math.max(prev ? prev.end : -Infinity, dayStart);
+    }
+    (e.currentTarget as Element).setPointerCapture(e.pointerId);
+    setHover(null);
+    setEdgeError(null);
+    const orig = side === "start" ? p.start : p.end;
+    setEdge({ id: p.block.id, side, linked, min, max, at: orig, orig });
+  };
+
+  // Where the pointer is, snapped: to the edges of other entries and "now" first, then to round
+  // times (finer as you zoom in), within ~10 px; otherwise to the minute.
+  const snap = (raw: number, e: Edge) => {
+    const width = barRef.current?.getBoundingClientRect().width ?? 1;
+    const near = (10 / width) * shown;
+    const skip = new Set([e.id, e.linked?.id]);
+    const edges = [now, ...placed.filter((q) => !skip.has(q.block.id)).flatMap((q) => [q.start, q.end])];
+    const best = edges.reduce((b, t) => (Math.abs(t - raw) < Math.abs(b - raw) ? t : b), Infinity);
+    if (Math.abs(best - raw) <= near) return best;
+    const g = (shown <= 2 * 3600000 ? 5 : shown <= 8 * 3600000 ? 15 : 30) * 60000;
+    const grid = dayStart + Math.round((raw - dayStart) / g) * g;
+    if (Math.abs(grid - raw) <= near) return grid;
+    return dayStart + Math.round((raw - dayStart) / 60000) * 60000;
+  };
+
+  const moveEdge = (e: PointerEvent) => {
+    if (!edge || !barRef.current) return;
+    const r = barRef.current.getBoundingClientRect();
+    const raw = from + ((e.clientX - r.left) / r.width) * shown;
+    const t = Math.min(edge.max, Math.max(edge.min, snap(raw, edge)));
+    if (t !== edge.at) setEdge({ ...edge, at: t });
+  };
+
+  const endEdge = () => {
+    const e = edge;
+    if (!e) return;
+    dragged.current = true; // (so letting go isn't a click that opens the entry)
+    setEdge(null);
+    if (Math.abs(e.at - e.orig) < 30000) return;
+    const iso = new Date(e.at).toISOString();
+    const changes = [{ id: e.id, [e.side]: iso }, ...(e.linked ? [{ id: e.linked.id, [e.linked.side]: iso }] : [])];
+    const next = { ...moves };
+    for (const c of changes) {
+      const p = placed.find((q) => q.block.id === c.id);
+      if (!p) continue;
+      next[c.id] = { start: "start" in c ? e.at : p.start, end: "end" in c ? e.at : p.end, was: `${p.start}-${p.end}` };
+    }
+    setMoves(next);
+    retimeBlocks(changes).then((res) => {
+      if (res.ok) return;
+      setMoves((m) => {
+        const back = { ...m };
+        for (const c of changes) delete back[c.id];
+        return back;
+      });
+      setEdgeError(res.message);
+    });
+  };
+
   // Time marks for what's on screen: labels and faint lines, finer as you zoom in. Placed by
   // the real clock time, so daylight-saving days still line up.
   const { labels, lines } = marksFor(dayKey, tz, dayStart, dayEnd, from, to);
   // The bar: your main entries as rounded pills with small gaps between them. Something running
   // alongside (+ Start) goes in a thin strip under the bar instead of squashing it.
   const height = compact ? 48 : 64;
-  const main = placed.filter((p) => p.lane === 0);
-  const side = placed.filter((p) => p.lane > 0);
+  const shownPlaced = placed.map(withMoves);
+  const main = shownPlaced.filter((p) => p.lane === 0);
+  const side = shownPlaced.filter((p) => p.lane > 0);
   const sideRows = Math.max(0, ...side.map((p) => p.lane));
   // Left / width of a pill, with a 1px gap each side (never thinner than 2px).
   const pill = (start: number, end: number) => {
@@ -139,10 +243,27 @@ export default function DayBar({
   const nameOf = (b: Block) => (b.activity_id ? byId.get(b.activity_id) : undefined);
   // One entry: hover for what it was, click to change it.
   // (A plain function, not a component, so the pills aren't re-made on every hover.)
-  const entry = (p: Placed, style: CSSProperties, round: string) => {
+  const entry = (p: Placed, style: CSSProperties, round: string, handles = false) => {
     const a = nameOf(p.block);
+    // Grab either end to change its time (not an end that's off this day, or "now" while running).
+    const wide = at(p.end) - at(p.start) > 1.2;
+    const startOk = handles && wide && +new Date(p.block.started_at) >= dayStart;
+    const endOk = handles && wide && p.block.ended_at !== null && +new Date(p.block.ended_at) <= dayEnd;
+    const grip = (side: "start" | "end") => (
+      <span
+        aria-hidden="true"
+        onPointerDown={(e) => beginEdge(e, p, side)}
+        onPointerMove={moveEdge}
+        onPointerUp={endEdge}
+        onPointerCancel={endEdge}
+        onClick={(e) => e.stopPropagation()}
+        className={`absolute inset-y-0 w-2.5 cursor-ew-resize touch-none ${side === "start" ? "left-0" : "right-0"} after:absolute after:inset-y-[28%] after:w-[3px] after:rounded-full after:bg-paper/0 after:transition-colors group-hover:after:bg-paper/85 ${
+          side === "start" ? "after:left-[3px]" : "after:right-[3px]"
+        } ${edge && edge.id === p.block.id && edge.side === side ? "after:bg-paper" : ""}`}
+      />
+    );
     const label = `${a?.name ?? "Something"}, ${clock(new Date(p.start), tz)} to ${p.block.ended_at ? clock(new Date(p.end), tz) : "now"}`;
-    const cls = `absolute ${round} transition-[filter,box-shadow] ${p.block.confirmed ? "" : "opacity-60"} ${
+    const cls = `group absolute ${round} transition-[filter,box-shadow] ${p.block.confirmed ? "" : "opacity-60"} ${
       hover?.block?.id === p.block.id ? "shadow-md brightness-110" : ""
     }`;
     const look = { ...style, background: a?.color ?? "#a98467" };
@@ -157,7 +278,10 @@ export default function DayBar({
         onClick={() => onSelect(p.block)}
         className={cls}
         style={look}
-      />
+      >
+        {startOk && grip("start")}
+        {endOk && grip("end")}
+      </button>
     ) : (
       <div key={p.block.id} aria-label={label} onMouseEnter={() => setHover(p)} className={cls} style={look} />
     );
@@ -170,8 +294,19 @@ export default function DayBar({
 
   return (
     <div className="relative">
+      {/* Dragging an edge: the time it'll be. */}
+      {edge && (
+        <div
+          aria-live="polite"
+          className="num pointer-events-none absolute bottom-full z-40 mb-2 -translate-x-1/2 whitespace-nowrap rounded-control bg-accent px-2.5 py-1 text-xs font-semibold text-accent-ink shadow-lg"
+          style={{ left: `${Math.min(95, Math.max(5, at(edge.at)))}%` }}
+        >
+          {edge.side === "start" ? "Starts" : "Ends"} {clock(new Date(edge.at), tz)}
+          {edge.linked && <span className="font-normal opacity-70"> · and the one next to it</span>}
+        </div>
+      )}
       {/* The speech bubble over the bar: what it was, when, for how long. */}
-      {hover && (
+      {hover && !edge && (
         <div
           role="tooltip"
           className="pointer-events-none absolute bottom-full z-30 mb-2.5 w-max max-w-[16rem] rounded-control bg-accent px-3 py-2 text-accent-ink shadow-lg shadow-ink/25"
@@ -201,7 +336,7 @@ export default function DayBar({
         </div>
       )}
       {/* The bubble's tail, pointing right at the entry (the bubble itself stays on screen). */}
-      {hover && (
+      {hover && !edge && (
         <span
           aria-hidden="true"
           className="pointer-events-none absolute bottom-full z-30 mb-[3px] size-0 -translate-x-1/2 border-x-[7px] border-t-[7px] border-x-transparent border-t-accent"
@@ -246,7 +381,9 @@ export default function DayBar({
           );
         })}
         {now < dayEnd && <div className="absolute inset-y-0 right-0 bg-paper" style={{ left: `${Math.max(0, at(now))}%` }} />}
-        {main.map((p) => entry(p, { ...pill(p.start, p.end), top: 3, bottom: 3 }, "rounded-[6px]"))}
+        {main.map((p) => entry(p, { ...pill(p.start, p.end), top: 3, bottom: 3 }, "rounded-[6px]", resizable))}
+        {/* While dragging an edge: a line where it'll go. */}
+        {edge && <div aria-hidden="true" className="pointer-events-none absolute inset-y-0 z-30 w-0.5 -translate-x-1/2 bg-ink" style={{ left: `${at(edge.at)}%` }} />}
         {/* Faint lines at the time marks. */}
         {!compact &&
           lines.map((t) => (
@@ -268,6 +405,8 @@ export default function DayBar({
         })}
         {showNow && <div aria-hidden="true" className="pointer-events-none absolute inset-y-0 z-20 w-0.5 -translate-x-1/2 bg-ink" style={{ left: `${at(now)}%` }} />}
       </div>
+
+      {edgeError && <p className="mt-1 text-xs text-danger">{edgeError}</p>}
 
       {/* Running alongside (+ Start): a thin strip per extra row, under the bar. */}
       {sideRows > 0 && (

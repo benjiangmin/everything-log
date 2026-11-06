@@ -28,7 +28,9 @@ export default function DayMapInner({
   blocks = [],
   activities = [],
   onPointer,
+  gestures = "cooperative",
 }: {
+  gestures?: "cooperative" | "greedy";
   visits: Visit[];
   points: RoutePoint[];
   blocks?: Block[];
@@ -109,7 +111,7 @@ export default function DayMapInner({
         onZoomChanged={(e) => setZoom(e.detail.zoom)}
         defaultCenter={all[0] ?? { lat: 43.0731, lng: -89.4012 }}
         defaultZoom={15}
-        gestureHandling="cooperative"
+        gestureHandling={gestures}
         disableDefaultUI
         zoomControl
         clickableIcons={false}
