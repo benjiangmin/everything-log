@@ -75,6 +75,14 @@ export default function DayBar({
   // Pinch / Ctrl+scroll zooms around the pointer; sideways scroll pans. A plain scroll still
   // scrolls the page. (Needs a non-passive listener so the browser doesn't zoom the page too.)
   const barRef = useRef<HTMLDivElement>(null);
+  const [barWidth, setBarWidth] = useState(1000); // in px (for chips: see pill)
+  useEffect(() => {
+    const el = barRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(([e]) => setBarWidth(e.contentRect.width));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
   useEffect(() => {
     const el = barRef.current;
     if (!el || !zoomable) return;
@@ -233,10 +241,13 @@ export default function DayBar({
   const main = shownPlaced.filter((p) => p.lane === 0);
   const side = shownPlaced.filter((p) => p.lane > 0);
   const sideRows = Math.max(0, ...side.map((p) => p.lane));
-  // Left / width of a pill, with a 1px gap each side (never thinner than 2px).
+  // Left / width of a pill, with a 1px gap each side. Something too short to see (a 2-minute
+  // Commute on the whole day) becomes a small chip centred on its time, so it's still there.
+  const tiny = (start: number, end: number) => ((at(end) - at(start)) / 100) * barWidth < TINY_PX;
   const pill = (start: number, end: number) => {
     const l = at(start);
     const w = at(end) - l;
+    if (tiny(start, end)) return { left: `calc(${l + w / 2}% - ${TINY_PX / 2}px)`, width: `${TINY_PX}px` };
     return { left: `calc(${l}% + 1px)`, width: `max(calc(${w}% - 2px), 2px)` };
   };
 
@@ -263,7 +274,8 @@ export default function DayBar({
       />
     );
     const label = `${a?.name ?? "Something"}, ${clock(new Date(p.start), tz)} to ${p.block.ended_at ? clock(new Date(p.end), tz) : "now"}`;
-    const cls = `group absolute ${round} transition-[filter,box-shadow] ${p.block.confirmed ? "" : "opacity-60"} ${
+    const chip = tiny(p.start, p.end);
+    const cls = `group absolute ${chip ? "z-[15] rounded-full ring-2 ring-paper" : round} transition-[filter,box-shadow] ${p.block.confirmed ? "" : "opacity-60"} ${
       hover?.block?.id === p.block.id ? "shadow-md brightness-110" : ""
     }`;
     const look = { ...style, background: a?.color ?? "#a98467" };
@@ -461,6 +473,7 @@ export default function DayBar({
 }
 
 const MIN_VIEW = 10 * 60000; // zoom in as far as 10 minutes across
+const TINY_PX = 7; // narrower than this on screen: drawn as a chip this wide
 
 function ZoomButton({ label, disabled, onClick, children }: { label: string; disabled: boolean; onClick: () => void; children: ReactNode }) {
   return (

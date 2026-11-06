@@ -103,7 +103,8 @@ export default function BlockEditor({
       }}
       className={`flex min-h-full flex-col gap-4 ${pending ? "opacity-70" : ""}`}
     >
-      <div>
+      {/* (Above what follows, so the color palette opens on top of the times.) */}
+      <div className="relative z-20">
         <ActivityInput
           activities={activities}
           value={name}
