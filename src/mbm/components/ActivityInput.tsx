@@ -29,7 +29,15 @@ export default function ActivityInput({
   const listId = useId();
   const box = useRef<HTMLInputElement>(null);
   const q = value.trim().toLowerCase();
-  const matches = q ? activities.filter((a) => a.name.toLowerCase().includes(q) && a.name.toLowerCase() !== q).slice(0, 6) : [];
+  // What you've typed exactly first (so Enter keeps "Work", not "working on this project"), then
+  // ones starting with it, then the rest.
+  const rank = (name: string) => (name === q ? 0 : name.startsWith(q) ? 1 : 2);
+  const matches = q
+    ? activities
+        .filter((a) => a.name.toLowerCase().includes(q))
+        .sort((a, b) => rank(a.name.toLowerCase()) - rank(b.name.toLowerCase()))
+        .slice(0, 6)
+    : [];
   const showing = open && matches.length > 0;
 
   return (

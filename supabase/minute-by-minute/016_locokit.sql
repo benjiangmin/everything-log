@@ -67,8 +67,8 @@ begin
             place_id = coalesce(v_place, place_at(x.lat, x.lng))
           where id = v_id;
       end if;
-    exception when unique_violation then
-      null; -- another stop starts at the very same moment: skip this one
+    exception when unique_violation or check_violation then
+      null; -- another stop starts at the very same moment, or a bad one: skip it, send the rest
     end;
   end loop;
 end $$;

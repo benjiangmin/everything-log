@@ -72,10 +72,15 @@ export default function BlockEditor({
     setMessage(null);
     if (!name.trim()) return setMessage("What were you doing?");
     if (!going && end !== null && end <= start) return setMessage("The end has to be after the start.");
-    const startIso = startedEarlier && start === startShown ? block!.started_at : zonedTime(dayKey, start, tz).toISOString();
+    // A time you didn't change stays exactly as it was, to the second (the boxes only show
+    // minutes): filling in an untracked gap that starts at 11:52:40 starts at 11:52:40, not
+    // 11:52, so it doesn't overlap what's before it.
+    const startIso =
+      start !== startShown ? zonedTime(dayKey, start, tz).toISOString() : startedEarlier ? block!.started_at : new Date(from).toISOString();
     let endIso: string | null = null;
     if (!going && end !== null) {
-      endIso = endsLater && end === endShown ? block!.ended_at : zonedTime(dayKey, end, tz).toISOString();
+      endIso =
+        end !== endShown ? zonedTime(dayKey, end, tz).toISOString() : endsLater ? block!.ended_at : new Date(to!).toISOString();
     }
     run(async () => {
       const res = await saveBlock({ id: block?.id, name, start: startIso, end: endIso, note: showNote ? note : (block?.note ?? "") });
