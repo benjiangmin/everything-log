@@ -27,43 +27,50 @@ export default function DayView({ day, today, renderedAt }: { day: Day; today: b
     <div className="flex flex-col gap-5">
       {today && <NowStatus activities={day.activities} running={day.running} tz={day.tz} renderedAt={renderedAt} />}
 
-      <section aria-label="The day" className="rounded-card border-[1.5px] border-ink px-4 pb-4 pt-4 sm:px-6 sm:pb-5">
-        <h2 className="mb-4 font-display text-lg font-semibold">The day</h2>
-        <DayBar
-          key={day.dayKey}
-          placed={placed}
-          lanes={lanes}
-          gaps={gaps}
-          dayKey={day.dayKey}
-          dayStart={dayStart}
-          dayEnd={dayEnd}
-          now={now}
-          tz={day.tz}
-          byId={byId}
-          onSelect={(b) => openMbm({ kind: "edit", dayKey: day.dayKey, blockId: b.id })}
-          marks={marks}
-          onHover={(h) =>
-            setFocus(
-              h && {
-                start: h.start,
-                end: h.end,
-                // Commute → the route; anything else → where you were; untracked → either.
-                kind: !h.block ? "any" : isMoving(h.block.activity_id ? byId.get(h.block.activity_id)?.name : null) ? "moving" : "still",
-              },
-            )
-          }
-          onSelectGap={(g) => openMbm({ kind: "add", dayKey: day.dayKey, from: g.start, to: g.end })}
-        />
-      </section>
+      {/* The "Map" screen: the day bar on top and the map filling the rest of the window, so you
+          can hover one and see it on the other. The page snaps here (and to the top). */}
+      <div
+        data-screen={screen ? "map" : undefined}
+        className={screen ? "flex h-[calc(100dvh-2rem)] min-h-[36rem] snap-start scroll-mt-4 flex-col gap-5" : "flex flex-col gap-5"}
+      >
+        <section aria-label="The day" className="shrink-0 rounded-card border-[1.5px] border-ink px-4 pb-4 pt-4 sm:px-6 sm:pb-5">
+          <h2 className="mb-4 font-display text-lg font-semibold">The day</h2>
+          <DayBar
+            key={day.dayKey}
+            placed={placed}
+            lanes={lanes}
+            gaps={gaps}
+            dayKey={day.dayKey}
+            dayStart={dayStart}
+            dayEnd={dayEnd}
+            now={now}
+            tz={day.tz}
+            byId={byId}
+            onSelect={(b) => openMbm({ kind: "edit", dayKey: day.dayKey, blockId: b.id })}
+            marks={marks}
+            onHover={(h) =>
+              setFocus(
+                h && {
+                  start: h.start,
+                  end: h.end,
+                  // Commute → the route; anything else → where you were; untracked → either.
+                  kind: !h.block ? "any" : isMoving(h.block.activity_id ? byId.get(h.block.activity_id)?.name : null) ? "moving" : "still",
+                },
+              )
+            }
+            onSelectGap={(g) => openMbm({ kind: "add", dayKey: day.dayKey, from: g.start, to: g.end })}
+          />
+        </section>
 
-      <DayMap
-        day={day}
-        focus={focus}
-        onPointer={setMarks}
-        gestures={screen === "map" ? "greedy" : "cooperative"}
-        // Today: where you are now pulses, in the color of what you're doing.
-        liveColor={today ? ((day.running[0]?.activity_id && byId.get(day.running[0].activity_id)?.color) || "#7f5539") : null}
-      />
+        <DayMap
+          day={day}
+          focus={focus}
+          onPointer={setMarks}
+          gestures={screen === "map" ? "greedy" : "cooperative"}
+          // Today: where you are now pulses, in the color of what you're doing.
+          liveColor={today ? ((day.running[0]?.activity_id && byId.get(day.running[0].activity_id)?.color) || "#7f5539") : null}
+        />
+      </div>
       {screen && <ScreenSwitch screen={screen} />}
     </div>
   );
@@ -79,9 +86,14 @@ function useScreens(hasMap: boolean): "day" | "map" | null {
     const root = document.documentElement;
     const before = root.style.scrollSnapType;
     root.style.scrollSnapType = "y mandatory";
+    // Whichever screen's top is nearest the top of the window.
     const update = () => {
+      const day = document.querySelector<HTMLElement>('[data-screen="day"]');
       const map = document.querySelector<HTMLElement>('[data-screen="map"]');
-      if (map) setScreen(map.getBoundingClientRect().top < window.innerHeight / 2 ? "map" : "day");
+      if (!day || !map) return;
+      const toDay = Math.abs(day.getBoundingClientRect().top - 40);
+      const toMap = Math.abs(map.getBoundingClientRect().top - 16);
+      setScreen(toMap < toDay ? "map" : "day");
     };
     // Pinch on a trackpad (Ctrl+scroll) zooms the bar or the map, never the page.
     const noPageZoom = (e: WheelEvent) => e.ctrlKey && e.preventDefault();

@@ -27,11 +27,10 @@ export default function DayMap({
   const empty = day.visits.length === 0 && day.points.length === 0;
   const [showDots, setShowDots] = useState(false);
   return (
-    // The "Map" screen: fills the window, so the page snaps to it and gestures go to the map.
+    // On the "Map" screen it fills the window under the day bar (see DayView).
     <section
       aria-label="Map"
-      data-screen={empty ? undefined : "map"}
-      className={`overflow-hidden rounded-card border-[1.5px] border-ink ${empty ? "" : "flex h-[calc(100dvh-2rem)] min-h-[30rem] snap-start scroll-mt-4 flex-col"}`}
+      className={`overflow-hidden rounded-card border-[1.5px] border-ink ${empty ? "" : "flex min-h-0 flex-1 flex-col"}`}
     >
       <div className="flex items-baseline justify-between gap-3 px-4 pb-3 pt-4 sm:px-6">
         <div className="min-w-0">
