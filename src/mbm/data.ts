@@ -46,9 +46,10 @@ export async function getDay(dayKey: string): Promise<Day> {
   const tz = mbmTz();
   const { start, end } = dayRange(dayKey, tz);
   const client = await mbm();
-  // Stops iOS told us about late: make sure no automatic Commute runs through them (011; does
-  // nothing if not run yet, or if there's nothing to fix).
-  await client.rpc("repair_day", { p_from: start.toISOString(), p_to: end.toISOString() });
+  // Rebuild the day from the dots first (stops, Commutes: see 014_rebuild_day.sql), so it's right
+  // every time you look. Falls back to the older repair if 014 isn't run yet.
+  const rebuilt = await client.rpc("rebuild_day", { p_from: start.toISOString(), p_to: end.toISOString() });
+  if (rebuilt.error) await client.rpc("repair_day", { p_from: start.toISOString(), p_to: end.toISOString() });
   const [blocks, activities, running] = await Promise.all([
     client
       .from("blocks")

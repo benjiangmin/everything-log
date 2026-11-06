@@ -144,7 +144,15 @@ export async function saveBlock(input: { id?: string; name: string; start: strin
 
 export async function deleteBlock(id: string): Promise<Result> {
   if (!isUuid(id)) return fail("That entry is gone.");
-  const { error } = await (await mbm()).from("blocks").delete().eq("id", id);
+  const client = await mbm();
+  // An automatic entry (a Commute from your location): remember it's unwanted, so rebuilding
+  // the day doesn't make it again (014; skipped if not run yet).
+  const { data: b } = await client.from("blocks").select("started_at, ended_at, source").eq("id", id).maybeSingle();
+  if (b && (b as { source: string }).source === "location") {
+    const { started_at, ended_at } = b as { started_at: string; ended_at: string | null };
+    await client.from("dismissed").upsert({ started_at, ended_at: ended_at ?? new Date().toISOString() });
+  }
+  const { error } = await client.from("blocks").delete().eq("id", id);
   if (error) return fail(error.message);
   refresh();
   return { ok: true };
