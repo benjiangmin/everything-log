@@ -403,11 +403,23 @@ function useFilledTrips(trips: Trip[]): Trip[] {
     () =>
       trips.map((t) =>
         snapped[t.key]
-          ? { ...t, pieces: [{ path: snapped[t.key], missing: false }] }
+          ? { ...t, pieces: [{ path: joinEnds(t, snapped[t.key]), missing: false }] }
           : { ...t, pieces: t.pieces.map((p, i) => (filled[`${t.key}:${i}`] ? { ...p, path: filled[`${t.key}:${i}`] } : p)) },
       ),
     [trips, filled, snapped],
   );
+}
+
+// A snapped route starts and ends on the road or path; join it back to where the trip really
+// starts and ends (the stop, or the first / last dot), so it always runs node to node.
+function joinEnds(t: Trip, path: Spot[]): Spot[] {
+  const first = t.pieces[0]?.path[0];
+  const lastPiece = t.pieces[t.pieces.length - 1]?.path;
+  const last = lastPiece?.[lastPiece.length - 1];
+  const out = [...path];
+  if (first && metres(first, out[0]) > 3) out.unshift(first);
+  if (last && metres(last, out[out.length - 1]) > 3) out.push(last);
+  return out;
 }
 
 // Google's walking route between two spots (Routes API; it has to be allowed on the key).
