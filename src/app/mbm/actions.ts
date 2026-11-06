@@ -287,6 +287,8 @@ export async function moveStop(visitId: string, lat: number, lng: number): Promi
       ]).then((rs) => rs.find((r) => r.error)?.error ?? null)
     : (await client.from("visits").update({ lat, lng }).eq("id", visitId)).error;
   if (moved) return fail(moved.message);
+  // So the phone's next update doesn't move it back (016_locokit.sql; fine if that's not run yet).
+  await client.from("visits").update({ pinned: true }).eq("id", visitId);
   refresh();
   return { ok: true };
 }
@@ -294,7 +296,15 @@ export async function moveStop(visitId: string, lat: number, lng: number): Promi
 // Remove a stop the phone made up (the trips around it join up).
 export async function removeStop(visitId: string): Promise<Result> {
   if (!isUuid(visitId)) return fail("That stop is gone.");
-  const { error } = await (await mbm()).from("visits").delete().eq("id", visitId);
+  const client = await mbm();
+  // A LocoKit stop: remember it's removed, or the phone sends it back (016_locokit.sql).
+  const { data: v } = await client.from("visits").select("lk_id").eq("id", visitId).maybeSingle();
+  const lk = (v as { lk_id?: string | null } | null)?.lk_id;
+  if (lk) {
+    const { error } = await client.from("lk_removed").upsert({ lk_id: lk });
+    if (error) return fail(error.message);
+  }
+  const { error } = await client.from("visits").delete().eq("id", visitId);
   if (error) return fail(error.message);
   refresh();
   return { ok: true };
