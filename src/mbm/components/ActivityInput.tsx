@@ -69,7 +69,7 @@ export default function ActivityInput({
         placeholder={placeholder}
         aria-label={placeholder}
         style={{ outline: "none" }}
-        className={`w-full rounded-control border border-line bg-paper px-3 py-2.5 text-ink placeholder:text-muted/70 focus:border-ink ${trailing ? "pr-24" : ""} ${className}`}
+        className={`w-full rounded-control border border-line bg-paper px-3 py-2.5 text-ink placeholder:text-muted/70 focus:border-ink ${trailing ? "pr-32" : ""} ${className}`}
       />
       {trailing && <div className="absolute right-2 top-1/2 -translate-y-1/2">{trailing}</div>}
       {showing && (

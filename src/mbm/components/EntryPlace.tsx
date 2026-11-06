@@ -64,36 +64,32 @@ export default function EntryPlace({ blockId }: { blockId: string }) {
   const list: PlaceLite[] = info.usual ? [info.usual, ...sorted.filter((p) => p.id !== info.usual!.id)] : sorted;
 
   return (
-    <div className={`rounded-control border border-line px-3 py-2.5 ${pending ? "opacity-60" : ""}`}>
-      <div className="flex items-center justify-between gap-3">
-        <p className="min-w-0 text-sm">
-          <span className="text-muted">Where </span>
-          {info.current ? (
-            <span className="font-semibold text-ink">{info.current.name}</span>
-          ) : near?.name ? (
-            <>
-              <span className="font-semibold text-ink">{near.name}</span>
-              <span className="text-muted"> · from your phone</span>
-            </>
-          ) : (
-            <span className="text-muted">not known</span>
-          )}
-        </p>
-        <button
-          type="button"
-          onClick={() => {
-            setOpen((o) => !o);
-            setMapping(false);
-          }}
-          aria-expanded={open}
-          className="shrink-0 rounded-control px-2.5 py-1 text-sm font-semibold text-accent hover:bg-surface"
-        >
-          {open ? "Done" : info.current ? "Change" : "Set place"}
-        </button>
-      </div>
+    <div className={pending ? "opacity-60" : ""}>
+      {/* A pin and the place; click to change it. (Muted: the phone's guess, not set by you.) */}
+      <button
+        type="button"
+        onClick={() => {
+          setOpen((o) => !o);
+          setMapping(false);
+        }}
+        aria-expanded={open}
+        title={info.current ? "Where this happened" : near?.name ? "Where your phone had you (click to set)" : "Set where this happened"}
+        className="-mx-2 flex max-w-full items-center gap-2 rounded-control px-2 py-1.5 text-sm transition-colors hover:bg-surface"
+      >
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true" className="shrink-0 text-accent">
+          <path d="M12 21s-6.5-5.6-6.5-11A6.5 6.5 0 0 1 18.5 10c0 5.4-6.5 11-6.5 11Z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
+          <circle cx="12" cy="10" r="2.3" fill="currentColor" />
+        </svg>
+        <span className={`truncate ${info.current ? "font-semibold text-ink" : near?.name ? "text-ink" : "text-muted"}`}>
+          {info.current?.name ?? near?.name ?? "Add a place"}
+        </span>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true" className={`shrink-0 text-muted transition-transform ${open ? "rotate-180" : ""}`}>
+          <path d="M6 9l6 6 6-6" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      </button>
 
       {open && (
-        <div className="mt-3 flex flex-col gap-3">
+        <div className="mt-2 flex flex-col gap-3 rounded-control border border-line p-3">
           {list.length > 0 && (
             <div className="flex flex-wrap gap-1.5">
               {list.map((p) => {

@@ -44,6 +44,14 @@ export default function EntryPanel({
     const dayStart = +new Date(day.start);
     const dayEnd = +new Date(day.end);
     const until = Math.min(day.loadedAt, dayEnd);
+    // The day's other entries: their starts and ends are handy times to snap to.
+    const others = day.blocks
+      .filter((b) => b.id !== blockId)
+      .map((b) => ({
+        name: (b.activity_id && byId.get(b.activity_id)?.name) || "an entry",
+        start: Math.max(dayStart, +new Date(b.started_at)),
+        end: b.ended_at ? Math.min(+new Date(b.ended_at), dayEnd) : null,
+      }));
     if (editing && !block) body = <p className="text-sm text-muted">That entry is gone.</p>;
     else if (block) {
       body = (
@@ -54,6 +62,7 @@ export default function EntryPanel({
           block={block}
           from={Math.max(dayStart, +new Date(block.started_at))}
           to={block.ended_at ? Math.min(+new Date(block.ended_at), dayEnd) : null}
+          others={others}
           onDone={onClose}
         />
       );
@@ -69,6 +78,7 @@ export default function EntryPanel({
           activities={day.activities}
           from={from}
           to={to}
+          others={others}
           onDone={onClose}
         />
       );
