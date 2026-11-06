@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type PointerEvent, type ReactNode } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type PointerEvent, type ReactNode } from "react";
 import type { Activity, Block } from "@/mbm/data";
 import { clock, span, zonedTime } from "@/mbm/time";
 import type { Placed } from "./segments";
@@ -123,12 +123,45 @@ export default function DayBar({
   // Time marks for what's on screen: labels and faint lines, finer as you zoom in. Placed by
   // the real clock time, so daylight-saving days still line up.
   const { labels, lines } = marksFor(dayKey, tz, dayStart, dayEnd, from, to);
-  // The same height however many entries overlap: an entry fills it, except while others overlap
-  // it, when they share it (each in its own row).
-  const height = compact ? 56 : 72;
-  const pieces = useMemo(() => slice(placed), [placed]);
+  // The bar: your main entries as rounded pills with small gaps between them. Something running
+  // alongside (+ Start) goes in a thin strip under the bar instead of squashing it.
+  const height = compact ? 48 : 64;
+  const main = placed.filter((p) => p.lane === 0);
+  const side = placed.filter((p) => p.lane > 0);
+  const sideRows = Math.max(0, ...side.map((p) => p.lane));
+  // Left / width of a pill, with a 1px gap each side (never thinner than 2px).
+  const pill = (start: number, end: number) => {
+    const l = at(start);
+    const w = at(end) - l;
+    return { left: `calc(${l}% + 1px)`, width: `max(calc(${w}% - 2px), 2px)` };
+  };
 
   const nameOf = (b: Block) => (b.activity_id ? byId.get(b.activity_id) : undefined);
+  // One entry: hover for what it was, click to change it.
+  // (A plain function, not a component, so the pills aren't re-made on every hover.)
+  const entry = (p: Placed, style: CSSProperties, round: string) => {
+    const a = nameOf(p.block);
+    const label = `${a?.name ?? "Something"}, ${clock(new Date(p.start), tz)} to ${p.block.ended_at ? clock(new Date(p.end), tz) : "now"}`;
+    const cls = `absolute ${round} transition-[filter,box-shadow] ${p.block.confirmed ? "" : "opacity-60"} ${
+      hover?.block?.id === p.block.id ? "shadow-md brightness-110" : ""
+    }`;
+    const look = { ...style, background: a?.color ?? "#a98467" };
+    return onSelect ? (
+      <button
+        key={p.block.id}
+        type="button"
+        aria-label={label}
+        onMouseEnter={() => setHover(p)}
+        onFocus={() => setHover(p)}
+        onBlur={() => setHover(null)}
+        onClick={() => onSelect(p.block)}
+        className={cls}
+        style={look}
+      />
+    ) : (
+      <div key={p.block.id} aria-label={label} onMouseEnter={() => setHover(p)} className={cls} style={look} />
+    );
+  };
   // Middle of the part of it that's on screen.
   const hoverMid = hover ? at((Math.max(hover.start, from) + Math.min(hover.end, to)) / 2) : 0;
   // The bubble sits over the tail, sliding sideways near the ends so it stays on screen
@@ -178,7 +211,7 @@ export default function DayBar({
 
       <div
         ref={barRef}
-        className={`relative overflow-hidden rounded-control bg-surface/60 ring-1 ring-line ${zoomed ? "cursor-grab touch-pan-y active:cursor-grabbing" : ""}`}
+        className={`relative overflow-hidden rounded-control bg-paper ring-1 ring-line ${zoomed ? "cursor-grab touch-pan-y active:cursor-grabbing" : ""}`}
         style={{ height }}
         onMouseLeave={() => setHover(null)}
         onPointerDown={onPointerDown}
@@ -194,8 +227,8 @@ export default function DayBar({
       >
         {/* Untracked: striped, full height. The rest of today (not happened yet): plain. */}
         {gaps.map((g) => {
-          const cls = "absolute inset-y-0 bg-[repeating-linear-gradient(135deg,var(--line)_0_6px,transparent_6px_12px)] bg-paper";
-          const style = { left: `${at(g.start)}%`, width: `${at(g.end) - at(g.start)}%` };
+          const cls = "absolute inset-y-[3px] rounded-[6px] bg-[repeating-linear-gradient(135deg,var(--line)_0_6px,transparent_6px_12px)] bg-paper";
+          const style = pill(g.start, g.end);
           return onSelectGap ? (
             <button
               key={g.start}
@@ -213,41 +246,11 @@ export default function DayBar({
           );
         })}
         {now < dayEnd && <div className="absolute inset-y-0 right-0 bg-paper" style={{ left: `${Math.max(0, at(now))}%` }} />}
-        {pieces.map(({ p, start, end, row, rows, last }) => {
-          const a = nameOf(p.block);
-          const style = {
-            left: `${at(start)}%`,
-            width: `${at(end) - at(start)}%`,
-            top: `${(row / rows) * 100}%`,
-            height: `${100 / rows}%`,
-            background: a?.color ?? "#a98467",
-          };
-          const cls = `absolute border-paper/70 transition-[filter] ${last ? "border-r" : ""} ${rows > 1 ? "border-b" : ""} ${
-            p.block.confirmed ? "" : "opacity-60"
-          } ${hover?.block?.id === p.block.id ? "brightness-110" : ""}`;
-          const label = `${a?.name ?? "Something"}, ${clock(new Date(p.start), tz)} to ${p.block.ended_at ? clock(new Date(p.end), tz) : "now"}`;
-          const key = `${p.block.id}-${start}`;
-          return onSelect ? (
-            <button
-              key={key}
-              type="button"
-              aria-label={label}
-              tabIndex={start === p.start ? 0 : -1}
-              onMouseEnter={() => setHover(p)}
-              onFocus={() => setHover(p)}
-              onBlur={() => setHover(null)}
-              onClick={() => onSelect(p.block)}
-              className={cls}
-              style={style}
-            />
-          ) : (
-            <div key={key} aria-label={label} onMouseEnter={() => setHover(p)} className={cls} style={style} />
-          );
-        })}
+        {main.map((p) => entry(p, { ...pill(p.start, p.end), top: 3, bottom: 3 }, "rounded-[6px]"))}
         {/* Faint lines at the time marks. */}
         {!compact &&
           lines.map((t) => (
-            <div key={t} aria-hidden="true" className="pointer-events-none absolute inset-y-0 z-10 w-px bg-ink/10" style={{ left: `${at(t)}%` }} />
+            <div key={t} aria-hidden="true" className="pointer-events-none absolute inset-y-0 z-10 w-px bg-paper/25 mix-blend-overlay" style={{ left: `${at(t)}%` }} />
           ))}
         {/* What you're pointing at on the map. */}
         {marks?.map((m, i) => {
@@ -258,13 +261,20 @@ export default function DayBar({
             <div
               key={i}
               aria-hidden="true"
-              className="pointer-events-none absolute inset-y-0 z-10 rounded-[4px] bg-ink/15 ring-2 ring-inset ring-ink"
+              className="pointer-events-none absolute inset-y-0 z-10 rounded-[7px] bg-ink/10 ring-2 ring-inset ring-ink"
               style={{ left: `${left}%`, width: `max(${right - left}%, 3px)` }}
             />
           );
         })}
-                {showNow && <div aria-hidden="true" className="pointer-events-none absolute inset-y-0 z-20 w-0.5 -translate-x-1/2 bg-ink" style={{ left: `${at(now)}%` }} />}
+        {showNow && <div aria-hidden="true" className="pointer-events-none absolute inset-y-0 z-20 w-0.5 -translate-x-1/2 bg-ink" style={{ left: `${at(now)}%` }} />}
       </div>
+
+      {/* Running alongside (+ Start): a thin strip per extra row, under the bar. */}
+      {sideRows > 0 && (
+        <div className="relative mt-1 overflow-hidden" style={{ height: sideRows * 10 - 2 }} onMouseLeave={() => setHover(null)}>
+          {side.map((p) => entry(p, { ...pill(p.start, p.end), top: (p.lane - 1) * 10, height: 8 }, "rounded-full"))}
+        </div>
+      )}
 
       {!compact && (
         <div className="relative mt-1 h-4 overflow-hidden text-[11px] text-muted">
@@ -362,29 +372,4 @@ function timeLabel(m: number) {
   const mm = m % 60;
   const hr = h % 12 === 0 ? 12 : h % 12;
   return `${hr}${mm ? `:${String(mm).padStart(2, "0")}` : ""}${h < 12 ? "a" : "p"}`;
-}
-
-// Entries cut into pieces where the number overlapping changes. In each piece, the entries going
-// on share the height, in lane order (so an entry stays in the same row while it overlaps).
-type Piece = { p: Placed; start: number; end: number; row: number; rows: number; last: boolean };
-function slice(placed: Placed[]): Piece[] {
-  const cuts = [...new Set(placed.flatMap((p) => [p.start, p.end]))].sort((a, b) => a - b);
-  const out: Piece[] = [];
-  const open = new Map<string, Piece>(); // the piece each entry is in, while it carries on unchanged
-  for (let i = 0; i < cuts.length - 1; i++) {
-    const [a, b] = [cuts[i], cuts[i + 1]];
-    const on = placed.filter((p) => p.start < b && p.end > a).sort((x, y) => x.lane - y.lane);
-    on.forEach((p, row) => {
-      const prev = open.get(p.block.id);
-      if (prev && prev.end === a && prev.row === row && prev.rows === on.length) {
-        prev.end = b; // same row, same company: just longer
-      } else {
-        const piece = { p, start: a, end: b, row, rows: on.length, last: false };
-        out.push(piece);
-        open.set(p.block.id, piece);
-      }
-    });
-  }
-  for (const piece of out) piece.last = piece.end === piece.p.end;
-  return out;
 }
