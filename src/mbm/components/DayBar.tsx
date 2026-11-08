@@ -42,7 +42,7 @@ export default function DayBar({
   onSelectGap?: (gap: { start: number; end: number }) => void; // click untracked time to fill it in
   onHover?: (span: { start: number; end: number; block?: Block } | null) => void;
   marks?: { start: number; end: number }[] | null; // outlined (what you're hovering on the map) // what's hovered (the map lights it up)
-  phone?: PhoneUse[]; // when you used your phone (a thin line under the bar)
+  phone?: PhoneUse[]; // apps you used (a thin line under the bar)
   compact?: boolean; // the home page's smaller version
 }) {
   // What the bubble is about: an entry, or an untracked stretch.
@@ -302,6 +302,7 @@ export default function DayBar({
   };
   // Phone use on screen: a minute or longer, cut to the day.
   const phoneShown = phone
+    .filter((u) => u.kind === "app")
     .map((u) => ({ ...u, start: Math.max(dayStart, +new Date(u.started_at)), end: Math.min(dayEnd, u.ended_at ? +new Date(u.ended_at) : now) }))
     .filter((u) => u.end - u.start >= 60_000 && u.end > from && u.start < to);
   // Middle of the part of it that's on screen.
@@ -440,8 +441,8 @@ export default function DayBar({
         </div>
       )}
 
-      {/* Using your phone: a thin line under the bar. Light: phone unlocked; dark: an app open
-          (hover for which). Under a minute isn't shown. Read only: these aren't entries. */}
+      {/* Apps you used: a thin line under the bar (hover for which). Under a minute isn't
+          shown. Read only: these aren't entries. */}
       {phoneShown.length > 0 && (
         <div className="relative mt-1 h-1.5 overflow-hidden" onMouseLeave={() => setHoverState(null)}>
           {phoneShown.map((u) => (
@@ -449,7 +450,7 @@ export default function DayBar({
               key={u.id}
               aria-label={`${u.kind === "app" ? (u.app ?? "An app") : "On your phone"}, ${clock(new Date(u.start), tz)} to ${u.ended_at ? clock(new Date(u.end), tz) : "now"}`}
               onMouseEnter={() => setHoverState({ start: u.start, end: u.end, phone: u })}
-              className={`absolute inset-y-0 rounded-full ${u.kind === "app" ? "z-[1] bg-ink/60" : "bg-ink/20"} ${
+              className={`absolute inset-y-0 rounded-full bg-ink/50 ${
                 hover?.phone?.id === u.id ? "brightness-75" : ""
               }`}
               style={{ left: `${at(u.start)}%`, width: `max(${at(u.end) - at(u.start)}%, 2px)` }}
