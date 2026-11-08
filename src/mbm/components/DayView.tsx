@@ -48,6 +48,7 @@ export default function DayView({ day, today, renderedAt }: { day: Day; today: b
             byId={byId}
             onSelect={(b) => openMbm({ kind: "edit", dayKey: day.dayKey, blockId: b.id })}
             marks={marks}
+            phone={day.phone}
             onHover={(h) =>
               setFocus(
                 h && {

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type CSSProperties, type PointerEvent, type ReactNode } from "react";
-import type { Activity, Block } from "@/mbm/data";
+import type { Activity, Block, PhoneUse } from "@/mbm/data";
 import { clock, span, zonedTime } from "@/mbm/time";
 import type { Placed } from "./segments";
 import { retimeBlocks } from "@/app/mbm/actions";
@@ -25,6 +25,7 @@ export default function DayBar({
   onSelectGap,
   onHover,
   marks = null,
+  phone = [],
   compact = false,
 }: {
   placed: Placed[];
@@ -41,10 +42,11 @@ export default function DayBar({
   onSelectGap?: (gap: { start: number; end: number }) => void; // click untracked time to fill it in
   onHover?: (span: { start: number; end: number; block?: Block } | null) => void;
   marks?: { start: number; end: number }[] | null; // outlined (what you're hovering on the map) // what's hovered (the map lights it up)
+  phone?: PhoneUse[]; // when you used your phone (a thin line under the bar)
   compact?: boolean; // the home page's smaller version
 }) {
   // What the bubble is about: an entry, or an untracked stretch.
-  const [hover, setHoverState] = useState<{ start: number; end: number; block?: Block } | null>(null);
+  const [hover, setHoverState] = useState<{ start: number; end: number; block?: Block; phone?: PhoneUse } | null>(null);
   const setHover = (h: { start: number; end: number; block?: Block } | null) => {
     setHoverState(h);
     onHover?.(h && { start: h.start, end: h.end, block: h.block });
@@ -298,6 +300,10 @@ export default function DayBar({
       <div key={p.block.id} aria-label={label} onMouseEnter={() => setHover(p)} className={cls} style={look} />
     );
   };
+  // Phone use on screen: a minute or longer, cut to the day.
+  const phoneShown = phone
+    .map((u) => ({ ...u, start: Math.max(dayStart, +new Date(u.started_at)), end: Math.min(dayEnd, u.ended_at ? +new Date(u.ended_at) : now) }))
+    .filter((u) => u.end - u.start >= 60_000 && u.end > from && u.start < to);
   // Middle of the part of it that's on screen.
   const hoverMid = hover ? at((Math.max(hover.start, from) + Math.min(hover.end, to)) / 2) : 0;
   // The bubble sits over the tail, sliding sideways near the ends so it stays on screen
@@ -324,7 +330,14 @@ export default function DayBar({
           className="pointer-events-none absolute bottom-full z-30 mb-2.5 w-max max-w-[16rem] rounded-control bg-accent px-3 py-2 text-accent-ink shadow-lg shadow-ink/25"
           style={{ left: `${hoverMid}%`, transform: `translateX(-${slide}%)` }}
         >
-          {hover.block ? (
+          {hover.phone ? (
+            <>
+              <p className="text-sm font-semibold">{hover.phone.kind === "app" ? (hover.phone.app ?? "An app") : "On your phone"}</p>
+              <p className="num text-xs opacity-80">
+                {clock(new Date(hover.start), tz)} – {hover.phone.ended_at ? clock(new Date(hover.end), tz) : "now"} · {span(hover.end - hover.start)}
+              </p>
+            </>
+          ) : hover.block ? (
             <>
               <p className="flex items-center gap-1.5 text-sm font-semibold">
                 <span className="size-2 rounded-full ring-1 ring-accent-ink/40" style={{ background: nameOf(hover.block)?.color ?? "#a98467" }} />
@@ -424,6 +437,24 @@ export default function DayBar({
       {sideRows > 0 && (
         <div className="relative mt-1 overflow-hidden" style={{ height: sideRows * 10 - 2 }} onMouseLeave={() => setHover(null)}>
           {side.map((p) => entry(p, { ...pill(p.start, p.end), top: (p.lane - 1) * 10, height: 8 }, "rounded-full"))}
+        </div>
+      )}
+
+      {/* Using your phone: a thin line under the bar. Light: phone unlocked; dark: an app open
+          (hover for which). Under a minute isn't shown. Read only: these aren't entries. */}
+      {phoneShown.length > 0 && (
+        <div className="relative mt-1 h-1.5 overflow-hidden" onMouseLeave={() => setHoverState(null)}>
+          {phoneShown.map((u) => (
+            <div
+              key={u.id}
+              aria-label={`${u.kind === "app" ? (u.app ?? "An app") : "On your phone"}, ${clock(new Date(u.start), tz)} to ${u.ended_at ? clock(new Date(u.end), tz) : "now"}`}
+              onMouseEnter={() => setHoverState({ start: u.start, end: u.end, phone: u })}
+              className={`absolute inset-y-0 rounded-full ${u.kind === "app" ? "z-[1] bg-ink/60" : "bg-ink/20"} ${
+                hover?.phone?.id === u.id ? "brightness-75" : ""
+              }`}
+              style={{ left: `${at(u.start)}%`, width: `max(${at(u.end) - at(u.start)}%, 2px)` }}
+            />
+          ))}
         </div>
       )}
 

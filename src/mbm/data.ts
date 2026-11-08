@@ -23,6 +23,8 @@ export type Visit = {
   place: string | null; // the name you gave it
   auto_name: string | null; // the name your phone found (e.g. "Noland Hall")
 };
+// Using your phone (018_phone_use.sql): unlocked → locked ('phone'), or one app open ('app').
+export type PhoneUse = { id: string; kind: "phone" | "app"; app: string | null; started_at: string; ended_at: string | null };
 export type RoutePoint = { at: string; lat: number; lng: number; accuracy_m?: number | null; motion?: string | null };
 
 export type Day = {
@@ -35,6 +37,7 @@ export type Day = {
   running: Block[]; // what's going on right now (can be more than one)
   visits: Visit[]; // stops that day
   points: RoutePoint[]; // the route between them
+  phone: PhoneUse[]; // when you used your phone, and which app
   loadedAt: number; // when the server read it (the live clock starts from here)
 };
 
@@ -68,9 +71,16 @@ export async function getDay(dayKey: string): Promise<Day> {
       .lt("arrived_at", end.toISOString())
       .or(`departed_at.is.null,departed_at.gt.${start.toISOString()}`)
       .order("arrived_at");
-  const [firstVisits, pointRows] = await Promise.all([
+  const [firstVisits, pointRows, phoneRows] = await Promise.all([
     visitsOn("id, arrived_at, departed_at, lat, lng, auto_name, places(name, lat, lng)"),
     client.from("points").select("*").gte("at", start.toISOString()).lt("at", end.toISOString()).order("at").limit(5000),
+    client
+      .from("phone_use")
+      .select("id, kind, app, started_at, ended_at")
+      .lt("started_at", end.toISOString())
+      .or(`ended_at.is.null,ended_at.gt.${start.toISOString()}`)
+      .order("started_at")
+      .limit(3000),
   ]);
   const visitRows = firstVisits.error ? await visitsOn("id, arrived_at, departed_at, lat, lng, places(name)") : firstVisits; // 006 not run yet
   type PlaceRow = { name: string; lat?: number; lng?: number };
@@ -85,6 +95,7 @@ export async function getDay(dayKey: string): Promise<Day> {
         return { ...v, ...pin, auto_name: v.auto_name ?? null, place: place?.name ?? null };
       });
   const points: RoutePoint[] = pointRows.error ? [] : (pointRows.data as RoutePoint[]);
+  const phone: PhoneUse[] = phoneRows.error ? [] : (phoneRows.data as PhoneUse[]); // (018 not run yet: none)
 
   const error = blocks.error ?? activities.error ?? running.error;
   if (error) {
@@ -104,6 +115,7 @@ export async function getDay(dayKey: string): Promise<Day> {
     running: running.data as Block[],
     visits,
     points,
+    phone,
     loadedAt: Date.now(),
   };
 }
