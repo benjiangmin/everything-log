@@ -14,9 +14,8 @@ export const metadata = { title: "Day" };
 export default function MbmDayPage(props: PageProps<"/mbm/day">) {
   return (
     // Wide: the day bar gets about 90% of the screen.
-    <main className="mx-auto w-full px-4 pb-24 pt-6 sm:w-[92%] sm:px-0 sm:pt-8">
-      {/* The "Day" screen starts here (the page snaps between it and the map). */}
-      <div data-screen="day" className="snap-start scroll-mt-10" />
+    // Fills the window under the top bar: the day bar, then the map taking the rest.
+    <main className="mx-auto flex min-h-[calc(100dvh-4rem)] w-full flex-col px-4 pb-5 pt-4 sm:w-[92%] sm:px-0">
       <Suspense fallback={<Skeleton />}>
         {props.searchParams.then((sp) => (
           <MbmDay day={typeof sp.day === "string" ? sp.day : undefined} />
@@ -40,14 +39,14 @@ async function MbmDay({ day: asked }: { day?: string }) {
   const day = await getDay(dayKey).catch((e: Error) => e);
   if (day instanceof Error) return <p className="rounded-card bg-surface px-5 py-4 text-sm text-danger">{day.message}</p>;
 
-  const arrow = "grid size-10 place-items-center rounded-control transition-colors hover:bg-accent-ink/10";
+  const arrow = "grid size-9 place-items-center rounded-control transition-colors hover:bg-surface";
   return (
     <>
-      <header className="mb-5 flex items-center gap-3 rounded-card bg-accent px-5 py-4 text-accent-ink shadow-lg shadow-ink/15">
-        <div className="min-w-0 flex-1">
-          <h1 className="font-display text-2xl font-semibold tracking-tight sm:text-3xl">{isToday ? "Today" : dayTitle(dayKey)}</h1>
-          <p className="text-sm opacity-70">{isToday ? dayTitle(dayKey) : "Minute by minute"}</p>
-        </div>
+      <header className="mb-3 flex items-center gap-3">
+        <h1 className="min-w-0 flex-1 truncate font-display text-2xl font-semibold tracking-tight">
+          {isToday ? "Today" : dayTitle(dayKey)}
+          {isToday && <span className="ml-2 text-base font-normal text-muted">{dayTitle(dayKey)}</span>}
+        </h1>
         <nav aria-label="Days" className="flex items-center gap-1">
           <Link href={`/mbm/day?day=${shiftDay(dayKey, -1)}`} aria-label="The day before" className={arrow}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -55,7 +54,7 @@ async function MbmDay({ day: asked }: { day?: string }) {
             </svg>
           </Link>
           {!isToday && (
-            <Link href="/mbm/day" className="rounded-control px-3 py-2 text-sm font-semibold transition-colors hover:bg-accent-ink/10">
+            <Link href="/mbm/day" className="rounded-control px-3 py-2 text-sm font-semibold transition-colors hover:bg-surface">
               Today
             </Link>
           )}
