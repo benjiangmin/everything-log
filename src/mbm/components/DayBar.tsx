@@ -386,9 +386,12 @@ export default function DayBar({
           e.preventDefault();
         }}
       >
+        {/* Everything sits 3px in from the bar's edge on all sides, so the pills never touch it
+            (their corners follow the bar's: 12px outside, 9px inside). */}
+        <div className="absolute inset-[3px]">
         {/* Untracked: striped, full height. The rest of today (not happened yet): plain. */}
         {gaps.map((g) => {
-          const cls = "absolute inset-y-[3px] rounded-[6px] bg-[repeating-linear-gradient(135deg,var(--line)_0_6px,transparent_6px_12px)] bg-paper";
+          const cls = "absolute inset-y-0 rounded-[9px] bg-[repeating-linear-gradient(135deg,var(--line)_0_6px,transparent_6px_12px)] bg-paper";
           const style = pill(g.start, g.end);
           return onSelectGap ? (
             <button
@@ -407,7 +410,7 @@ export default function DayBar({
           );
         })}
         {now < dayEnd && <div className="absolute inset-y-0 right-0 bg-paper" style={{ left: `${Math.max(0, at(now))}%` }} />}
-        {main.map((p) => entry(p, { ...pill(p.start, p.end), top: 3, bottom: 3 }, "rounded-[6px]", resizable))}
+        {main.map((p) => entry(p, { ...pill(p.start, p.end), top: 0, bottom: 0 }, "rounded-[9px]", resizable))}
         {/* While dragging an edge: a line where it'll go. */}
         {edge && <div aria-hidden="true" className="pointer-events-none absolute inset-y-0 z-30 w-0.5 -translate-x-1/2 bg-ink" style={{ left: `${at(edge.at)}%` }} />}
         {/* Faint lines at the time marks. */}
@@ -424,12 +427,13 @@ export default function DayBar({
             <div
               key={i}
               aria-hidden="true"
-              className="pointer-events-none absolute inset-y-0 z-10 rounded-[7px] bg-ink/10 ring-2 ring-inset ring-ink"
+              className="pointer-events-none absolute inset-y-0 z-10 rounded-[9px] bg-ink/10 ring-2 ring-inset ring-ink"
               style={{ left: `${left}%`, width: `max(${right - left}%, 3px)` }}
             />
           );
         })}
         {showNow && <div aria-hidden="true" className="pointer-events-none absolute inset-y-0 z-20 w-0.5 -translate-x-1/2 bg-ink" style={{ left: `${at(now)}%` }} />}
+        </div>
       </div>
 
       {edgeError && <p className="mt-1 text-xs text-danger">{edgeError}</p>}

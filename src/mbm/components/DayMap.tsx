@@ -67,19 +67,23 @@ export default function DayMap({
         </p>
       ) : (
         // isolate: keeps the map's own layers under the page's popups and panels.
-        <div className="relative isolate min-h-0 flex-1 border-t border-line">
-          <Inner
-            visits={day.visits}
-            points={day.points}
-            blocks={day.blocks}
-            activities={day.activities}
-            tz={day.tz}
-            focus={focus}
-            showDots={showDots}
-            liveColor={liveColor}
-            onPointer={onPointer}
-            gestures={gestures}
-          />
+        // The map fills this box exactly (absolute: the box's height comes from the page's layout,
+        // which a plain height: 100% can't follow, and the map would come out 0 px tall).
+        <div className="relative isolate min-h-[24rem] flex-1 border-t border-line">
+          <div className="absolute inset-0">
+            <Inner
+              visits={day.visits}
+              points={day.points}
+              blocks={day.blocks}
+              activities={day.activities}
+              tz={day.tz}
+              focus={focus}
+              showDots={showDots}
+              liveColor={liveColor}
+              onPointer={onPointer}
+              gestures={gestures}
+            />
+          </div>
         </div>
       )}
     </section>
