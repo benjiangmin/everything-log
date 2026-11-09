@@ -540,6 +540,7 @@ function FitTo({ spots }: { spots: Spot[] }) {
   return null;
 }
 
+// (Google's popup pads only its left side; the extra right padding below evens it out.)
 function NameStop({ visit, tz, onDone, onMove }: { visit: Visit; tz: string; onDone: () => void; onMove: () => void }) {
   const [name, setName] = useState(visit.place ?? visit.auto_name ?? "");
   const confirm = useConfirm();
@@ -556,7 +557,7 @@ function NameStop({ visit, tz, onDone, onMove }: { visit: Visit; tz: string; onD
           else setMessage(res.message);
         })
       }}
-      className="flex w-60 flex-col gap-2 p-1 font-sans"
+      className="flex w-60 flex-col gap-2 p-1 pr-4 font-sans"
     >
       <p className="text-xs text-[#86705f]">
         {clock(visit.arrived_at, tz)} – {visit.departed_at ? clock(visit.departed_at, tz) : "now"}

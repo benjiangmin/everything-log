@@ -61,10 +61,19 @@ export async function dayData(dayKey: string): Promise<{ ok: true; day: Day } | 
 
 // Find-or-create by name; a new one gets the next color in the palette.
 async function activityId(client: Awaited<ReturnType<typeof mbm>>, name: string) {
+  await matchCase(client, name);
   const { count } = await client.from("activities").select("id", { count: "exact", head: true });
   const { data, error } = await client.rpc("activity_id_for", { p_name: name, p_color: PALETTE[(count ?? 0) % PALETTE.length] });
   if (error) throw new Error(error.message);
   return data as string;
+}
+
+// You typed a name that only differs in capitals from one you have ("Working on this project"
+// vs "working on this project"): it's the same activity, renamed to how you typed it now.
+async function matchCase(client: Awaited<ReturnType<typeof mbm>>, name: string) {
+  const { data } = await client.from("activities").select("id, name");
+  const same = (data ?? []).find((a) => a.name.trim().toLowerCase() === name.toLowerCase() && a.name.trim() !== name);
+  if (same) await client.from("activities").update({ name }).eq("id", same.id);
 }
 
 const cleanName = (n: unknown) => String(n ?? "").replace(/\s+/g, " ").trim().slice(0, 60);
@@ -80,7 +89,9 @@ export async function startEntry(input: { name: string; since: "last" | "now" | 
   if (!activity) return fail("What are you doing?");
   const since = input.since === "last" || input.since === "now" ? input.since : new Date(input.since);
   if (since instanceof Date && (Number.isNaN(since.getTime()) || since.getTime() > Date.now() + 60000)) return fail("That time doesn't look right.");
-  const { error } = await (await mbm()).rpc("start_entry", {
+  const client = await mbm();
+  await matchCase(client, activity);
+  const { error } = await client.rpc("start_entry", {
     p_name: activity,
     p_since: since instanceof Date ? since.toISOString() : since,
     p_switch: input.stopRunning,
