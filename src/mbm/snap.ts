@@ -3,7 +3,8 @@ import { decodePolyline, metres, type Spot } from "./trips";
 // Snaps a stretch of GPS dots onto real walkways and roads ("map matching"), so it follows the
 // paths you actually took instead of cutting straight across fields. Only stretches the phone
 // actually recorded are snapped (gaps it missed stay dashed: never a made-up solid line), and a
-// match is only used if it stays close to every dot and isn't a detour. Uses Valhalla on the
+// match is used unless it's plainly a different route (far from your dots, or a long detour), so
+// walks are snapped every time. Uses Valhalla on the
 // OpenStreetMap community's public server (free, no account; it knows campus footpaths).
 // Answers are kept in this browser, so each stretch is only sent once. Returns null if it can't
 // (offline, server busy, or a match that looks wrong): then the map just draws your dots.
@@ -19,7 +20,7 @@ export async function snapPath(path: Spot[], pace: number | null): Promise<Spot[
 
   const step = Math.ceil(raw.length / MAX_POINTS);
   const shape = raw.filter((_, i) => i % step === 0 || i === raw.length - 1);
-  const id = `mbm-snap:v3:${shape.length}:${shape[0].lat.toFixed(5)},${shape[0].lng.toFixed(5)}:${shape[shape.length - 1].lat.toFixed(5)},${shape[shape.length - 1].lng.toFixed(5)}`;
+  const id = `mbm-snap:v4:${shape.length}:${shape[0].lat.toFixed(5)},${shape[0].lng.toFixed(5)}:${shape[shape.length - 1].lat.toFixed(5)},${shape[shape.length - 1].lng.toFixed(5)}`;
   try {
     const kept = localStorage.getItem(id);
     if (kept) return kept === "none" ? null : (JSON.parse(kept) as Spot[]);
@@ -34,19 +35,18 @@ export async function snapPath(path: Spot[], pace: number | null): Promise<Spot[
         costing: (pace ?? 0) > 5 ? "bus" : "pedestrian", // faster than ~18 km/h: a bus (or car; bus lanes allowed)
         shape_match: "map_snap",
         directions_type: "none",
-        trace_options: { search_radius: 30, gps_accuracy: 15, breakage_distance: 300, turn_penalty_factor: 500 },
+        trace_options: { search_radius: 40, gps_accuracy: 15, breakage_distance: 300, turn_penalty_factor: 500 },
       }),
     });
     if (!res.ok) return remember(id, null, res.status === 400); // 400: it can't match this one, don't ask again
     const body = (await res.json()) as { trip?: { legs?: { shape?: string }[] } };
     const matched = (body.trip?.legs ?? []).flatMap((l) => (l.shape ? decodePolyline(l.shape, 6) : []));
     if (matched.length < 2) return remember(id, null, true);
-    // Only if it's really your route: not much longer than the dots (no detours), and close to
-    // every one of them.
+    // Unless it's plainly not your route: much longer than the dots (a detour), or far from one.
     let len = 0;
     for (let i = 1; i < matched.length; i++) len += metres(matched[i - 1], matched[i]);
-    if (len > length * 1.3 + 60) return remember(id, null, true);
-    if (raw.some((d) => distanceToPath(d, matched) > 40)) return remember(id, null, true);
+    if (len > length * 1.8 + 150) return remember(id, null, true);
+    if (raw.some((d) => distanceToPath(d, matched) > 75)) return remember(id, null, true);
     return remember(id, matched, true);
   } catch {
     return null; // offline: try again next time

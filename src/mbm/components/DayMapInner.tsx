@@ -9,6 +9,7 @@ import { clock, span } from "@/mbm/time";
 import { HtmlMarker, KEY, stylesFor } from "./mapBits";
 import { buildTrips, decodePolyline, metres, type Piece, type Spot, type Trip } from "@/mbm/trips";
 import { snapPath } from "@/mbm/snap";
+import { nearOutline } from "@/mbm/buildings";
 import { isMoving } from "@/mbm/moving";
 
 // The stretch you're hovering on the day bar. moving: light up the route (Commute); still: the
@@ -107,6 +108,8 @@ export default function DayMapInner({
   }
 
   const all: Spot[] = [...points, ...visits].map((s) => ({ lat: s.lat, lng: s.lng }));
+  // Dots recorded inside a stop's building are you inside it: not shown.
+  const outdoorDots = points.filter((p) => !visits.some((v) => nearOutline(v.outline, p.lat, p.lng, 0)));
 
   return (
     <div ref={box} className="relative size-full" onMouseLeave={() => pointed && point(null)}>
@@ -141,7 +144,9 @@ export default function DayMapInner({
       >
         <FitTo spots={all} top={topCover} />
         <PointerTrack trips={trips} onHit={(hit, e) => point(hit.length ? { trips: hit, stops: [], ...where(e) } : null)} />
-        {showDots && <Dots points={points} tz={tz} />}
+        {showDots && <Dots points={outdoorDots} tz={tz} />}
+        {/* The building you were in, lit up while you hover the stop (here or on the day bar). */}
+        {visits.map((v) => (v.outline && lit?.stops.has(v.id) ? <Building key={`b-${v.id}`} outline={v.outline} /> : null))}
         {trips.map((t) => {
           const on = lit?.trip.has(t.key) ?? false;
           return (
@@ -498,6 +503,28 @@ function Route({ path, dashed, lit, faded }: { path: Spot[]; dashed: boolean; li
     });
     return () => line.setMap(null);
   }, [map, maps, path, dashed, lit, faded]);
+  return null;
+}
+
+// A building's outline, filled in.
+function Building({ outline }: { outline: [number, number][] }) {
+  const map = useMap();
+  const maps = useMapsLibrary("maps");
+  useEffect(() => {
+    if (!map || !maps) return;
+    const shape = new maps.Polygon({
+      map,
+      paths: outline.map(([lat, lng]) => ({ lat, lng })),
+      strokeColor: "#3e281b",
+      strokeOpacity: 0.9,
+      strokeWeight: 2,
+      fillColor: "#d4a373",
+      fillOpacity: 0.45,
+      clickable: false,
+      zIndex: 0,
+    });
+    return () => shape.setMap(null);
+  }, [map, maps, outline]);
   return null;
 }
 

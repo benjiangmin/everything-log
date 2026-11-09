@@ -300,6 +300,13 @@ export async function moveStop(visitId: string, lat: number, lng: number): Promi
   if (moved) return fail(moved.message);
   // So the phone's next update doesn't move it back (016_locokit.sql; fine if that's not run yet).
   await client.from("visits").update({ pinned: true }).eq("id", visitId);
+  // Moved: its building is looked up again at the new spot (021_buildings.sql; fine if not run).
+  if (placeId) {
+    await client.from("places").update({ outline: null }).eq("id", placeId);
+    await client.from("visits").update({ outline: null, outline_checked: false }).eq("place_id", placeId);
+  } else {
+    await client.from("visits").update({ outline: null, outline_checked: false }).eq("id", visitId);
+  }
   refresh();
   return { ok: true };
 }

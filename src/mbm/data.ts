@@ -1,4 +1,5 @@
 import "server-only";
+import { buildingAt, type Outline } from "./buildings";
 import { mbm } from "./supabase";
 import { DEFAULT_TZ, dayRange } from "./time";
 
@@ -23,6 +24,7 @@ export type Visit = {
   place: string | null; // the name you gave it
   auto_name: string | null; // the name your phone found (e.g. "Noland Hall")
   gps?: { lat: number; lng: number }; // where the phone put it, when it's drawn at a place's pin instead
+  outline?: Outline | null; // the building it's in (021_buildings.sql)
 };
 // Using your phone (018_phone_use.sql): unlocked → locked ('phone'), or one app open ('app').
 export type PhoneUse = { id: string; kind: "phone" | "app"; app: string | null; started_at: string; ended_at: string | null };
@@ -52,6 +54,7 @@ export async function getDay(dayKey: string): Promise<Day> {
   const client = await mbm();
   // Rebuild the day from the dots first (stops, Commutes: see 014_rebuild_day.sql), so it's right
   // every time you look. Falls back to the older repair if 014 isn't run yet.
+  await outlineStops(client, start, end);
   const rebuilt = await client.rpc("rebuild_day", { p_from: start.toISOString(), p_to: end.toISOString() });
   if (rebuilt.error) await client.rpc("repair_day", { p_from: start.toISOString(), p_to: end.toISOString() });
   const [blocks, activities, running] = await Promise.all([
@@ -91,7 +94,9 @@ export async function getDay(dayKey: string): Promise<Day> {
     return out;
   }
   const [firstVisits, pointRows, phoneRows] = await Promise.all([
-    visitsOn("id, arrived_at, departed_at, lat, lng, auto_name, places(name, lat, lng)"),
+    visitsOn("id, arrived_at, departed_at, lat, lng, auto_name, outline, places(name, lat, lng)").then((r) =>
+      r.error ? visitsOn("id, arrived_at, departed_at, lat, lng, auto_name, places(name, lat, lng)") : r,
+    ), // (without outline: 021 not run yet)
     allPoints(),
     client
       .from("phone_use")
@@ -112,7 +117,7 @@ export async function getDay(dayKey: string): Promise<Day> {
         const place = Array.isArray(places) ? places[0] : places;
         const pin = place && typeof place.lat === "number" && typeof place.lng === "number" ? { lat: place.lat, lng: place.lng } : {};
         const gps = "lat" in pin ? { gps: { lat: v.lat, lng: v.lng } } : {};
-        return { ...v, ...pin, ...gps, auto_name: v.auto_name ?? null, place: place?.name ?? null };
+        return { ...v, ...pin, ...gps, outline: v.outline ?? null, auto_name: v.auto_name ?? null, place: place?.name ?? null };
       });
   const points: RoutePoint[] = pointRows;
   const phone: PhoneUse[] = phoneRows.error ? [] : (phoneRows.data as PhoneUse[]); // (018 not run yet: none)
@@ -160,4 +165,33 @@ export async function getNowInfo(): Promise<NowInfo> {
     lastEnd: (last.data as { ended_at: string } | null)?.ended_at ?? null,
     loadedAt: Date.now(),
   };
+}
+
+// Stops on the day not yet checked for a building: look each one up (OpenStreetMap) and save it,
+// which also fits the stop's times to when you walked in and out (021_buildings.sql). A few at a
+// time; anything not done (offline, or 021 not run yet) is tried next time.
+async function outlineStops(client: Awaited<ReturnType<typeof mbm>>, start: Date, end: Date) {
+  const { data, error } = await client
+    .from("visits")
+    .select("id, lat, lng, places(lat, lng, outline)")
+    .eq("outline_checked", false)
+    .lt("arrived_at", end.toISOString())
+    .or(`departed_at.is.null,departed_at.gt.${start.toISOString()}`)
+    .limit(6);
+  if (error || !data?.length) return;
+  type Row = { id: string; lat: number; lng: number; places: { lat?: number | null; lng?: number | null; outline?: Outline | null } | { lat?: number | null; lng?: number | null; outline?: Outline | null }[] | null };
+  await Promise.all(
+    (data as unknown as Row[]).map(async (v) => {
+      const place = Array.isArray(v.places) ? v.places[0] : v.places;
+      // A named place that already has its building: that one. Otherwise look it up at the
+      // place's pin (where you put it), or where the phone put the stop.
+      let outline: Outline | null | undefined = place?.outline ?? undefined;
+      if (outline === undefined) {
+        const at = place && typeof place.lat === "number" && typeof place.lng === "number" ? { lat: place.lat, lng: place.lng } : v;
+        outline = await buildingAt(at.lat, at.lng);
+      }
+      if (outline === undefined) return; // couldn't ask: next time
+      await client.rpc("set_stop_outline", { p_visit_id: v.id, p_outline: outline });
+    }),
+  );
 }

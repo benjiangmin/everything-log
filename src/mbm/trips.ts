@@ -1,3 +1,4 @@
+import { nearOutline } from "./buildings";
 import type { RoutePoint, Visit } from "./data";
 
 // The day as stops and the trips between them. Every trip starts at a stop and ends at the next
@@ -43,7 +44,15 @@ function cleanDots(points: RoutePoint[]) {
   const all = points
     .map((p) => ({ ...spot(p), t: ms(p.at), still: p.speed_mps != null && p.speed_mps < 0.8, fuzzy: p.speed_mps != null && p.speed_mps < 0.5 && (p.accuracy_m ?? 0) > 25 }))
     .sort((a, b) => a.t - b.t);
-  const pts = all.filter((p) => !p.fuzzy);
+  // Standing somewhere (waiting to cross, talking): one dot, not a zigzag of jitter. A still dot
+  // within 20 m of the last one kept is dropped.
+  const pts: typeof all = [];
+  for (const p of all) {
+    if (p.fuzzy) continue;
+    const prev = pts[pts.length - 1];
+    if (prev && p.still && metres(prev, p) < 20) continue;
+    pts.push(p);
+  }
   return pts.filter((b, i) => {
     const a = pts[i - 1];
     const c = pts[i + 1];
@@ -89,8 +98,9 @@ export function buildTrips(visits: Visit[], points: RoutePoint[]): Trip[] {
     // even close to the stop: on a short trip (Theory → SAC, 250 m) they're most of the route.
     // A stop drawn at your place's pin: also by where the phone put you (you may have gone in a
     // door 50 m from the pin).
+    // A stop in a building: anything in (or right by) the building is you inside it.
     const near = (p: Spot, s: Visit, m: number) => metres(p, s) <= m || (s.gps != null && metres(p, s.gps) <= m);
-    const byStop = (p: (typeof inside)[number], s: Visit) => near(p, s, 30) || (p.still && near(p, s, 75));
+    const byStop = (p: (typeof inside)[number], s: Visit) => nearOutline(s.outline, p.lat, p.lng) || near(p, s, 30) || (p.still && near(p, s, 75));
     while (from && inside.length && byStop(inside[0], from)) inside.shift();
     while (to && inside.length && byStop(inside[inside.length - 1], to)) inside.pop();
     if (!inside.length && !(from && to)) continue;
