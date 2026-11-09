@@ -302,11 +302,14 @@ export default function DayBar({
       <div key={p.block.id} aria-label={label} onMouseEnter={() => setHover(p)} className={cls} style={look} />
     );
   };
-  // Phone use on screen: a minute or longer, cut to the day.
+  // Phone use on screen, cut to the day. Everything counts in the stats; on the bar, a use shorter
+  // than a minute shows only once you've zoomed in far enough for it to be a visible sliver
+  // (~0.3% of the bar's width).
   const phoneShown = phone
     .filter((u) => u.kind === "app")
     .map((u) => ({ ...u, start: Math.max(dayStart, +new Date(u.started_at)), end: Math.min(dayEnd, u.ended_at ? +new Date(u.ended_at) : now) }))
-    .filter((u) => u.end - u.start >= 60_000 && u.end > from && u.start < to);
+    .filter((u) => u.end > u.start && u.end > from && u.start < to)
+    .filter((u) => u.end - u.start >= 60_000 || (u.end - u.start) / (to - from) >= 0.003);
   // Middle of the part of it that's on screen.
   const hoverMid = hover ? at((Math.max(hover.start, from) + Math.min(hover.end, to)) / 2) : 0;
   // The bubble sits over the tail, sliding sideways near the ends so it stays on screen
