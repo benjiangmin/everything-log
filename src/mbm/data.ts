@@ -71,9 +71,27 @@ export async function getDay(dayKey: string): Promise<Day> {
       .lt("arrived_at", end.toISOString())
       .or(`departed_at.is.null,departed_at.gt.${start.toISOString()}`)
       .order("arrived_at");
+  // The day's route dots. The database hands out at most 1,000 rows at a time (a bus ride alone
+  // can be 600), so they're fetched 1,000 at a time; before, a busy day lost its last dots.
+  async function allPoints(): Promise<RoutePoint[]> {
+    const out: RoutePoint[] = [];
+    for (let from = 0; from < 20000; from += 1000) {
+      const { data, error } = await client
+        .from("points")
+        .select("*")
+        .gte("at", start.toISOString())
+        .lt("at", end.toISOString())
+        .order("at")
+        .range(from, from + 999);
+      if (error || !data) break;
+      out.push(...(data as RoutePoint[]));
+      if (data.length < 1000) break;
+    }
+    return out;
+  }
   const [firstVisits, pointRows, phoneRows] = await Promise.all([
     visitsOn("id, arrived_at, departed_at, lat, lng, auto_name, places(name, lat, lng)"),
-    client.from("points").select("*").gte("at", start.toISOString()).lt("at", end.toISOString()).order("at").limit(5000),
+    allPoints(),
     client
       .from("phone_use")
       .select("id, kind, app, started_at, ended_at")
@@ -94,7 +112,7 @@ export async function getDay(dayKey: string): Promise<Day> {
         const pin = place && typeof place.lat === "number" && typeof place.lng === "number" ? { lat: place.lat, lng: place.lng } : {};
         return { ...v, ...pin, auto_name: v.auto_name ?? null, place: place?.name ?? null };
       });
-  const points: RoutePoint[] = pointRows.error ? [] : (pointRows.data as RoutePoint[]);
+  const points: RoutePoint[] = pointRows;
   const phone: PhoneUse[] = phoneRows.error ? [] : (phoneRows.data as PhoneUse[]); // (018 not run yet: none)
 
   const error = blocks.error ?? activities.error ?? running.error;
