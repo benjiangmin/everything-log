@@ -14,7 +14,7 @@ const fail = (message: string): Result => ({ ok: false, message });
 const isUuid = (id: unknown): id is string => typeof id === "string" && /^[0-9a-f-]{36}$/i.test(id);
 
 function refresh() {
-  revalidatePath("/mbm");
+  revalidatePath("/mbm", "layout"); // Home, Day and Stats
   revalidatePath("/");
 }
 

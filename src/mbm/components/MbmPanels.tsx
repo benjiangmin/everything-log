@@ -21,7 +21,7 @@ export default function MbmPanels() {
   if (panel.kind === "now") return <NowPanel switching={Boolean(panel.switch)} onClose={close} />;
   // Adding: on the day you're looking at (?day=…), otherwise today.
   const viewing = new URLSearchParams(window.location.search).get("day");
-  const dayKey = panel.dayKey ?? (window.location.pathname === "/mbm" && isDayKey(viewing) ? viewing : dayKeyOf(new Date(), DEFAULT_TZ));
+  const dayKey = panel.dayKey ?? (window.location.pathname === "/mbm/day" && isDayKey(viewing) ? viewing : dayKeyOf(new Date(), DEFAULT_TZ));
   return (
     <EntryPanel
       key={`${panel.kind}-${dayKey}`}
