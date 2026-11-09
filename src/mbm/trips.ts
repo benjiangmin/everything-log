@@ -35,10 +35,15 @@ export function metres(a: Spot, b: Spot) {
 }
 
 // Dots worth drawing: everything the phone kept (it already throws out inaccurate ones), minus
-// lone spikes: a dot far off between two that are close together (the GPS glitching, not you
-// going somewhere and straight back).
+//   - fuzzy standing-still dots (±25 m or worse, not moving): the GPS wandering while you stand
+//     somewhere (waiting to cross, between tall buildings), drawn as little spikes off the route;
+//   - lone spikes: a dot far off between two that are close together (the GPS glitching, not you
+//     going somewhere and straight back).
 function cleanDots(points: RoutePoint[]) {
-  const pts = points.map((p) => ({ ...spot(p), t: ms(p.at), still: p.speed_mps != null && p.speed_mps < 0.8 })).sort((a, b) => a.t - b.t);
+  const all = points
+    .map((p) => ({ ...spot(p), t: ms(p.at), still: p.speed_mps != null && p.speed_mps < 0.8, fuzzy: p.speed_mps != null && p.speed_mps < 0.5 && (p.accuracy_m ?? 0) > 25 }))
+    .sort((a, b) => a.t - b.t);
+  const pts = all.filter((p) => !p.fuzzy);
   return pts.filter((b, i) => {
     const a = pts[i - 1];
     const c = pts[i + 1];
@@ -82,7 +87,10 @@ export function buildTrips(visits: Visit[], points: RoutePoint[]): Trip[] {
     // trip: the trip starts and ends at the stop's node instead. That's dots within 30 m, or
     // standing-still ones within 75 m (GPS drifting around inside). Dots you were walking on stay,
     // even close to the stop: on a short trip (Theory → SAC, 250 m) they're most of the route.
-    const byStop = (p: (typeof inside)[number], s: Spot) => metres(p, s) <= 30 || (p.still && metres(p, s) <= 75);
+    // A stop drawn at your place's pin: also by where the phone put you (you may have gone in a
+    // door 50 m from the pin).
+    const near = (p: Spot, s: Visit, m: number) => metres(p, s) <= m || (s.gps != null && metres(p, s.gps) <= m);
+    const byStop = (p: (typeof inside)[number], s: Visit) => near(p, s, 30) || (p.still && near(p, s, 75));
     while (from && inside.length && byStop(inside[0], from)) inside.shift();
     while (to && inside.length && byStop(inside[inside.length - 1], to)) inside.pop();
     if (!inside.length && !(from && to)) continue;

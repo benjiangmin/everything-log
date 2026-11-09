@@ -22,6 +22,7 @@ export type Visit = {
   lng: number;
   place: string | null; // the name you gave it
   auto_name: string | null; // the name your phone found (e.g. "Noland Hall")
+  gps?: { lat: number; lng: number }; // where the phone put it, when it's drawn at a place's pin instead
 };
 // Using your phone (018_phone_use.sql): unlocked → locked ('phone'), or one app open ('app').
 export type PhoneUse = { id: string; kind: "phone" | "app"; app: string | null; started_at: string; ended_at: string | null };
@@ -110,7 +111,8 @@ export async function getDay(dayKey: string): Promise<Day> {
         // not a few close together wherever the phone happened to put each stop).
         const place = Array.isArray(places) ? places[0] : places;
         const pin = place && typeof place.lat === "number" && typeof place.lng === "number" ? { lat: place.lat, lng: place.lng } : {};
-        return { ...v, ...pin, auto_name: v.auto_name ?? null, place: place?.name ?? null };
+        const gps = "lat" in pin ? { gps: { lat: v.lat, lng: v.lng } } : {};
+        return { ...v, ...pin, ...gps, auto_name: v.auto_name ?? null, place: place?.name ?? null };
       });
   const points: RoutePoint[] = pointRows;
   const phone: PhoneUse[] = phoneRows.error ? [] : (phoneRows.data as PhoneUse[]); // (018 not run yet: none)
