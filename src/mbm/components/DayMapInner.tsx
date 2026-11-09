@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { APIProvider, InfoWindow, Map, useMap, useMapsLibrary } from "@vis.gl/react-google-maps";
-import { moveStop, namePlace, rememberedRoute, removeStop } from "@/app/mbm/actions";
+import { moveStop, namePlace, rememberedRoute, removeStop, saveBlock } from "@/app/mbm/actions";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
 import type { Activity, Block, RoutePoint, Visit } from "@/mbm/data";
 import { clock, span } from "@/mbm/time";
@@ -45,6 +45,9 @@ export default function DayMapInner({
   const [moving, setMoving] = useState<Visit | null>(null); // "click where it really is"
   const [moveNote, setMoveNote] = useState<string | null>(null);
   const [, runMove] = useTransition();
+  // A trip you clicked that has no Commute on the bar: offer to add one.
+  const [adding, setAdding] = useState<{ trip: Trip; x: number; y: number; note?: string } | null>(null);
+  const [addPending, runAdd] = useTransition();
   const [zoom, setZoom] = useState(15);
   // What the pointer is on: trips under it (several, where paths overlap) or a stop.
   const [pointed, setPointed] = useState<{ trips: string[]; stops: string[]; x: number; y: number } | null>(null);
@@ -118,7 +121,13 @@ export default function DayMapInner({
         draggableCursor={moving ? "crosshair" : undefined}
         onClick={(e) => {
           const at = e.detail.latLng;
-          if (!moving || !at) return;
+          if (!moving) {
+            // Clicked a trip nothing was tracked for: "Add as Commute".
+            const t = pointed ? trips.find((x) => pointed.trips.includes(x.key) && tripRow(x, blocks, activities, tz).untracked) : undefined;
+            setAdding(t && pointed ? { trip: t, x: pointed.x, y: pointed.y } : null);
+            return;
+          }
+          if (!at) return;
           const v = moving;
           setMoving(null);
           runMove(async () => {
@@ -226,7 +235,32 @@ export default function DayMapInner({
         </p>
       )}
     </APIProvider>
-      {pointed && !moving && (
+      {adding && (
+        <div
+          className="absolute z-40 w-max -translate-x-1/2 -translate-y-full rounded-card bg-paper p-1.5 text-sm shadow-xl shadow-ink/20 ring-1 ring-line"
+          style={{ left: adding.x, top: adding.y - 12 }}
+        >
+          <button
+            type="button"
+            disabled={addPending}
+            onClick={() =>
+              runAdd(async () => {
+                const res = await saveBlock({ name: "Commute", start: new Date(adding.trip.start).toISOString(), end: new Date(adding.trip.end).toISOString() });
+                if (res.ok) setAdding(null);
+                else setAdding((a) => (a ? { ...a, note: res.message } : a));
+              })
+            }
+            className="rounded-control px-3 py-1.5 font-semibold text-ink hover:bg-surface"
+          >
+            {addPending ? "Adding…" : `Add as Commute · ${clock(new Date(adding.trip.start), tz)} – ${clock(new Date(adding.trip.end), tz)}`}
+          </button>
+          <button type="button" onClick={() => setAdding(null)} className="rounded-control px-2 py-1.5 text-muted hover:bg-surface">
+            Cancel
+          </button>
+          {adding.note && <p className="px-3 pb-1 text-xs text-danger">{adding.note}</p>}
+        </div>
+      )}
+      {pointed && !moving && !adding && (
         <Tip
           x={pointed.x}
           y={pointed.y}
@@ -240,7 +274,7 @@ export default function DayMapInner({
   );
 }
 
-type Row = { key: string; color: string; title: string; detail: string };
+type Row = { key: string; color: string; title: string; detail: string; untracked?: boolean };
 
 // A trip, named after the moving entry during it (Commute, or later Running…). Never after a
 // still one like a class: if no moving entry covers it, it's just a trip nothing was tracked for.
@@ -256,8 +290,9 @@ function tripRow(t: Trip, blocks: Block[], activities: Activity[], tz: string): 
   return {
     key: t.key,
     color: best?.color ?? "#7f5539",
-    title: best?.name ?? "Trip (no Commute tracked)",
+    title: best?.name ?? "Trip (no Commute tracked) · click to add",
     detail: `${clock(new Date(t.start), tz)} – ${clock(new Date(t.end), tz)} · ${span(t.end - t.start)}`,
+    untracked: !best,
   };
 }
 
