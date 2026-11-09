@@ -422,7 +422,11 @@ function useFilledTrips(trips: Trip[]): Trip[] {
         const b = p.path[p.path.length - 1];
         let path: Spot[] | null = null;
         if (!p.missing) {
-          const snapped = await snapPath(p.path, t.pace);
+          // Only the dots you recorded are snapped, not the stops at either end: snapping to a stop's
+          // pin would route you to whatever door the map knows (the library's west entrance) instead
+          // of the way you actually went in. The ends join straight from your first / last dot.
+          const dots = p.path.slice(p.ends?.from ? 1 : 0, p.ends?.to ? -1 : undefined);
+          const snapped = await snapPath(dots, t.pace);
           if (snapped) path = [a, ...snapped, b]; // (joined back to where it really starts and ends)
         } else if (metres(a, b) >= 120) {
           const whole = t.pieces.length === 1 && t.fromId && t.toId;

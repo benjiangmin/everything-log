@@ -20,7 +20,7 @@ export async function snapPath(path: Spot[], pace: number | null): Promise<Spot[
 
   const step = Math.ceil(raw.length / MAX_POINTS);
   const shape = raw.filter((_, i) => i % step === 0 || i === raw.length - 1);
-  const id = `mbm-snap:v4:${shape.length}:${shape[0].lat.toFixed(5)},${shape[0].lng.toFixed(5)}:${shape[shape.length - 1].lat.toFixed(5)},${shape[shape.length - 1].lng.toFixed(5)}`;
+  const id = `mbm-snap:v5:${shape.length}:${shape[0].lat.toFixed(5)},${shape[0].lng.toFixed(5)}:${shape[shape.length - 1].lat.toFixed(5)},${shape[shape.length - 1].lng.toFixed(5)}`;
   try {
     const kept = localStorage.getItem(id);
     if (kept) return kept === "none" ? null : (JSON.parse(kept) as Spot[]);

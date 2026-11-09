@@ -7,7 +7,7 @@ import type { RoutePoint, Visit } from "./data";
 // not a route). A stretch with no dots is a "missing" piece, drawn dashed.
 
 export type Spot = { lat: number; lng: number };
-export type Piece = { path: Spot[]; missing: boolean };
+export type Piece = { path: Spot[]; missing: boolean; ends?: { from: boolean; to: boolean } }; // ends: its first / last spot is a stop, not a dot
 export type Trip = {
   key: string;
   fromId: string | null; // the stop it left
@@ -137,7 +137,7 @@ export function buildTrips(visits: Visit[], points: RoutePoint[]): Trip[] {
         const path = run.map(spot);
         if (r === 0 && joinsFrom) path.unshift(spot(from!));
         if (r === runs.length - 1 && joinsTo) path.push(spot(to!));
-        pieces.push({ path, missing: false });
+        pieces.push({ path, missing: false, ends: { from: r === 0 && !!joinsFrom, to: r === runs.length - 1 && !!joinsTo } });
       });
       if (to && !joinsTo) pieces.push({ path: [spot(last), spot(to)], missing: true });
     }
