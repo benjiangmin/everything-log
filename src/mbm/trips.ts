@@ -38,7 +38,7 @@ export function metres(a: Spot, b: Spot) {
 // lone spikes: a dot far off between two that are close together (the GPS glitching, not you
 // going somewhere and straight back).
 function cleanDots(points: RoutePoint[]) {
-  const pts = points.map((p) => ({ ...spot(p), t: ms(p.at) })).sort((a, b) => a.t - b.t);
+  const pts = points.map((p) => ({ ...spot(p), t: ms(p.at), still: p.speed_mps != null && p.speed_mps < 0.8 })).sort((a, b) => a.t - b.t);
   return pts.filter((b, i) => {
     const a = pts[i - 1];
     const c = pts[i + 1];
@@ -79,9 +79,12 @@ export function buildTrips(visits: Visit[], points: RoutePoint[]): Trip[] {
     if (hi <= lo) continue;
     const inside = pts.filter((p) => p.t >= lo && p.t <= hi);
     // Dots right by the stop at either end are you still in (or around) the building, not the
-    // trip: the trip starts and ends at the stop's node instead.
-    while (from && inside.length && metres(inside[0], from) <= 75) inside.shift();
-    while (to && inside.length && metres(inside[inside.length - 1], to) <= 75) inside.pop();
+    // trip: the trip starts and ends at the stop's node instead. That's dots within 30 m, or
+    // standing-still ones within 75 m (GPS drifting around inside). Dots you were walking on stay,
+    // even close to the stop: on a short trip (Theory → SAC, 250 m) they're most of the route.
+    const byStop = (p: (typeof inside)[number], s: Spot) => metres(p, s) <= 30 || (p.still && metres(p, s) <= 75);
+    while (from && inside.length && byStop(inside[0], from)) inside.shift();
+    while (to && inside.length && byStop(inside[inside.length - 1], to)) inside.pop();
     if (!inside.length && !(from && to)) continue;
     if (!inside.length && from && to && metres(from, to) < 60) continue; // back to the same place
 

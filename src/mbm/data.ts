@@ -25,7 +25,7 @@ export type Visit = {
 };
 // Using your phone (018_phone_use.sql): unlocked → locked ('phone'), or one app open ('app').
 export type PhoneUse = { id: string; kind: "phone" | "app"; app: string | null; started_at: string; ended_at: string | null };
-export type RoutePoint = { at: string; lat: number; lng: number; accuracy_m?: number | null; motion?: string | null };
+export type RoutePoint = { at: string; lat: number; lng: number; accuracy_m?: number | null; speed_mps?: number | null; motion?: string | null };
 
 export type Day = {
   dayKey: string;
