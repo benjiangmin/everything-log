@@ -15,7 +15,7 @@ export default function MbmDayPage(props: PageProps<"/mbm/day">) {
   return (
     // Wide: the day bar gets about 90% of the screen.
     // Fills the window under the top bar: the day bar, then the map taking the rest.
-    <main className="mx-auto flex min-h-[calc(100dvh-4rem)] w-full flex-col px-4 pb-5 pt-4 sm:w-[92%] sm:px-0">
+    <main className="mx-auto flex min-h-[calc(100dvh-4rem)] w-full flex-col px-4 pb-5 pt-4 sm:w-[96%] sm:px-0">
       <Suspense fallback={<Skeleton />}>
         {props.searchParams.then((sp) => (
           <MbmDay day={typeof sp.day === "string" ? sp.day : undefined} />

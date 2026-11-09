@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Day } from "@/mbm/data";
 import DayBar from "./DayBar";
 import DayMap from "./DayMap";
@@ -22,15 +22,49 @@ export default function DayView({ day, today, renderedAt }: { day: Day; today: b
   const [focus, setFocus] = useState<Focus | null>(null); // hovering the bar → lit up on the map
   const [marks, setMarks] = useState<{ start: number; end: number }[] | null>(null); // hovering the map → outlined on the bar
   useNoPageZoom();
+  // Scrolling down (anywhere but the map, which zooms instead) opens the map up: the day box
+  // shrinks to a slim bar. Scrolling up brings it back. (So does its ▾ / ▴ button.)
+  const [slim, setSlim] = useState(false);
+  const root = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = root.current;
+    if (!el) return;
+    const onWheel = (e: WheelEvent) => {
+      if (e.ctrlKey || Math.abs(e.deltaY) < 4 || Math.abs(e.deltaX) > Math.abs(e.deltaY)) return; // zooming / panning the bar
+      if ((e.target as Element).closest('[aria-label="Map"]')) return;
+      setSlim(e.deltaY > 0);
+    };
+    el.addEventListener("wheel", onWheel, { passive: true });
+    return () => el.removeEventListener("wheel", onWheel);
+  }, []);
 
   return (
     // The day bar on top and the map filling the rest of the window, so you can hover one and see
     // it on the other. Today: what's running sits in a small button in the corner (NowChip).
-    <div className="flex min-h-0 flex-1 flex-col gap-4">
+    <div ref={root} className="flex min-h-0 flex-1 flex-col gap-4">
       {today && <NowChip activities={day.activities} running={day.running} tz={day.tz} renderedAt={renderedAt} />}
       <div className="flex min-h-[30rem] flex-1 flex-col gap-4">
-        <section aria-label="The day" className="shrink-0 rounded-card border-[1.5px] border-ink px-4 pb-4 pt-4 sm:px-6 sm:pb-5">
-          <h2 className="mb-4 font-display text-lg font-semibold">The day</h2>
+        <section
+          aria-label="The day"
+          className={`relative shrink-0 rounded-card border-[1.5px] border-ink px-4 transition-[padding] duration-300 sm:px-6 ${slim ? "py-3" : "pb-4 pt-4 sm:pb-5"}`}
+        >
+          <button
+            type="button"
+            onClick={() => setSlim((v) => !v)}
+            aria-label={slim ? "Show the day bar bigger" : "Make the map bigger"}
+            title={slim ? "Bigger bar" : "Bigger map"}
+            // (Sits on the box's top border, so it never covers the bar.)
+            className="absolute -top-3.5 right-6 z-10 grid size-7 place-items-center rounded-full bg-paper text-muted ring-[1.5px] ring-ink transition-colors hover:bg-surface hover:text-ink"
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true" className={`transition-transform ${slim ? "rotate-180" : ""}`}>
+              <path d="M5 15l7-7 7 7" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </button>
+          <div className={`grid transition-[grid-template-rows,opacity] duration-300 ${slim ? "grid-rows-[0fr] opacity-0" : "grid-rows-[1fr]"}`}>
+            <h2 className="overflow-hidden font-display text-lg font-semibold">
+              <span className="block pb-4">The day</span>
+            </h2>
+          </div>
           <DayBar
             key={day.dayKey}
             placed={placed}
@@ -45,6 +79,7 @@ export default function DayView({ day, today, renderedAt }: { day: Day; today: b
             onSelect={(b) => openMbm({ kind: "edit", dayKey: day.dayKey, blockId: b.id })}
             marks={marks}
             phone={day.phone}
+            slim={slim}
             onHover={(h) =>
               setFocus(
                 h && {

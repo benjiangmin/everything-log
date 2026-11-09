@@ -17,7 +17,7 @@ export default function MbmTopBar({ signedIn, email, owner }: { signedIn: boolea
   const active = (href: string) => (href === "/mbm" ? pathname === "/mbm" : pathname.startsWith(href));
   return (
     <header className="border-b border-line bg-paper">
-      <div className="mx-auto flex h-16 w-full items-center gap-2 px-4 sm:w-[92%] sm:gap-4 sm:px-0">
+      <div className="mx-auto flex h-16 w-full items-center gap-2 px-4 sm:w-[96%] sm:gap-4 sm:px-0">
         <Link href="/mbm" className="mr-2 flex items-center gap-2 font-display text-lg font-semibold tracking-tight text-ink sm:mr-6">
           <span aria-hidden="true" className="grid size-7 place-items-center rounded-full bg-accent text-accent-ink">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round">

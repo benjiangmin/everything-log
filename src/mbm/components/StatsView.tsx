@@ -70,10 +70,10 @@ function Card({ title, children, aside }: { title: string; children: React.React
   );
 }
 
-// A row with a bar showing its share of the biggest one.
-function Row({ color, label, seconds, max, note }: { color?: string; label: string; seconds: number; max: number; note?: string }) {
-  return (
-    <li className="py-1.5">
+// A row with a bar showing its share of the biggest one. onPick: the row is a button.
+function Row({ color, label, seconds, max, note, onPick }: { color?: string; label: string; seconds: number; max: number; note?: string; onPick?: () => void }) {
+  const body = (
+    <>
       <div className="flex items-baseline gap-2 text-sm">
         {color && <span aria-hidden="true" className="size-2.5 shrink-0 translate-y-[-1px] rounded-full" style={{ background: color }} />}
         <span className="min-w-0 flex-1 truncate">{label}</span>
@@ -83,36 +83,78 @@ function Row({ color, label, seconds, max, note }: { color?: string; label: stri
       <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-surface">
         <div className="h-full rounded-full" style={{ width: `${max > 0 ? Math.max(2, (seconds / max) * 100) : 0}%`, background: color ?? "var(--ink)", opacity: color ? 1 : 0.55 }} />
       </div>
+    </>
+  );
+  return (
+    <li>
+      {onPick ? (
+        <button type="button" onClick={onPick} title={`Just ${label}`} className="-mx-2 block w-[calc(100%+1rem)] rounded-control px-2 py-1.5 text-left transition-colors hover:bg-surface/70">
+          {body}
+        </button>
+      ) : (
+        <div className="py-1.5">{body}</div>
+      )}
     </li>
   );
 }
+
+// Searching matches the start of a word ("work" finds "Working on this project", "k" finds
+// nothing), not any letter inside one. Click a row to look at just that one.
+const startsAWord = (name: string, q: string) => (" " + name.toLowerCase()).includes(" " + q);
 
 function TimeSpent({ activities, elapsed }: { activities: Stats["activities"]; elapsed: number }) {
   const [q, setQ] = useState("");
   const [all, setAll] = useState(false);
   const query = q.trim().toLowerCase();
-  const found = query ? activities.filter((a) => a.name.toLowerCase().includes(query)) : activities;
+  const found = query ? activities.filter((a) => startsAWord(a.name, query)) : activities;
   const shown = query || all ? found : found.slice(0, LIST);
   const max = activities[0]?.seconds ?? 0;
   const total = found.reduce((s, a) => s + a.seconds, 0);
+  const share = (s: number) => (elapsed > 0 ? ` · ${Math.round((s / elapsed) * 100)}% of the time` : "");
+  const one = found.length === 1 ? found[0] : undefined;
   return (
     <Card title="Time spent">
-      <input
-        value={q}
-        onChange={(e) => setQ(e.target.value)}
-        placeholder="Time spent on…"
-        aria-label="Find time spent on something"
-        className="mb-3 w-full rounded-control border border-line bg-paper px-3 py-2 text-sm outline-none focus:border-ink"
-      />
+      <div className="relative mb-3">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted">
+          <circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="2.2" />
+          <path d="M20 20l-3.5-3.5" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
+        </svg>
+        <input
+          type="search"
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          onKeyDown={(e) => e.key === "Escape" && setQ("")}
+          placeholder="Search your activities…"
+          aria-label="Search your activities"
+          className="w-full rounded-full border border-line bg-paper py-2 pl-9 pr-9 text-sm outline-none transition-colors placeholder:text-muted focus:border-ink [&::-webkit-search-cancel-button]:hidden"
+        />
+        {q && (
+          <button
+            type="button"
+            onClick={() => setQ("")}
+            aria-label="Clear the search"
+            className="absolute right-2 top-1/2 grid size-6 -translate-y-1/2 place-items-center rounded-full text-muted hover:bg-surface hover:text-ink"
+          >
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M6 6l12 12M18 6L6 18" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
+            </svg>
+          </button>
+        )}
+      </div>
       {query && (
         <p className="mb-2 text-sm">
-          {found.length ? (
+          {one ? (
             <>
-              <span className="num font-semibold">{hm(total)}</span> on “{q.trim()}”
-              {elapsed > 0 && <span className="text-muted"> · {Math.round((total / elapsed) * 100)}% of the time</span>}
+              <span className="num font-semibold">{hm(one.seconds)}</span> on {one.name}
+              <span className="text-muted">{share(one.seconds)}</span>
+            </>
+          ) : found.length > 1 ? (
+            <>
+              {found.length} activities match · <span className="num font-semibold">{hm(total)}</span> together
+              <span className="text-muted">{share(total)}</span>
             </>
           ) : (
-            <span className="text-muted">No time on “{q.trim()}” here.</span>
+            <span className="text-muted">No activity called “{q.trim()}” here.</span>
           )}
         </p>
       )}
@@ -121,7 +163,7 @@ function TimeSpent({ activities, elapsed }: { activities: Stats["activities"]; e
       ) : (
         <ul>
           {shown.map((a) => (
-            <Row key={a.name} color={a.color} label={a.name} seconds={a.seconds} max={max} />
+            <Row key={a.name} color={a.color} label={a.name} seconds={a.seconds} max={max} onPick={() => setQ(a.name)} />
           ))}
         </ul>
       )}

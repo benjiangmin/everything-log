@@ -27,6 +27,7 @@ export default function DayBar({
   marks = null,
   phone = [],
   compact = false,
+  slim = false,
 }: {
   placed: Placed[];
   lanes: number;
@@ -44,6 +45,7 @@ export default function DayBar({
   marks?: { start: number; end: number }[] | null; // outlined (what you're hovering on the map) // what's hovered (the map lights it up)
   phone?: PhoneUse[]; // apps you used (a thin line under the bar)
   compact?: boolean; // the home page's smaller version
+  slim?: boolean; // the day page with the map opened up: a shorter bar, no zoom row
 }) {
   // What the bubble is about: an entry, or an untracked stretch.
   const [hover, setHoverState] = useState<{ start: number; end: number; block?: Block; phone?: PhoneUse } | null>(null);
@@ -238,7 +240,7 @@ export default function DayBar({
   const { labels, lines } = marksFor(dayKey, tz, dayStart, dayEnd, from, to);
   // The bar: your main entries as rounded pills with small gaps between them. Something running
   // alongside (+ Start) goes in a thin strip under the bar instead of squashing it.
-  const height = compact ? 48 : 64;
+  const height = compact ? 48 : slim ? 40 : 64;
   const shownPlaced = placed.map(withMoves);
   const main = shownPlaced.filter((p) => p.lane === 0);
   const side = shownPlaced.filter((p) => p.lane > 0);
@@ -373,7 +375,7 @@ export default function DayBar({
       <div
         ref={barRef}
         className={`relative overflow-hidden rounded-control bg-paper ring-1 ring-line ${zoomed ? "cursor-grab touch-pan-y active:cursor-grabbing" : ""}`}
-        style={{ height }}
+        style={{ height, transition: "height 250ms cubic-bezier(0.22,1,0.36,1)" }}
         onMouseLeave={() => setHover(null)}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
@@ -484,7 +486,7 @@ export default function DayBar({
         </div>
       )}
 
-      {zoomable && (
+      {zoomable && !slim && (
         <div className="mt-2 flex items-center justify-between gap-3 text-xs text-muted">
           <span className="num">
             {zoomed ? `${clock(new Date(from), tz)} – ${clock(new Date(to), tz)}` : "Pinch or Ctrl+scroll on the bar to zoom"}
