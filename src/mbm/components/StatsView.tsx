@@ -21,7 +21,21 @@ const miles = (m: number) => {
 };
 const LIST = 8; // shown before "Show all"
 
-export default function StatsView({ stats, range, tz, dayKey, isNow }: { stats: Stats; range: Range; tz: string; dayKey: string; isNow: boolean }) {
+export default function StatsView({
+  stats,
+  range,
+  tz,
+  dayKey,
+  isNow,
+  query = "",
+}: {
+  stats: Stats;
+  range: Range;
+  tz: string;
+  dayKey: string;
+  isNow: boolean;
+  query?: string; // start the activity search with this (from the top bar's search)
+}) {
   const elapsed = Math.max(0, (+new Date(stats.to) - +new Date(stats.from)) / 1000);
   const unmarked = Math.max(0, elapsed - stats.tracked_seconds);
   const screen = stats.apps.reduce((s, a) => s + a.seconds, 0);
@@ -39,7 +53,7 @@ export default function StatsView({ stats, range, tz, dayKey, isNow }: { stats: 
       </section>
 
       <div className="grid gap-8 lg:grid-cols-2">
-        <TimeSpent activities={stats.activities} elapsed={elapsed} />
+        <TimeSpent activities={stats.activities} elapsed={elapsed} initial={query} />
         <Apps apps={stats.apps} />
       </div>
 
@@ -102,8 +116,8 @@ function Row({ color, label, seconds, max, note, onPick }: { color?: string; lab
 // nothing), not any letter inside one. Click a row to look at just that one.
 const startsAWord = (name: string, q: string) => (" " + name.toLowerCase()).includes(" " + q);
 
-function TimeSpent({ activities, elapsed }: { activities: Stats["activities"]; elapsed: number }) {
-  const [q, setQ] = useState("");
+function TimeSpent({ activities, elapsed, initial }: { activities: Stats["activities"]; elapsed: number; initial: string }) {
+  const [q, setQ] = useState(initial);
   const [all, setAll] = useState(false);
   const query = q.trim().toLowerCase();
   const found = query ? activities.filter((a) => startsAWord(a.name, query)) : activities;

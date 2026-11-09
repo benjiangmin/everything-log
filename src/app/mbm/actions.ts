@@ -331,3 +331,97 @@ export async function namePlace(visitId: string, name: string): Promise<Result> 
   refresh();
   return { ok: true };
 }
+
+// ---------- Search (the top bar) ----------
+
+export type SearchHit =
+  | { kind: "activity"; name: string; color: string; href: string; detail: string }
+  | { kind: "entry"; name: string; color: string; note: string | null; href: string; detail: string }
+  | { kind: "place"; name: string; href: string; detail: string }
+  | { kind: "app"; name: string; href: string; detail: string };
+
+// Everything with something called q: your activities, entries (by activity or note), places
+// you've been and apps you've used. A word has to start with what you typed ("work" finds
+// "Working…", "k" doesn't).
+export async function searchEverything(q: string): Promise<SearchHit[]> {
+  const text = String(q ?? "").replace(/[%_,()*\\"]/g, " ").replace(/\s+/g, " ").trim().slice(0, 60);
+  if (!text || !mbmReady()) return [];
+  const client = await mbm();
+  const tz = process.env.MBM_TIMEZONE || "America/Chicago";
+  const lower = text.toLowerCase();
+  const wordStart = (s: string | null | undefined) => Boolean(s && (" " + s.toLowerCase()).includes(" " + lower));
+  const dayOf = (at: string) => new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(at));
+  const when = (at: string) => new Date(at).toLocaleDateString("en-US", { timeZone: tz, month: "short", day: "numeric", year: "numeric" });
+  const like = `%${text}%`;
+
+  const [acts, notes, visits, apps] = await Promise.all([
+    client.from("activities").select("id, name, color, last_used_at").ilike("name", like).limit(30),
+    client.from("blocks").select("id, started_at, activity_id, note").ilike("note", like).order("started_at", { ascending: false }).limit(20),
+    client.from("visits").select("arrived_at, auto_name, places(name)").order("arrived_at", { ascending: false }).limit(2000),
+    client.from("phone_use").select("app, started_at").eq("kind", "app").ilike("app", like).order("started_at", { ascending: false }).limit(500),
+  ]);
+
+  const activities = (acts.data ?? []).filter((a) => wordStart(a.name));
+  const colorOf = new Map((acts.data ?? []).map((a) => [a.id, a.color as string]));
+  const nameOf = new Map((acts.data ?? []).map((a) => [a.id, a.name as string]));
+  const hits: SearchHit[] = [];
+
+  for (const a of activities.slice(0, 5)) {
+    hits.push({
+      kind: "activity",
+      name: a.name,
+      color: a.color,
+      href: `/mbm/stats?range=year&q=${encodeURIComponent(a.name)}`,
+      detail: a.last_used_at ? `Last ${when(a.last_used_at)}` : "Activity",
+    });
+  }
+
+  // Entries: of those activities (latest few), and any with the words in their note.
+  const ids = activities.map((a) => a.id);
+  const ofActs = ids.length
+    ? await client.from("blocks").select("id, started_at, activity_id, note").in("activity_id", ids).order("started_at", { ascending: false }).limit(5)
+    : { data: [] as { id: string; started_at: string; activity_id: string | null; note: string | null }[] };
+  const noteHits = (notes.data ?? []).filter((b) => wordStart(b.note));
+  const missing = noteHits.map((b) => b.activity_id).filter((id): id is string => Boolean(id) && !nameOf.has(id as string));
+  if (missing.length) {
+    const { data } = await client.from("activities").select("id, name, color").in("id", missing);
+    for (const a of data ?? []) {
+      nameOf.set(a.id, a.name);
+      colorOf.set(a.id, a.color);
+    }
+  }
+  const seen = new Set<string>();
+  for (const b of [...noteHits, ...(ofActs.data ?? [])]) {
+    if (seen.has(b.id) || seen.size >= 6) continue;
+    seen.add(b.id);
+    hits.push({
+      kind: "entry",
+      name: (b.activity_id && nameOf.get(b.activity_id)) || "Something",
+      color: (b.activity_id && colorOf.get(b.activity_id)) || "#86705f",
+      note: b.note || null,
+      href: `/mbm/day?day=${dayOf(b.started_at)}`,
+      detail: `${when(b.started_at)} · ${new Date(b.started_at).toLocaleTimeString("en-US", { timeZone: tz, hour: "numeric", minute: "2-digit" })}`,
+    });
+  }
+
+  // Places: by name (yours, or the one the phone found), with how often and when last.
+  const places = new Map<string, { last: string; n: number }>();
+  for (const v of visits.data ?? []) {
+    const place = (v.places as unknown as { name: string } | null)?.name ?? v.auto_name;
+    if (!wordStart(place)) continue;
+    const p = places.get(place!);
+    if (p) p.n++;
+    else places.set(place!, { last: v.arrived_at, n: 1 });
+  }
+  for (const [name, p] of [...places].slice(0, 5)) {
+    hits.push({ kind: "place", name, href: `/mbm/day?day=${dayOf(p.last)}`, detail: `${p.n} visit${p.n === 1 ? "" : "s"} · last ${when(p.last)}` });
+  }
+
+  // Apps: when last used.
+  const appsSeen = new Map<string, string>();
+  for (const u of apps.data ?? []) if (u.app && wordStart(u.app) && !appsSeen.has(u.app)) appsSeen.set(u.app, u.started_at);
+  for (const [name, last] of [...appsSeen].slice(0, 5)) {
+    hits.push({ kind: "app", name, href: `/mbm/stats?range=day&day=${dayOf(last)}`, detail: `App · last used ${when(last)}` });
+  }
+  return hits;
+}

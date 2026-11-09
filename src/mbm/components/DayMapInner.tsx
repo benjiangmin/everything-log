@@ -29,8 +29,10 @@ export default function DayMapInner({
   activities = [],
   onPointer,
   gestures = "cooperative",
+  topCover = 0,
 }: {
   gestures?: "cooperative" | "greedy";
+  topCover?: number; // px at the top covered by something floating on the map: fit the day below it
   visits: Visit[];
   points: RoutePoint[];
   blocks?: Block[];
@@ -137,7 +139,7 @@ export default function DayMapInner({
         }}
         className="size-full"
       >
-        <FitTo spots={all} />
+        <FitTo spots={all} top={topCover} />
         <PointerTrack trips={trips} onHit={(hit, e) => point(hit.length ? { trips: hit, stops: [], ...where(e) } : null)} />
         {showDots && <Dots points={points} tz={tz} />}
         {trips.map((t) => {
@@ -521,7 +523,7 @@ function Dots({ points, tz }: { points: RoutePoint[]; tz: string }) {
 }
 
 // Zooms to show the whole day (when the number of spots changes).
-function FitTo({ spots }: { spots: Spot[] }) {
+function FitTo({ spots, top = 0 }: { spots: Spot[]; top?: number }) {
   const map = useMap();
   const core = useMapsLibrary("core");
   const key = spots.length;
@@ -534,9 +536,9 @@ function FitTo({ spots }: { spots: Spot[] }) {
     }
     const bounds = new core.LatLngBounds();
     for (const s of spots) bounds.extend(s);
-    map.fitBounds(bounds, 48);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- only when the number of spots changes
-  }, [map, core, key]);
+    map.fitBounds(bounds, top ? { top: top + 32, right: 48, bottom: 48, left: 48 } : 48);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only when the number of spots (or the cover) changes
+  }, [map, core, key, top]);
   return null;
 }
 

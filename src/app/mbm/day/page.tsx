@@ -42,36 +42,38 @@ async function MbmDay({ day: asked }: { day?: string }) {
   const arrow = "grid size-9 place-items-center rounded-control transition-colors hover:bg-surface";
   return (
     <>
-      <header className="mb-3 flex items-center gap-3">
-        <h1 className="min-w-0 flex-1 truncate font-display text-2xl font-semibold tracking-tight">
-          {isToday ? "Today" : dayTitle(dayKey)}
-          {isToday && <span className="ml-2 text-base font-normal text-muted">{dayTitle(dayKey)}</span>}
-        </h1>
-        <nav aria-label="Days" className="flex items-center gap-1">
-          <Link href={`/mbm/day?day=${shiftDay(dayKey, -1)}`} aria-label="The day before" className={arrow}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-              <path d="M15 5l-7 7 7 7" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          </Link>
-          {!isToday && (
-            <Link href="/mbm/day" className="rounded-control px-3 py-2 text-sm font-semibold transition-colors hover:bg-surface">
-              Today
+      <DayView
+        key={dayKey}
+        day={day}
+        today={isToday}
+        renderedAt={day.loadedAt}
+        title={isToday ? "Today" : dayTitle(dayKey)}
+        subtitle={isToday ? dayTitle(dayKey) : undefined}
+        nav={
+          <nav aria-label="Days" className="flex items-center gap-1">
+            <Link href={`/mbm/day?day=${shiftDay(dayKey, -1)}`} aria-label="The day before" className={arrow}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="M15 5l-7 7 7 7" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
             </Link>
-          )}
-          <Link
-            href={`/mbm/day?day=${shiftDay(dayKey, 1)}`}
-            aria-label="The day after"
-            aria-disabled={isToday}
-            className={`${arrow} ${isToday ? "pointer-events-none opacity-30" : ""}`}
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-              <path d="M9 5l7 7-7 7" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          </Link>
-        </nav>
-      </header>
-
-      <DayView key={dayKey} day={day} today={isToday} renderedAt={day.loadedAt} />
+            {!isToday && (
+              <Link href="/mbm/day" className="rounded-control px-3 py-2 text-sm font-semibold transition-colors hover:bg-surface">
+                Today
+              </Link>
+            )}
+            <Link
+              href={`/mbm/day?day=${shiftDay(dayKey, 1)}`}
+              aria-label="The day after"
+              aria-disabled={isToday}
+              className={`${arrow} ${isToday ? "pointer-events-none opacity-30" : ""}`}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="M9 5l7 7-7 7" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </Link>
+          </nav>
+        }
+      />
     </>
   );
 }

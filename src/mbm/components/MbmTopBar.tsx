@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { signOut } from "@/app/mbm/actions";
+import TopSearch from "./TopSearch";
 
 // Minute by Minute's top bar: its name, the three pages, and signing out. `owner`: you (signed in
 // to the everything-log on this browser) also get a link back to it; nobody else does.
@@ -43,7 +44,12 @@ export default function MbmTopBar({ signedIn, email, owner }: { signedIn: boolea
             ))}
           </nav>
         )}
-        <div className="ml-auto flex items-center gap-1">
+        {signedIn && (
+          <div className="ml-auto hidden min-w-0 flex-1 justify-end md:flex">
+            <TopSearch />
+          </div>
+        )}
+        <div className={`flex items-center gap-1 ${signedIn ? "md:ml-2" : ""} ml-auto`}>
           {owner && (
             <Link href="/" title="Back to your everything-log" className="whitespace-nowrap rounded-control px-3 py-2 text-sm text-muted transition-colors hover:bg-surface hover:text-ink">
               <span aria-hidden="true">←</span>

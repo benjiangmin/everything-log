@@ -17,7 +17,9 @@ export default function DayMap({
   liveColor = null,
   onPointer,
   gestures = "cooperative",
+  bare = false,
 }: {
+  bare?: boolean; // just the map (the day page's map layout puts its own things on top)
   gestures?: "cooperative" | "greedy"; // greedy: scroll / pinch zooms the map (when it's the screen you're on)
   day: Day;
   focus?: Focus | null;
@@ -32,7 +34,7 @@ export default function DayMap({
       aria-label="Map"
       className={`overflow-hidden rounded-card border-[1.5px] border-ink ${empty ? "" : "flex min-h-0 flex-1 flex-col"}`}
     >
-      <div className="flex items-baseline justify-between gap-3 px-4 pb-3 pt-4 sm:px-6">
+      <div className={`flex items-baseline justify-between gap-3 px-4 pb-3 pt-4 sm:px-6 ${bare && !empty ? "hidden" : ""}`}>
         <div className="min-w-0">
           <h2 className="font-display text-lg font-semibold">Where you went</h2>
           {!empty && (
@@ -69,7 +71,7 @@ export default function DayMap({
         // isolate: keeps the map's own layers under the page's popups and panels.
         // The map fills this box exactly (absolute: the box's height comes from the page's layout,
         // which a plain height: 100% can't follow, and the map would come out 0 px tall).
-        <div className="relative isolate min-h-[24rem] flex-1 border-t border-line">
+        <div className={`relative isolate min-h-[24rem] flex-1 ${bare ? "" : "border-t border-line"}`}>
           <div className="absolute inset-0">
             <Inner
               visits={day.visits}
@@ -82,6 +84,7 @@ export default function DayMap({
               liveColor={liveColor}
               onPointer={onPointer}
               gestures={gestures}
+              topCover={bare ? 150 : 0}
             />
           </div>
         </div>

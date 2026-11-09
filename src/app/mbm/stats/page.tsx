@@ -17,7 +17,11 @@ export default function MbmStatsPage(props: PageProps<"/mbm/stats">) {
     <main className="mx-auto w-full max-w-5xl px-4 pb-24 pt-6 sm:pt-8">
       <Suspense fallback={<div aria-busy="true" className="h-96 animate-pulse rounded-card bg-line" />}>
         {props.searchParams.then((sp) => (
-          <StatsFor range={isRange(sp.range) ? sp.range : "day"} day={typeof sp.day === "string" ? sp.day : undefined} />
+          <StatsFor
+            range={isRange(sp.range) ? sp.range : "day"}
+            day={typeof sp.day === "string" ? sp.day : undefined}
+            q={typeof sp.q === "string" ? sp.q.slice(0, 60) : ""}
+          />
         ))}
       </Suspense>
     </main>
@@ -26,7 +30,7 @@ export default function MbmStatsPage(props: PageProps<"/mbm/stats">) {
 
 const href = (range: Range, day?: string) => `/mbm/stats?range=${range}${day ? `&day=${day}` : ""}`;
 
-async function StatsFor({ range, day: asked }: { range: Range; day?: string }) {
+async function StatsFor({ range, day: asked, q }: { range: Range; day?: string; q: string }) {
   await connection();
   if (!mbmReady()) return <p className="rounded-card bg-surface px-5 py-4 text-sm">Minute by Minute isn&apos;t connected yet.</p>;
   const user = await mbmUser();
@@ -85,7 +89,7 @@ async function StatsFor({ range, day: asked }: { range: Range; day?: string }) {
       {stats instanceof Error ? (
         <p className="mt-6 rounded-card bg-surface px-5 py-4 text-sm text-danger">{stats.message}</p>
       ) : (
-        <StatsView stats={stats} range={range} tz={tz} dayKey={period.first} isNow={isNow} />
+        <StatsView key={`${period.first}-${range}-${q}`} stats={stats} range={range} tz={tz} dayKey={period.first} isNow={isNow} query={q} />
       )}
     </>
   );
