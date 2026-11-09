@@ -8,7 +8,7 @@ import { openMbm } from "./open";
 import { useNow } from "./useNow";
 
 // What's running, kept small: a button in the bottom-left corner showing it (with its timer).
-// Click it for the full box (Stop, + Start, Switch); nothing running: one click to start.
+// Hover (or click) it for the full box (Stop, + Start, Switch); nothing running: click to start.
 export default function NowChip({ activities, running, tz, renderedAt }: { activities: Activity[]; running: Block[]; tz: string; renderedAt: number }) {
   const t = useNow(renderedAt);
   const [open, setOpen] = useState(false);
@@ -16,6 +16,16 @@ export default function NowChip({ activities, running, tz, renderedAt }: { activ
   const byId = new Map(activities.map((a) => [a.id, a]));
   const first = running[0];
   const a = first?.activity_id ? byId.get(first.activity_id) : undefined;
+
+  // Opens when you hover it (and closes a moment after you leave, so you can move into the box).
+  const leaving = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const enter = () => {
+    if (leaving.current) clearTimeout(leaving.current);
+    setOpen(true);
+  };
+  const leave = () => {
+    leaving.current = setTimeout(() => setOpen(false), 350);
+  };
 
   // Close on a click elsewhere, or Escape.
   useEffect(() => {
@@ -31,7 +41,7 @@ export default function NowChip({ activities, running, tz, renderedAt }: { activ
   }, [open]);
 
   return (
-    <div ref={box} className="fixed bottom-5 left-5 z-40 flex flex-col items-start gap-2">
+    <div ref={box} onMouseEnter={enter} onMouseLeave={leave} className="fixed bottom-5 left-5 z-40 flex flex-col items-start gap-2">
       {open && (
         <div className="w-[min(30rem,calc(100vw-2.5rem))] rounded-card shadow-2xl shadow-ink/25 ring-1 ring-line">
           <NowStatus activities={activities} running={running} tz={tz} renderedAt={renderedAt} compact />
@@ -39,7 +49,7 @@ export default function NowChip({ activities, running, tz, renderedAt }: { activ
       )}
       <button
         type="button"
-        onClick={() => (running.length ? setOpen((o) => !o) : openMbm({ kind: "now" }))}
+        onClick={() => (running.length ? setOpen(true) : openMbm({ kind: "now" }))}
         aria-expanded={running.length ? open : undefined}
         className="flex max-w-[calc(100vw-2.5rem)] items-center gap-2.5 rounded-full bg-accent py-2.5 pl-3.5 pr-4 text-sm font-semibold text-accent-ink shadow-xl shadow-ink/25 transition-transform hover:scale-[1.02]"
       >

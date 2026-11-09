@@ -39,8 +39,7 @@ export default function NowPanel({ switching = false, onClose }: { switching?: b
   const byId = new Map((info?.activities ?? []).map((a) => [a.id, a]));
   const running = info?.running ?? [];
   const names = running.map((b) => (b.activity_id ? byId.get(b.activity_id)?.name : null) ?? "Something");
-  const runningIds = new Set(running.map((b) => b.activity_id));
-  const quick = (info?.activities ?? []).filter((a) => !runningIds.has(a.id)).slice(0, 12);
+  // (No suggestion chips for now: they come back once they're smart. Typing still suggests matches.)
 
   // What "since last entry" means right now, shown on the button.
   const lastLabel = (() => {
@@ -95,23 +94,6 @@ export default function NowPanel({ switching = false, onClose }: { switching?: b
           className={`flex flex-col gap-4 ${pending ? "opacity-70" : ""}`}
         >
           <ActivityInput activities={info.activities} value={text} onChange={setText} onEnter={go} placeholder="Cooking, Class, Gaming…" autoFocus />
-
-          {quick.length > 0 && (
-            <div className="flex flex-wrap gap-1.5">
-              {quick.map((a) => (
-                <button
-                  key={a.id}
-                  type="button"
-                  disabled={pending}
-                  onClick={() => go(a.name)}
-                  className="flex items-center gap-1.5 rounded-full bg-surface px-3 py-1.5 text-sm text-ink ring-1 ring-line transition-colors hover:ring-ink/40 disabled:opacity-50"
-                >
-                  <span className="size-2 rounded-full" style={{ background: a.color }} />
-                  {a.name}
-                </button>
-              ))}
-            </div>
-          )}
 
           {/* Started when */}
           <div>
