@@ -3,6 +3,7 @@ import { mbmUser } from "@/mbm/supabase";
 import { isEverythingLogOwner } from "@/mbm/owner";
 import MbmTopBar from "@/mbm/components/MbmTopBar";
 import MbmPanels from "@/mbm/components/MbmPanels";
+import LiveRefresh from "@/mbm/components/LiveRefresh";
 
 export const metadata = { title: { default: "Minute by Minute", template: "%s · Minute by Minute" } };
 
@@ -15,6 +16,8 @@ export default function MbmLayout({ children }: LayoutProps<"/mbm">) {
         <Bar />
       </Suspense>
       <MbmPanels />
+      {/* What the phone sends shows up within 30 seconds. */}
+      <LiveRefresh />
       {children}
     </>
   );

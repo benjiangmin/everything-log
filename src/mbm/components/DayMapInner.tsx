@@ -553,11 +553,12 @@ function Dots({ points, tz }: { points: RoutePoint[]; tz: string }) {
   return null;
 }
 
-// Zooms to show the whole day (when the number of spots changes).
+// Zooms to show the whole day: when the day opens (not every time new dots come in from the
+// phone, so the map doesn't jump while you look around).
 function FitTo({ spots, top = 0 }: { spots: Spot[]; top?: number }) {
   const map = useMap();
   const core = useMapsLibrary("core");
-  const key = spots.length;
+  const key = spots.length ? `${spots[0].lat},${spots[0].lng}` : "";
   useEffect(() => {
     if (!map || !core || spots.length === 0) return;
     if (spots.length === 1) {
@@ -568,7 +569,7 @@ function FitTo({ spots, top = 0 }: { spots: Spot[]; top?: number }) {
     const bounds = new core.LatLngBounds();
     for (const s of spots) bounds.extend(s);
     map.fitBounds(bounds, top ? { top: top + 32, right: 48, bottom: 48, left: 48 } : 48);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- only when the number of spots (or the cover) changes
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only for a new day (or a new cover)
   }, [map, core, key, top]);
   return null;
 }

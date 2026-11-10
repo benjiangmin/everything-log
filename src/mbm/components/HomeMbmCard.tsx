@@ -3,6 +3,7 @@
 import Link from "next/link";
 import type { Day } from "@/mbm/data";
 import DayBar from "./DayBar";
+import LiveRefresh from "./LiveRefresh";
 import NowStatus from "./NowStatus";
 import { layOut } from "./segments";
 import { useNow } from "./useNow";
@@ -15,6 +16,7 @@ export default function HomeMbmCard({ day, renderedAt }: { day: Day; renderedAt:
   const { placed, lanes, gaps } = layOut(day.blocks, dayStart, dayEnd, now);
   return (
     <section aria-label="Minute by Minute" className="mt-6 rounded-card border-2 border-ink p-4 sm:p-5">
+      <LiveRefresh />
       <div className="mb-3 flex items-baseline justify-between">
         <h2 className="font-display text-lg font-semibold">Minute by Minute</h2>
         <Link href="/mbm/day" className="text-sm text-muted underline-offset-4 hover:text-ink hover:underline">
