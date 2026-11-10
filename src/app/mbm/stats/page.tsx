@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { mbmTz } from "@/mbm/data";
 import { mbmReady, mbmUser } from "@/mbm/supabase";
 import { isDayKey } from "@/mbm/time";
-import { RANGES, getStats, isRange, periodOf, todayKey, type Range } from "@/mbm/stats";
+import { RANGES, getPins, getStats, isRange, periodOf, todayKey, type Range } from "@/mbm/stats";
 import StatsView from "@/mbm/components/StatsView";
 
 export const metadata = { title: "Stats" };
@@ -40,7 +40,7 @@ async function StatsFor({ range, day: asked, q }: { range: Range; day?: string; 
   const today = todayKey(tz);
   const dayKey = isDayKey(asked) && asked <= today ? asked : today;
   const period = periodOf(range, dayKey, today);
-  const stats = await getStats(period, tz).catch((e: Error) => e);
+  const [stats, pins] = await Promise.all([getStats(period, tz).catch((e: Error) => e), getPins().catch(() => null)]);
   const isNow = period.first <= today && today < period.next;
   const arrow = "grid size-10 place-items-center rounded-control transition-colors hover:bg-surface";
 
@@ -89,7 +89,7 @@ async function StatsFor({ range, day: asked, q }: { range: Range; day?: string; 
       {stats instanceof Error ? (
         <p className="mt-6 rounded-card bg-surface px-5 py-4 text-sm text-danger">{stats.message}</p>
       ) : (
-        <StatsView key={`${period.first}-${range}-${q}`} stats={stats} range={range} tz={tz} dayKey={period.first} isNow={isNow} query={q} />
+        <StatsView key={`${period.first}-${range}-${q}`} stats={stats} range={range} tz={tz} dayKey={period.first} isNow={isNow} query={q} pins={pins} />
       )}
     </>
   );

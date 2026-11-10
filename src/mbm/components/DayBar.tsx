@@ -315,6 +315,8 @@ export default function DayBar({
   // The bubble sits over the tail, sliding sideways near the ends so it stays on screen
   // (the tail is always inside it).
   const slide = Math.min(90, Math.max(10, hoverMid));
+  // Over the map (slim), the bar is near the top of the screen: the bubble goes below it instead.
+  const below = slim;
 
   return (
     <div className="relative">
@@ -329,50 +331,59 @@ export default function DayBar({
           {edge.linked && <span className="font-normal opacity-70"> · and the one next to it</span>}
         </div>
       )}
-      {/* The speech bubble over the bar: what it was, when, for how long. */}
+      {/* The bubble over the bar: what it was, when, for how long. It floats well above the bar
+          (over the box's top edge), joined to the entry by a line. */}
       {hover && !edge && (
         <div
           role="tooltip"
-          className="pointer-events-none absolute bottom-full z-30 mb-2.5 w-max max-w-[16rem] rounded-control bg-accent px-3 py-2 text-accent-ink shadow-lg shadow-ink/25"
+          className={`pointer-events-none absolute z-30 w-max min-w-[11rem] max-w-[20rem] ${below ? "top-full mt-9" : "bottom-full mb-9"} rounded-card bg-accent px-4 py-3 text-accent-ink shadow-xl shadow-ink/30`}
           style={{ left: `${hoverMid}%`, transform: `translateX(-${slide}%)` }}
         >
           {hover.phone ? (
             <>
-              <p className="text-sm font-semibold">{hover.phone.kind === "app" ? (hover.phone.app ?? "An app") : "On your phone"}</p>
-              <p className="num text-xs opacity-80">
+              <p className="font-display text-base font-semibold">{hover.phone.kind === "app" ? (hover.phone.app ?? "An app") : "On your phone"}</p>
+              <p className="num mt-0.5 text-sm opacity-80">
                 {clock(new Date(hover.start), tz)} – {hover.phone.ended_at ? clock(new Date(hover.end), tz) : "now"} · {span(hover.end - hover.start)}
               </p>
             </>
           ) : hover.block ? (
             <>
-              <p className="flex items-center gap-1.5 text-sm font-semibold">
-                <span className="size-2 rounded-full ring-1 ring-accent-ink/40" style={{ background: nameOf(hover.block)?.color ?? "#a98467" }} />
+              <p className="flex items-center gap-2 font-display text-base font-semibold">
+                <span className="size-2.5 shrink-0 rounded-full ring-1 ring-accent-ink/40" style={{ background: nameOf(hover.block)?.color ?? "#a98467" }} />
                 {nameOf(hover.block)?.name ?? "Something"}
               </p>
-              <p className="num text-xs opacity-80">
+              <p className="num mt-0.5 text-sm opacity-80">
                 {clock(hover.block.started_at, tz)} – {hover.block.ended_at ? clock(hover.block.ended_at, tz) : "now"} ·{" "}
                 {span((hover.block.ended_at ? +new Date(hover.block.ended_at) : now) - +new Date(hover.block.started_at))}
               </p>
-              {hover.block.note && <p className="mt-0.5 line-clamp-2 text-xs opacity-80">{hover.block.note}</p>}
+              {hover.block.note && <p className="mt-1 line-clamp-3 text-sm opacity-80">{hover.block.note}</p>}
             </>
           ) : (
             <>
-              <p className="text-sm font-semibold">Untracked</p>
-              <p className="num text-xs opacity-80">
+              <p className="font-display text-base font-semibold">Untracked</p>
+              <p className="num mt-0.5 text-sm opacity-80">
                 {clock(new Date(hover.start), tz)} – {clock(new Date(hover.end), tz)} · {span(hover.end - hover.start)}
               </p>
-              {onSelectGap && <p className="mt-0.5 text-xs opacity-80">Click to fill it in</p>}
+              {onSelectGap && <p className="mt-1 text-xs opacity-70">Click to fill it in</p>}
             </>
           )}
         </div>
       )}
-      {/* The bubble's tail, pointing right at the entry (the bubble itself stays on screen). */}
+      {/* The line from the bubble down to the entry, ending in a dot on the bar's edge (the
+          bubble slides to stay on screen; the line always points right at the entry). */}
       {hover && !edge && (
-        <span
-          aria-hidden="true"
-          className="pointer-events-none absolute bottom-full z-30 mb-[3px] size-0 -translate-x-1/2 border-x-[7px] border-t-[7px] border-x-transparent border-t-accent"
-          style={{ left: `${hoverMid}%` }}
-        />
+        <>
+          <span
+            aria-hidden="true"
+            className={`pointer-events-none absolute z-30 h-9 w-[2px] -translate-x-1/2 bg-accent ${below ? "top-full" : "bottom-full"}`}
+            style={{ left: `${hoverMid}%` }}
+          />
+          <span
+            aria-hidden="true"
+            className={`pointer-events-none absolute z-30 size-2.5 -translate-x-1/2 rounded-full bg-accent ring-2 ring-paper ${below ? "top-full -translate-y-1/2" : "bottom-full translate-y-1/2"}`}
+            style={{ left: `${hoverMid}%` }}
+          />
+        </>
       )}
 
       <div

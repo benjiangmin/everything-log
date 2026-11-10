@@ -432,3 +432,16 @@ export async function searchEverything(q: string): Promise<SearchHit[]> {
   }
   return hits;
 }
+
+// Pin / unpin an activity on the Stats page's "Time spent" (023_pins.sql).
+export async function setPinned(name: string, pinned: boolean): Promise<Result> {
+  const clean = name.trim().replace(/\s+/g, " ").slice(0, 80);
+  if (!clean) return { ok: false, message: "Pin what?" };
+  const client = await mbm();
+  const { error } = pinned
+    ? await client.from("stat_pins").upsert({ name: clean }, { onConflict: "user_id,name", ignoreDuplicates: true })
+    : await client.from("stat_pins").delete().ilike("name", clean.replace(/[\\%_]/g, (c) => "\\" + c));
+  if (error) return { ok: false, message: /stat_pins/.test(error.message) ? "Run supabase/minute-by-minute/023_pins.sql first." : error.message };
+  revalidatePath("/mbm/stats");
+  return { ok: true };
+}

@@ -75,3 +75,11 @@ export async function getStats(period: Period, tz: string): Promise<Stats> {
 }
 
 export const todayKey = (tz: string) => dayKeyOf(new Date(), tz);
+
+// Your pinned activities on "Time spent", oldest first (023_pins.sql; none if it isn't run yet).
+export async function getPins(): Promise<string[] | null> {
+  const client = await mbm();
+  const { data, error } = await client.from("stat_pins").select("name").order("created_at");
+  if (error) return null; // null: can't pin yet
+  return (data as { name: string }[]).map((p) => p.name);
+}
