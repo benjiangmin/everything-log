@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { APIProvider, InfoWindow, Map, useMap, useMapsLibrary } from "@vis.gl/react-google-maps";
-import { moveStop, namePlace, rememberedRoute, removeStop, saveBlock } from "@/app/mbm/actions";
+import { moveStop, namePlace, rememberedRoute, removeStop, saveBlock, trailCells } from "@/app/mbm/actions";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
 import type { Activity, Block, RoutePoint, Visit } from "@/mbm/data";
 import { clock, span } from "@/mbm/time";
@@ -10,6 +10,7 @@ import { HtmlMarker, KEY, stylesFor } from "./mapBits";
 import { buildTrips, decodePolyline, metres, type Piece, type Spot, type Trip } from "@/mbm/trips";
 import { snapLeg } from "@/mbm/snap";
 import { splitLegs, waitSpot } from "@/mbm/legs";
+import { despike, makeTrails } from "@/mbm/trails";
 import { nearOutline } from "@/mbm/buildings";
 import { isMoving } from "@/mbm/moving";
 
@@ -57,7 +58,7 @@ export default function DayMapInner({
   const [pointed, setPointed] = useState<{ trips: string[]; stops: string[]; x: number; y: number } | null>(null);
   const box = useRef<HTMLDivElement>(null);
   const built = useMemo(() => buildTrips(visits, points), [visits, points]);
-  const trips = useFilledTrips(built);
+  const trips = useFilledTrips(built, points);
   // What lights up for the hovered stretch: the trips (moving) or the stops (still) during it.
   const barLit = useMemo(() => {
     if (!focus) return null;
@@ -428,11 +429,32 @@ function PointerTrack({ trips, onHit }: { trips: Trip[]; onHit: (keys: string[],
 // snapped onto the real paths and roads (solid; see snap.ts). Bits it missed are filled in and
 // stay dashed: a whole missed trip uses a walk you recorded before between the same two places,
 // otherwise Google's walking route. Answers are kept in this browser.
-function useFilledTrips(trips: Trip[]): Trip[] {
+function useFilledTrips(trips: Trip[], points: RoutePoint[]): Trip[] {
   const [better, setBetter] = useState<Record<string, Spot[]>>({});
   const asked = useRef(new Set<string>());
+  // Your trails around the day (trails.ts), learned from your walks before it. Fetched once per
+  // day; the pieces wait for them (a few hundred ms) so they're drawn the learned way first time.
+  const [trails, setTrails] = useState<{ day: string; center: ReturnType<typeof makeTrails> } | null>(null);
+  const dayOf = points.length ? points[0].at.slice(0, 10) : "";
+  useEffect(() => {
+    if (!points.length || trails?.day === dayOf) return;
+    let lat0 = Infinity, lat1 = -Infinity, lng0 = Infinity, lng1 = -Infinity; // prettier-ignore
+    for (const p of points) {
+      lat0 = Math.min(lat0, p.lat);
+      lat1 = Math.max(lat1, p.lat);
+      lng0 = Math.min(lng0, p.lng);
+      lng1 = Math.max(lng1, p.lng);
+    }
+    const pad = 0.002;
+    trailCells({ minLat: lat0 - pad, maxLat: lat1 + pad, minLng: lng0 - pad, maxLng: lng1 + pad }, points[0].at)
+      .catch(() => [])
+      .then((cells) => setTrails({ day: dayOf, center: makeTrails(cells) }));
+  }, [points, dayOf, trails?.day]);
+  const ready = !points.length || trails?.day === dayOf;
   // (Answers are kept even if the trips change meanwhile: each piece is only asked about once.)
   useEffect(() => {
+    if (!ready) return;
+    const center = trails?.center ?? null;
     for (const t of trips) {
       t.pieces.forEach(async (p, i) => {
         const key = pieceKey(t, i);
@@ -449,11 +471,12 @@ function useFilledTrips(trips: Trip[]): Trip[] {
           // wait is just where you stood, so a bus stop never turns into a detour.
           // (The path is [the stop, the door you left by] + your dots + [the next stop].)
           const head = p.path.slice(0, Math.max(0, p.path.length - (p.dots?.length ?? 0) - (p.ends?.to ? 1 : 0)));
-          const legs = p.dots ? splitLegs(p.dots) : [];
+          // Walks are first pulled onto your usual line (your trails), then matched.
+          const legs = (p.dots ? splitLegs(p.dots) : []).map((l) => (center && l.mode === "walk" ? { ...l, dots: center(l.dots) } : l));
           const drawn = await Promise.all(
             legs.map(async (l) => (l.mode === "wait" ? [waitSpot(l)] : ((await snapLeg(l.dots, l.mode)) ?? l.dots.map((d) => ({ lat: d.lat, lng: d.lng }))))),
           );
-          const body = drawn.flat();
+          const body = despike(drawn.flat());
           if (legs.length && body.length >= 2) path = [...head, ...body, ...(p.ends?.to ? [b] : [])]; // (joined back to where it really starts and ends)
         } else if (metres(a, b) >= 120) {
           const whole = t.pieces.length === 1 && t.fromId && t.toId;
@@ -463,7 +486,7 @@ function useFilledTrips(trips: Trip[]): Trip[] {
         if (path && path.length >= 2) setBetter((m) => ({ ...m, [key]: path! }));
       });
     }
-  }, [trips]);
+  }, [trips, ready, trails]);
   return useMemo(
     () => trips.map((t) => ({ ...t, pieces: t.pieces.map((p, i) => (better[pieceKey(t, i)] ? { ...p, path: better[pieceKey(t, i)] } : p)) })),
     [trips, better],

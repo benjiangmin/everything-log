@@ -33,7 +33,7 @@ export async function snapLeg(dots: Dot[], mode: "walk" | "bike" | "ride"): Prom
 
   const step = Math.ceil(raw.length / MAX_POINTS);
   const shape = raw.filter((_, i) => i % step === 0 || i === raw.length - 1);
-  const id = `mbm-snap:v6:${mode}:${shape.length}:${shape[0].lat.toFixed(5)},${shape[0].lng.toFixed(5)}:${shape[shape.length - 1].lat.toFixed(5)},${shape[shape.length - 1].lng.toFixed(5)}`;
+  const id = `mbm-snap:v8:${mode}:${shape.length}:${shape[0].lat.toFixed(5)},${shape[0].lng.toFixed(5)}:${shape[shape.length - 1].lat.toFixed(5)},${shape[shape.length - 1].lng.toFixed(5)}`;
   try {
     const kept = localStorage.getItem(id);
     if (kept) return kept === "none" ? null : (JSON.parse(kept) as Spot[]);
@@ -75,10 +75,32 @@ export async function snapLeg(dots: Dot[], mode: "walk" | "bike" | "ride"): Prom
   }
 }
 
-// The match where your dots agree with it, your own dots where they don't. A single dot off the
-// match is a GPS wobble (kept on the match); two or more in a row are you going another way.
+// The match where your dots agree with it, your own dots where they don't. A stretch of dots off
+// the match is one of two things, told apart by comparing lengths between where the dots leave the
+// match and where they rejoin it:
+//   - a shortcut the map doesn't know (cutting across a lawn): your dots are about as short as
+//     the match or shorter, which goes the long way round → your dots;
+//   - the GPS drifting off and back (common near buildings): your dots go out and come back, so
+//     they're longer than the match between the same two points → the match.
+// A single dot off the match is always a wobble.
 function blend(raw: Dot[], matched: Spot[], near: boolean[]): Spot[] {
   const ok = near.map((n, i) => n || (i > 0 && i < near.length - 1 && near[i - 1] && near[i + 1]));
+  for (let i = 0; i < raw.length; i++) {
+    if (ok[i]) continue;
+    let j = i;
+    while (j + 1 < raw.length && !ok[j + 1]) j++;
+    const before = i - 1;
+    const after = j + 1;
+    if (before >= 0 && after < raw.length) {
+      const a = project(raw[before], matched);
+      const b = project(raw[after], matched);
+      let dotLen = 0;
+      for (let k = before + 1; k <= after; k++) dotLen += metres(raw[k - 1], raw[k]);
+      const matchLen = b.along - a.along;
+      if (matchLen >= 0 && dotLen > matchLen * 1.15 + 15) for (let k = i; k <= j; k++) ok[k] = true; // drifted off and back
+    }
+    i = j;
+  }
   const out: Spot[] = [];
   let i = 0;
   while (i < raw.length) {

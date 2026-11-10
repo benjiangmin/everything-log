@@ -445,3 +445,19 @@ export async function setPinned(name: string, pinned: boolean): Promise<Result> 
   revalidatePath("/mbm/stats");
   return { ok: true };
 }
+
+// Your trails near a day's route, from your walks before it (028_trails.sql): how the map learns
+// the lines you usually walk. [] if there's nothing yet (or 028 isn't run).
+export async function trailCells(box: { minLat: number; maxLat: number; minLng: number; maxLng: number }, before: string) {
+  const ok = [box.minLat, box.maxLat, box.minLng, box.maxLng].every(Number.isFinite) && box.maxLat - box.minLat < 1 && box.maxLng - box.minLng < 1;
+  if (!ok || Number.isNaN(new Date(before).getTime())) return [];
+  const { data, error } = await (await mbm()).rpc("trail_cells", {
+    p_min_lat: box.minLat,
+    p_max_lat: box.maxLat,
+    p_min_lng: box.minLng,
+    p_max_lng: box.maxLng,
+    p_before: new Date(before).toISOString(),
+  });
+  if (error || !Array.isArray(data)) return [];
+  return (data as number[][]).map(([lat, lng, n, c2, s2]) => ({ lat: Number(lat), lng: Number(lng), n: Number(n), c2: Number(c2), s2: Number(s2) }));
+}
