@@ -5,6 +5,7 @@ import "@fontsource-variable/instrument-sans";
 import "./globals.css";
 import { ConfirmProvider } from "@/components/ui/ConfirmDialog";
 import SideNav from "@/components/ui/SideNav";
+import SubmitShortcut from "@/components/ui/SubmitShortcut";
 
 export const metadata: Metadata = {
   title: "benbadobee",
@@ -20,6 +21,8 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
           <Suspense fallback={null}>
             <SideNav />
           </Suspense>
+          {/* ⌘↵ / Ctrl+↵ submits whatever you're typing in. */}
+          <SubmitShortcut />
           {children}
         </ConfirmProvider>
       </body>
