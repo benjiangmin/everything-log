@@ -1,5 +1,6 @@
 import { nearOutline } from "./buildings";
 import type { RoutePoint, Visit } from "./data";
+import { splitLegs, waitSpot, type Dot } from "./legs";
 
 // The day as stops and the trips between them. Every trip starts at a stop and ends at the next
 // one (or at a loose end: where the day's first recording began, or where you are now if you
@@ -7,7 +8,9 @@ import type { RoutePoint, Visit } from "./data";
 // not a route). A stretch with no dots is a "missing" piece, drawn dashed.
 
 export type Spot = { lat: number; lng: number };
-export type Piece = { path: Spot[]; missing: boolean; ends?: { from: boolean; to: boolean } }; // ends: its first / last spot is a stop, not a dot
+// A piece of a trip: a stretch the phone recorded (its dots), or a "missing" one it didn't.
+// ends: its first / last spot is a stop, not a dot.
+export type Piece = { path: Spot[]; missing: boolean; ends?: { from: boolean; to: boolean }; dots?: Dot[] };
 export type Trip = {
   key: string;
   fromId: string | null; // the stop it left
@@ -18,6 +21,7 @@ export type Trip = {
   looseStart: Spot | null; // no stop before it: a small node where it began
   looseEnd: Spot | null; // no stop after it (yet): a small node where it ends
   pace: number | null; // metres a second over the recorded dots (walking ~1.4, driving 5+)
+  waits: { at: Spot; start: number; end: number }[]; // standing at a stop for a ride (a bus stop)
 };
 
 // The recording missed a bit when there are no dots for 20 minutes, or it jumps 200 m+ after 3+
@@ -42,7 +46,14 @@ export function metres(a: Spot, b: Spot) {
 //     going somewhere and straight back).
 function cleanDots(points: RoutePoint[]) {
   const all = points
-    .map((p) => ({ ...spot(p), t: ms(p.at), still: p.speed_mps != null && p.speed_mps < 0.8, fuzzy: p.speed_mps != null && p.speed_mps < 0.5 && (p.accuracy_m ?? 0) > 25 }))
+    .map((p) => ({
+      ...spot(p),
+      t: ms(p.at),
+      speed: p.speed_mps ?? null,
+      acc: p.accuracy_m ?? null,
+      still: p.speed_mps != null && p.speed_mps < 0.8,
+      fuzzy: p.speed_mps != null && p.speed_mps < 0.5 && (p.accuracy_m ?? 0) > 25,
+    }))
     .sort((a, b) => a.t - b.t);
   // Standing somewhere (waiting to cross, talking): one dot, not a zigzag of jitter. A still dot
   // within 20 m of the last one kept is dropped.
@@ -145,7 +156,7 @@ export function buildTrips(visits: Visit[], points: RoutePoint[]): Trip[] {
           path.unshift(spot(from!));
         }
         if (r === runs.length - 1 && joinsTo) path.push(spot(to!));
-        pieces.push({ path, missing: false, ends: { from: r === 0 && !!joinsFrom, to: r === runs.length - 1 && !!joinsTo } });
+        pieces.push({ path, missing: false, ends: { from: r === 0 && !!joinsFrom, to: r === runs.length - 1 && !!joinsTo }, dots: run });
       });
       if (to && !joinsTo) pieces.push({ path: [spot(last), spot(to)], missing: true });
       if (to && joinsTo) door.set(to.id, spot(last));
@@ -168,6 +179,7 @@ export function buildTrips(visits: Visit[], points: RoutePoint[]): Trip[] {
       end: to ? hi : dots[dots.length - 1].t,
       pieces: kept,
       pace: pace(dots),
+      waits: kept.flatMap((p) => (p.dots ? splitLegs(p.dots).filter((l) => l.mode === "wait").map((l) => ({ at: waitSpot(l), start: l.start, end: l.end })) : [])),
       looseStart: from ? null : spot(dots[0]),
       looseEnd: to ? null : spot(dots[dots.length - 1]),
     });

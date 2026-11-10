@@ -8,7 +8,8 @@ import type { Activity, Block, RoutePoint, Visit } from "@/mbm/data";
 import { clock, span } from "@/mbm/time";
 import { HtmlMarker, KEY, stylesFor } from "./mapBits";
 import { buildTrips, decodePolyline, metres, type Piece, type Spot, type Trip } from "@/mbm/trips";
-import { snapPath } from "@/mbm/snap";
+import { snapLeg } from "@/mbm/snap";
+import { splitLegs, waitSpot } from "@/mbm/legs";
 import { nearOutline } from "@/mbm/buildings";
 import { isMoving } from "@/mbm/moving";
 
@@ -171,6 +172,25 @@ export default function DayMapInner({
             </HtmlMarker>
           ));
         })}
+        {/* Where you waited for a ride (a bus stop): a small stop sign on the route. */}
+        {trips.flatMap((t) =>
+          t.waits.map((w, i) => {
+            const label = `Waited here ${span(w.end - w.start)} · ${clock(new Date(w.start), tz)} – ${clock(new Date(w.end), tz)}`;
+            return (
+              <HtmlMarker key={`${t.key}-wait-${i}`} position={w.at} zIndex={2}>
+                <span
+                  title={label}
+                  aria-label={label}
+                  className={`grid size-[18px] cursor-help place-items-center rounded-[6px] border-2 border-[#faf6f0] bg-[#3e281b] shadow transition-opacity ${
+                    dimming && !lit?.trip.has(t.key) ? "opacity-35" : ""
+                  }`}
+                >
+                  <span className="block size-1.5 rounded-full bg-[#faf6f0]" />
+                </span>
+              </HtmlMarker>
+            );
+          }),
+        )}
         {here && liveColor && (
           <HtmlMarker position={here.at} zIndex={here.when ? 4 : 0}>
             <span className="relative grid size-4 place-items-center" title={here.when ? `Last seen here · ${clock(here.when, tz)}` : "You're here"}>
@@ -425,9 +445,16 @@ function useFilledTrips(trips: Trip[]): Trip[] {
           // Only the dots you recorded are snapped, not the stops at either end: snapping to a stop's
           // pin would route you to whatever door the map knows (the library's west entrance) instead
           // of the way you actually went in. The ends join straight from your first / last dot.
-          const dots = p.path.slice(p.ends?.from ? 1 : 0, p.ends?.to ? -1 : undefined);
-          const snapped = await snapPath(dots, t.pace);
-          if (snapped) path = [a, ...snapped, b]; // (joined back to where it really starts and ends)
+          // Leg by leg (walk, bike, ride, waiting at a stop: legs.ts), each matched its own way; a
+          // wait is just where you stood, so a bus stop never turns into a detour.
+          // (The path is [the stop, the door you left by] + your dots + [the next stop].)
+          const head = p.path.slice(0, Math.max(0, p.path.length - (p.dots?.length ?? 0) - (p.ends?.to ? 1 : 0)));
+          const legs = p.dots ? splitLegs(p.dots) : [];
+          const drawn = await Promise.all(
+            legs.map(async (l) => (l.mode === "wait" ? [waitSpot(l)] : ((await snapLeg(l.dots, l.mode)) ?? l.dots.map((d) => ({ lat: d.lat, lng: d.lng }))))),
+          );
+          const body = drawn.flat();
+          if (legs.length && body.length >= 2) path = [...head, ...body, ...(p.ends?.to ? [b] : [])]; // (joined back to where it really starts and ends)
         } else if (metres(a, b) >= 120) {
           const whole = t.pieces.length === 1 && t.fromId && t.toId;
           const remembered = whole ? await rememberedRoute(t.fromId!, t.toId!).catch(() => null) : null;
