@@ -38,7 +38,7 @@ export function PageHeader({
   onDescription?: (next: string) => void;
 }) {
   const strip = useRef<HTMLDivElement>(null);
-  useBarHeight(strip, sticky);
+  const scrolled = useBarHeight(strip, sticky); // (a deeper shadow once the page is going under it)
   return (
     <>
       {back && (
@@ -52,7 +52,9 @@ export function PageHeader({
       {/* Sticky: paper above it (so nothing shows over the top), and the page scrolls away under
           the bar and its shadow, the same shadow as the other boxes. */}
       <div ref={strip} className={sticky ? "sticky top-0 z-40 -mx-3 -mt-3 mb-3 bg-paper px-3 pt-3" : ""}>
-        <header className="flex items-center justify-between gap-4 rounded-card bg-accent px-5 py-4 text-accent-ink shadow-lg shadow-ink/15">
+        <header className={`flex items-center justify-between gap-4 rounded-card bg-accent px-5 py-4 text-accent-ink transition-shadow ${
+            scrolled ? "shadow-xl shadow-ink/25" : "shadow-lg shadow-ink/15"
+          }`}>
           <div className="min-w-0 flex-1">
             <h1 className="min-w-0 truncate font-display text-2xl font-semibold tracking-tight sm:text-3xl">{title}</h1>
             {editing && onDescription ? (

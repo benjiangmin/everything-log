@@ -116,19 +116,19 @@ export default function TodoBox({ initial }: { initial: TodoItem[] | "missing" }
     // The paper above it covers the gap under the Home bar while it's stuck.
     <div ref={box} data-under-bar className="sticky z-30 -mx-3 mt-3 bg-paper px-3 pt-3" style={{ top: "var(--home-bar-h, 0px)" }}>
       {/* A sheet of paper lifted off the page (the other boxes are outlined or oat), with a dark
-          tab for its title, so it doesn't read as one more bar. */}
+          strip for its title, so it doesn't read as one more bar. */}
       <section
         aria-label="Todo"
-        className={`overflow-hidden rounded-card bg-paper ring-1 ring-ink/10 transition-shadow ${stuck ? "shadow-lg shadow-ink/15" : "shadow-md shadow-ink/10"}`}
+        className={`overflow-hidden rounded-card bg-paper ring-1 ring-ink/10 transition-shadow ${stuck ? "shadow-xl shadow-ink/25" : "shadow-md shadow-ink/10"}`}
       >
-        <div className="flex items-center gap-2.5 bg-accent px-4 py-2.5 text-accent-ink sm:px-5">
+        <div className="flex items-center gap-2.5 bg-surface px-4 py-2.5 text-ink sm:px-5">
           <svg width="17" height="17" viewBox="0 0 24 24" fill="none" aria-hidden="true">
             <path d="M4 6.5l1.6 1.6L8.5 5M4 13l1.6 1.6L8.5 11.5M4 19.5l1.6 1.6 2.9-3.1" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
             <path d="M12 7h8M12 13.5h8M12 20h8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
           </svg>
           <h2 className="flex-1 font-display text-lg font-semibold">Todo</h2>
           {initial !== "missing" && openCount > 0 && (
-            <span className="num rounded-full bg-accent-ink/15 px-2.5 py-0.5 text-sm font-semibold">
+            <span className="num rounded-full bg-ink/10 px-2.5 py-0.5 text-sm font-semibold text-ink/80">
               {openCount} left
             </span>
           )}

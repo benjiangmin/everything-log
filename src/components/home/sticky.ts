@@ -6,8 +6,17 @@ import { useEffect, useState, type RefObject } from "react";
 
 const BAR_VAR = "--home-bar-h";
 
-// The Home bar tells the page its height: the todo box sticks right under it.
+// The Home bar tells the page its height (the todo box sticks right under it), and gets back
+// whether the page is scrolled (something is going under it).
 export function useBarHeight(ref: RefObject<HTMLElement | null>, on: boolean) {
+  const [scrolled, setScrolled] = useState(false);
+  useEffect(() => {
+    if (!on) return;
+    const update = () => setScrolled(window.scrollY > 2);
+    update();
+    window.addEventListener("scroll", update, { passive: true });
+    return () => window.removeEventListener("scroll", update);
+  }, [on]);
   useEffect(() => {
     const el = ref.current;
     if (!on || !el) return;
@@ -21,6 +30,7 @@ export function useBarHeight(ref: RefObject<HTMLElement | null>, on: boolean) {
       root.style.removeProperty(BAR_VAR);
     };
   }, [ref, on]);
+  return scrolled;
 }
 
 // Something stuck right under the Home bar: true while it's stuck there (the page scrolling
