@@ -84,6 +84,8 @@ export function buildTrips(visits: Visit[], points: RoutePoint[]): Trip[] {
   });
 
   const trips: Trip[] = [];
+  // Where you went into each stop (the last dot before it), so you leave the same way.
+  const door = new Map<string, Spot>();
   for (let i = -1; i < vs.length; i++) {
     const from = i >= 0 ? vs[i] : null;
     const to = vs[i + 1] ?? null;
@@ -135,11 +137,18 @@ export function buildTrips(visits: Visit[], points: RoutePoint[]): Trip[] {
           pieces.push({ path: [spot(prev[prev.length - 1]), spot(run[0])], missing: true });
         }
         const path = run.map(spot);
-        if (r === 0 && joinsFrom) path.unshift(spot(from!));
+        if (r === 0 && joinsFrom) {
+          // You usually leave a building the way you came in: start from that door, unless the
+          // dots plainly head off another way (the first one is much nearer the stop than the door).
+          const d = door.get(from!.id);
+          if (d && metres(d, first) > 10 && metres(d, first) < metres(from!, first) + 50) path.unshift(d);
+          path.unshift(spot(from!));
+        }
         if (r === runs.length - 1 && joinsTo) path.push(spot(to!));
         pieces.push({ path, missing: false, ends: { from: r === 0 && !!joinsFrom, to: r === runs.length - 1 && !!joinsTo } });
       });
       if (to && !joinsTo) pieces.push({ path: [spot(last), spot(to)], missing: true });
+      if (to && joinsTo) door.set(to.id, spot(last));
     }
 
     const kept = pieces.filter((p) => p.path.length >= 2);
