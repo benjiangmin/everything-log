@@ -110,6 +110,7 @@ export default function CategoryGrid({
           <Empty>No categories yet. Press Edit to add one.</Empty>
         ) : (
           <SectionBoard
+            stickyTop="calc(var(--home-bar-h, 0px) + var(--home-todo-h, 0px))"
             dndId="home-categories"
             groups={groups}
             editing={editing}

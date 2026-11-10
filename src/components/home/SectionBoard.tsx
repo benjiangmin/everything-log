@@ -44,7 +44,9 @@ export default function SectionBoard({
   renderSectionHead,
   renderAdd,
   after,
+  stickyTop,
 }: {
+  stickyTop?: string; // subcategory titles stick this far from the top while you scroll past them
   dndId: string;
   groups: Group[]; // first one is "no section"
   editing: boolean;
@@ -132,7 +134,7 @@ export default function SectionBoard({
         {sections.map((s) =>
           // Empty sections only show while editing.
           s.itemIds.length > 0 || editing ? (
-            <SectionBlock key={s.id} group={s} editing={editing} renderItem={renderItem} renderHead={renderSectionHead} renderAdd={renderAdd} />
+            <SectionBlock key={s.id} group={s} editing={editing} stickyTop={stickyTop} renderItem={renderItem} renderHead={renderSectionHead} renderAdd={renderAdd} />
           ) : null,
         )}
       </SortableContext>
@@ -148,9 +150,11 @@ function SectionBlock({
   renderItem,
   renderHead,
   renderAdd,
+  stickyTop,
 }: {
   group: Group;
   editing: boolean;
+  stickyTop?: string;
   renderItem: (id: string, handle: ReactNode) => ReactNode;
   renderHead: (group: Group, handle: ReactNode) => ReactNode;
   renderAdd: (sectionId: string | null) => ReactNode;
@@ -166,7 +170,14 @@ function SectionBlock({
       style={{ transform: CSS.Translate.toString(transform), transition }}
       className={`mt-10 ${isDragging ? "relative z-20 rounded-card bg-paper/90 shadow-xl shadow-ink/20 ring-1 ring-line" : ""}`}
     >
-      {renderHead(group, editing ? <Handle refFn={setActivatorNodeRef} props={{ ...attributes, ...listeners }} label={`Drag ${group.name}`} /> : null)}
+      {stickyTop && !editing ? (
+        // Its title stays in view (on paper, so the pages scroll away under it) until the next one.
+        <div className="sticky z-20 -mx-3 bg-paper px-3 pt-2" style={{ top: stickyTop }}>
+          {renderHead(group, null)}
+        </div>
+      ) : (
+        renderHead(group, editing ? <Handle refFn={setActivatorNodeRef} props={{ ...attributes, ...listeners }} label={`Drag ${group.name}`} /> : null)
+      )}
       <GroupGrid group={group} editing={editing} renderItem={renderItem} renderAdd={renderAdd} />
     </section>
   );

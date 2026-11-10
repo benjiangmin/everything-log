@@ -20,6 +20,15 @@ const sorted = (list: TodoItem[]) =>
     if (a.done) return (a.done_at ?? "").localeCompare(b.done_at ?? "");
     return a.position - b.position;
   });
+// The fade for a scrolling list: at the top if it's scrolled down, at the bottom if there's more.
+function edges(el: HTMLElement | null) {
+  if (!el || el.scrollHeight <= el.clientHeight + 1) return null;
+  const top = el.scrollTop > 1;
+  const bottom = el.scrollTop + el.clientHeight < el.scrollHeight - 1;
+  if (!top && !bottom) return null;
+  return `linear-gradient(to bottom, ${top ? "transparent, black 28px" : "black"}, ${bottom ? "black calc(100% - 28px), transparent" : "black"})`;
+}
+
 const isEmpty = (html: string) => !html.replace(/<br\s*\/?>/gi, "").replace(/<[^>]*>/g, "").replace(/&nbsp;/g, " ").trim();
 
 export default function TodoBox({ initial }: { initial: TodoItem[] | "missing" }) {
@@ -41,6 +50,27 @@ export default function TodoBox({ initial }: { initial: TodoItem[] | "missing" }
 
   const open = items.filter((t) => !t.done);
   const done = items.filter((t) => t.done);
+  const openCount = open.filter((t) => !t.draft).length;
+
+  // A long list scrolls inside the box; its edges fade where there's more to scroll to.
+  const list = useRef<HTMLUListElement>(null);
+  const [fade, setFade] = useState<string | null>(null);
+  useEffect(() => setFade(edges(list.current)), [items]);
+
+  // How tall the box is, so the home page's subcategory titles stick right under it.
+  useEffect(() => {
+    const el = box.current;
+    if (!el) return;
+    const root = document.documentElement;
+    const measure = () => root.style.setProperty("--home-todo-h", `${el.offsetHeight}px`);
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => {
+      ro.disconnect();
+      root.style.removeProperty("--home-todo-h");
+    };
+  }, []);
 
   // A new, empty todo after `after` (or at the end), ready to type in. It's only saved once it
   // has something in it.
@@ -85,21 +115,37 @@ export default function TodoBox({ initial }: { initial: TodoItem[] | "missing" }
   return (
     // The paper above it covers the gap under the Home bar while it's stuck.
     <div ref={box} data-under-bar className="sticky z-30 -mx-3 mt-3 bg-paper px-3 pt-3" style={{ top: "var(--home-bar-h, 0px)" }}>
+      {/* A sheet of paper lifted off the page (the other boxes are outlined or oat), with a dark
+          tab for its title, so it doesn't read as one more bar. */}
       <section
         aria-label="Todo"
-        className={`rounded-card bg-surface px-4 pb-2 pt-3.5 transition-shadow sm:px-5 ${stuck ? "shadow-lg shadow-ink/15" : ""}`}
+        className={`overflow-hidden rounded-card bg-paper ring-1 ring-ink/10 transition-shadow ${stuck ? "shadow-lg shadow-ink/15" : "shadow-md shadow-ink/10"}`}
       >
-        <div className="flex items-baseline justify-between pb-1">
-          <h2 className="font-display text-lg font-semibold">Todo</h2>
-          {initial !== "missing" && open.length > 0 && <span className="num font-display text-lg font-semibold text-muted">{open.filter((t) => !t.draft).length || ""}</span>}
+        <div className="flex items-center gap-2.5 bg-accent px-4 py-2.5 text-accent-ink sm:px-5">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M4 6.5l1.6 1.6L8.5 5M4 13l1.6 1.6L8.5 11.5M4 19.5l1.6 1.6 2.9-3.1" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+            <path d="M12 7h8M12 13.5h8M12 20h8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+          </svg>
+          <h2 className="flex-1 font-display text-lg font-semibold">Todo</h2>
+          {initial !== "missing" && openCount > 0 && (
+            <span className="num rounded-full bg-accent-ink/15 px-2.5 py-0.5 text-sm font-semibold">
+              {openCount} left
+            </span>
+          )}
         </div>
+        <div className="px-4 pb-1.5 pt-1 sm:px-5">
         {initial === "missing" ? (
           <p className="pb-2 text-sm text-muted">
             Run <code>supabase/todos.sql</code> in Supabase to turn this on.
           </p>
         ) : (
           <>
-            <ul className="-mr-2 max-h-[40vh] overflow-y-auto pr-2">
+            <ul
+              ref={list}
+              onScroll={() => setFade(edges(list.current))}
+              className="-mr-2 max-h-[40vh] overflow-y-auto pr-2"
+              style={fade ? { maskImage: fade, WebkitMaskImage: fade } : undefined}
+            >
               {open.map((t) => (
                 <Row
                   key={t.id}
@@ -135,6 +181,7 @@ export default function TodoBox({ initial }: { initial: TodoItem[] | "missing" }
           </>
         )}
         {error && <p className="pb-2 text-xs text-danger">{error}</p>}
+        </div>
       </section>
     </div>
   );
