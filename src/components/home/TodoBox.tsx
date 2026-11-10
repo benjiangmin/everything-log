@@ -160,10 +160,11 @@ export default function TodoBox({ initial }: { initial: TodoItem[] | "missing" }
                     startNew(t);
                   }}
                   onEmptyBackspace={() => remove(t, true)}
+                  onDelete={() => remove(t)}
                 />
               ))}
               {done.map((t) => (
-                <Row key={t.id} todo={t} onToggle={(html) => toggle(t, html)} onSave={(html) => edit(t, html)} />
+                <Row key={t.id} todo={t} onToggle={(html) => toggle(t, html)} onSave={(html) => edit(t, html)} onDelete={() => remove(t)} />
               ))}
             </ul>
             <button
@@ -218,7 +219,9 @@ function Row({
   onSave,
   onEnter,
   onEmptyBackspace,
+  onDelete,
 }: {
+  onDelete: () => void;
   todo: TodoItem;
   focus?: boolean;
   onFocused?: () => void;
@@ -249,7 +252,8 @@ function Row({
       <span className="py-[9px]">
         <Circle done={todo.done} onClick={() => onToggle(el.current?.innerHTML ?? todo.html)} />
       </span>
-      <div
+      <div className="flex min-w-0 flex-1 items-start gap-1 border-b border-line group-last:border-b-0">
+        <div
         ref={el}
         role="textbox"
         aria-label="Todo"
@@ -273,10 +277,24 @@ function Row({
             t.blur();
           }
         }}
-        className={`min-w-0 flex-1 cursor-text whitespace-pre-wrap break-words border-b border-line py-[9px] text-[15px] leading-[22px] !outline-none group-last:border-b-0 ${
+        className={`min-w-0 flex-1 cursor-text whitespace-pre-wrap break-words py-[9px] text-[15px] leading-[22px] !outline-none ${
           todo.done ? "text-muted line-through decoration-muted/70" : "text-ink"
         }`}
-      />
+        />
+        {/* × to delete it, shown when you hover the todo. */}
+        <button
+          type="button"
+          onMouseDown={(e) => e.preventDefault()} // (so the text's blur doesn't save it first)
+          onClick={onDelete}
+          aria-label="Delete this todo"
+          title="Delete"
+          className="my-[7px] grid size-[26px] shrink-0 place-items-center rounded-full text-muted opacity-0 transition hover:bg-surface hover:text-ink focus-visible:opacity-100 group-hover:opacity-100"
+        >
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M6 6l12 12M18 6L6 18" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
+          </svg>
+        </button>
+      </div>
     </li>
   );
 }
