@@ -5,8 +5,11 @@ import { getAlertCategoryIds, getAlertHrefs } from "@/lib/alerts";
 import CategoryGrid from "@/components/home/CategoryGrid";
 import HomeGreeting from "@/components/home/HomeGreeting";
 import HomeMbm from "@/mbm/components/HomeMbm";
+import TodoBox from "@/components/home/TodoBox";
+import { getTodos } from "@/lib/todos";
 
-// Home: a greeting and the clock, the Home bar (sticks to the top), Minute by Minute, then your categories. The layout lives in Supabase (supabase/home.sql), and you change it
+// Home: a greeting and the clock, the Home bar (sticks to the top), Minute by Minute, your todo
+// list (sticks under the Home bar), then your categories. The layout lives in Supabase (supabase/home.sql), and you change it
 // from the page itself with the Edit button.
 export default function Home() {
   return (
@@ -17,6 +20,10 @@ export default function Home() {
           {/* Minute by Minute (its own app, see src/mbm): what you're doing now + today's bar. */}
           <Suspense fallback={<div className="mt-6 h-40 animate-pulse rounded-card border-2 border-ink/15" />}>
             <HomeMbm />
+          </Suspense>
+          {/* The todo list: sticks under the Home bar. */}
+          <Suspense fallback={<div className="mt-6 h-28 animate-pulse rounded-card border-2 border-ink/15" />}>
+            <Todos />
           </Suspense>
         </Categories>
       </Suspense>
@@ -36,6 +43,11 @@ async function Categories({ children }: { children: ReactNode }) {
       {children}
     </CategoryGrid>
   );
+}
+
+async function Todos() {
+  await connection();
+  return <TodoBox initial={await getTodos().catch(() => "missing" as const)} />;
 }
 
 function Skeleton() {

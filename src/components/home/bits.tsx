@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useState, type ReactNode } from "react";
+import { useRef, useState, type ReactNode } from "react";
+import { EDGE_SHADOW, useBarShadow } from "./sticky";
 
 // Small pieces shared by the home page and the category pages.
 
@@ -36,6 +37,8 @@ export function PageHeader({
   description?: string | null;
   onDescription?: (next: string) => void;
 }) {
+  const strip = useRef<HTMLDivElement>(null);
+  const shadow = useBarShadow(strip, sticky);
   return (
     <>
       {back && (
@@ -46,8 +49,9 @@ export function PageHeader({
           ← {back.label}
         </Link>
       )}
-      {/* Sticky: a paper strip behind it, so the page scrolls away underneath. */}
-      <div className={sticky ? "sticky top-0 z-40 -mx-3 -mt-3 bg-paper px-3 py-3" : ""}>
+      {/* Sticky: a paper strip behind it, so the page scrolls away underneath (with a shadow
+          under it once there's something above to scroll back to). */}
+      <div ref={strip} className={sticky ? `sticky top-0 z-40 -mx-3 -mt-3 bg-paper px-3 py-3 transition-shadow ${shadow ? EDGE_SHADOW : ""}` : ""}>
         <header className="flex items-center justify-between gap-4 rounded-card bg-accent px-5 py-4 text-accent-ink shadow-lg shadow-ink/15">
           <div className="min-w-0 flex-1">
             <h1 className="min-w-0 truncate font-display text-2xl font-semibold tracking-tight sm:text-3xl">{title}</h1>
