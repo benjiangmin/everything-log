@@ -201,7 +201,7 @@ function TimeSpent({ activities, elapsed, initial, savedPins }: { activities: St
   const [pins, setPins] = useState<string[]>(savedPins ?? []);
   const [problem, setProblem] = useState<string | null>(null);
   const [, start] = useTransition();
-  const canPin = savedPins !== null;
+  const canPin = true; // (if 023_pins.sql isn't run yet, pinning says so)
   const key = (name: string) => name.trim().toLowerCase();
   const pinnedKeys = new Set(pins.map(key));
   const byKey = new Map(activities.map((a) => [key(a.name), a]));
@@ -325,11 +325,11 @@ function TimeSpent({ activities, elapsed, initial, savedPins }: { activities: St
       ) : (
         <ul>
           {pinned.map((a) => (
-            <Row key={`pin-${a.name}`} color={a.color} label={a.name} seconds={a.seconds} max={max} onPick={() => setQ(a.name)} pin={pinFor(a.name)} />
+            <Row key={`pin-${a.name}`} color={a.color} label={a.name} seconds={a.seconds} max={max} pin={pinFor(a.name)} />
           ))}
           {pinned.length > 0 && shownRest.length > 0 && <li aria-hidden="true" className="my-1.5 border-t border-dashed border-line" />}
           {shownRest.map((a) => (
-            <Row key={a.name} color={a.color} label={a.name} seconds={a.seconds} max={max} onPick={() => setQ(a.name)} pin={pinFor(a.name)} />
+            <Row key={a.name} color={a.color} label={a.name} seconds={a.seconds} max={max} pin={pinFor(a.name)} />
           ))}
         </ul>
       )}

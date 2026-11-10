@@ -79,6 +79,9 @@ export default function DayBar({
   // Pinch / Ctrl+scroll zooms around the pointer; sideways scroll pans. A plain scroll still
   // scrolls the page. (Needs a non-passive listener so the browser doesn't zoom the page too.)
   const barRef = useRef<HTMLDivElement>(null);
+  const wrapRef = useRef<HTMLDivElement>(null);
+  // The edges of what the pointer is over (in the bar's box), for the bubble's line.
+  const [anchor, setAnchor] = useState<{ top: number; bottom: number; h: number } | null>(null);
   const [barWidth, setBarWidth] = useState(1000); // in px (for chips: see pill)
   useEffect(() => {
     const el = barRef.current;
@@ -315,11 +318,30 @@ export default function DayBar({
   // The bubble sits over the tail, sliding sideways near the ends so it stays on screen
   // (the tail is always inside it).
   const slide = Math.min(90, Math.max(10, hoverMid));
-  // Over the map (slim), the bar is near the top of the screen: the bubble goes below it instead.
-  const below = slim;
+  // Over the map (slim) the bar is near the top of the screen, and the apps line is under the
+  // bar: there the bubble goes below instead of above.
+  const below = slim || !!hover?.phone;
+  // Where the line meets what you're pointing at: right at its top edge (bubble above) or its
+  // bottom edge (below), measured from the thing itself. (Keyboard focus: the bar's edge.)
+  const LINE = 28;
+  const pos = anchor
+    ? below
+      ? { bubble: { top: anchor.bottom + LINE }, line: { top: anchor.bottom, height: LINE }, dot: { top: anchor.bottom } }
+      : { bubble: { bottom: anchor.h - (anchor.top - LINE) }, line: { top: anchor.top - LINE, height: LINE }, dot: { top: anchor.top } }
+    : null;
 
   return (
-    <div className="relative">
+    <div
+      ref={wrapRef}
+      className="relative"
+      onMouseOver={(e) => {
+        const w = wrapRef.current;
+        if (!w) return;
+        const r = (e.target as HTMLElement).getBoundingClientRect();
+        const box = w.getBoundingClientRect();
+        setAnchor({ top: r.top - box.top, bottom: r.bottom - box.top, h: box.height });
+      }}
+    >
       {/* Dragging an edge: the time it'll be. */}
       {edge && (
         <div
@@ -336,8 +358,8 @@ export default function DayBar({
       {hover && !edge && (
         <div
           role="tooltip"
-          className={`pointer-events-none absolute z-30 w-max min-w-[11rem] max-w-[20rem] ${below ? "top-full mt-9" : "bottom-full mb-9"} rounded-card bg-accent px-4 py-3 text-accent-ink shadow-xl shadow-ink/30`}
-          style={{ left: `${hoverMid}%`, transform: `translateX(-${slide}%)` }}
+          className={`pointer-events-none absolute z-30 w-max min-w-[11rem] max-w-[20rem] ${pos ? "" : below ? "top-full mt-7" : "bottom-full mb-7"} rounded-card bg-accent px-4 py-3 text-accent-ink shadow-xl shadow-ink/30`}
+          style={{ left: `${hoverMid}%`, transform: `translateX(-${slide}%)`, ...pos?.bubble }}
         >
           {hover.phone ? (
             <>
@@ -375,13 +397,13 @@ export default function DayBar({
         <>
           <span
             aria-hidden="true"
-            className={`pointer-events-none absolute z-30 h-9 w-[2px] -translate-x-1/2 bg-accent ${below ? "top-full" : "bottom-full"}`}
-            style={{ left: `${hoverMid}%` }}
+            className={`pointer-events-none absolute z-30 w-[2px] -translate-x-1/2 bg-accent ${pos ? "" : below ? "top-full h-7" : "bottom-full h-7"}`}
+            style={{ left: `${hoverMid}%`, ...pos?.line }}
           />
           <span
             aria-hidden="true"
-            className={`pointer-events-none absolute z-30 size-2.5 -translate-x-1/2 rounded-full bg-accent ring-2 ring-paper ${below ? "top-full -translate-y-1/2" : "bottom-full translate-y-1/2"}`}
-            style={{ left: `${hoverMid}%` }}
+            className={`pointer-events-none absolute z-30 size-2.5 -translate-x-1/2 rounded-full bg-accent ring-2 ring-paper ${pos ? "-translate-y-1/2" : below ? "top-full -translate-y-1/2" : "bottom-full translate-y-1/2"}`}
+            style={{ left: `${hoverMid}%`, ...pos?.dot }}
           />
         </>
       )}
