@@ -42,13 +42,12 @@ export default function NowChip({ activities, running, tz, renderedAt }: { activ
 
   return (
     <div ref={box} onMouseEnter={enter} onMouseLeave={leave} className="fixed bottom-5 left-5 z-40 flex flex-col items-start gap-2">
-      {/* The box grows up out of the button and fades in; on the way out it fades and settles
-          back down (kept on the page so it can animate both ways). */}
+      {/* The box fades in, and out (kept on the page so it can fade both ways). */}
       <div
           aria-hidden={!open}
           inert={!open}
-          className={`w-[min(30rem,calc(100vw-2.5rem))] origin-bottom-left rounded-card shadow-2xl shadow-ink/25 ring-1 ring-line transition-[opacity,transform,visibility] ease-[cubic-bezier(0.2,0.9,0.3,1.2)] motion-reduce:transition-none ${
-            open ? "visible translate-y-0 scale-100 opacity-100 duration-300" : "invisible translate-y-2 scale-[0.96] opacity-0 duration-200"
+          className={`w-[min(30rem,calc(100vw-2.5rem))] rounded-card shadow-2xl shadow-ink/25 ring-1 ring-line transition-[opacity,visibility] ease-out motion-reduce:transition-none ${
+            open ? "visible opacity-100 duration-200" : "invisible opacity-0 duration-300"
           }`}
         >
           <NowStatus activities={activities} running={running} tz={tz} renderedAt={renderedAt} compact />
