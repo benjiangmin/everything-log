@@ -71,7 +71,9 @@ export default function DayView({
           },
         )
       }
-      onSelectGap={(g) => openMbm({ kind: "add", dayKey: day.dayKey, from: g.start, to: g.end })}
+      // Untracked up to right now: you're asked what you're doing (it starts from when it began).
+      // Earlier untracked time: fill it in.
+      onSelectGap={(g) => (g.end >= now - 60_000 ? openMbm({ kind: "now" }) : openMbm({ kind: "add", dayKey: day.dayKey, from: g.start, to: g.end }))}
     />
   );
   const toggle = (onBorder: boolean) => (

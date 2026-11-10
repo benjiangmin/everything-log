@@ -386,7 +386,7 @@ export default function DayBar({
               <p className="num mt-0.5 text-sm opacity-80">
                 {clock(new Date(hover.start), tz)} – {clock(new Date(hover.end), tz)} · {span(hover.end - hover.start)}
               </p>
-              {onSelectGap && <p className="mt-1 text-xs opacity-70">Click to fill it in</p>}
+              {onSelectGap && <p className="mt-1 text-xs opacity-70">{hover.end >= now - 60_000 ? "Click to say what you're doing" : "Click to fill it in"}</p>}
             </>
           )}
         </div>
