@@ -1,5 +1,5 @@
 import "server-only";
-import { buildingAt, type Outline } from "./buildings";
+import type { Outline } from "./buildings";
 import { mbm } from "./supabase";
 import { DEFAULT_TZ, dayRange } from "./time";
 
@@ -54,7 +54,6 @@ export async function getDay(dayKey: string): Promise<Day> {
   const client = await mbm();
   // Rebuild the day from the dots first (stops, Commutes: see 014_rebuild_day.sql), so it's right
   // every time you look. Falls back to the older repair if 014 isn't run yet.
-  await outlineStops(client, start, end);
   const rebuilt = await client.rpc("rebuild_day", { p_from: start.toISOString(), p_to: end.toISOString() });
   if (rebuilt.error) await client.rpc("repair_day", { p_from: start.toISOString(), p_to: end.toISOString() });
   const [blocks, activities, running] = await Promise.all([
@@ -167,31 +166,3 @@ export async function getNowInfo(): Promise<NowInfo> {
   };
 }
 
-// Stops on the day not yet checked for a building: look each one up (OpenStreetMap) and save it,
-// which also fits the stop's times to when you walked in and out (021_buildings.sql). A few at a
-// time; anything not done (offline, or 021 not run yet) is tried next time.
-async function outlineStops(client: Awaited<ReturnType<typeof mbm>>, start: Date, end: Date) {
-  const { data, error } = await client
-    .from("visits")
-    .select("id, lat, lng, places(lat, lng, outline)")
-    .eq("outline_checked", false)
-    .lt("arrived_at", end.toISOString())
-    .or(`departed_at.is.null,departed_at.gt.${start.toISOString()}`)
-    .limit(6);
-  if (error || !data?.length) return;
-  type Row = { id: string; lat: number; lng: number; places: { lat?: number | null; lng?: number | null; outline?: Outline | null } | { lat?: number | null; lng?: number | null; outline?: Outline | null }[] | null };
-  await Promise.all(
-    (data as unknown as Row[]).map(async (v) => {
-      const place = Array.isArray(v.places) ? v.places[0] : v.places;
-      // A named place that already has its building: that one. Otherwise look it up at the
-      // place's pin (where you put it), or where the phone put the stop.
-      let outline: Outline | null | undefined = place?.outline ?? undefined;
-      if (outline === undefined) {
-        const at = place && typeof place.lat === "number" && typeof place.lng === "number" ? { lat: place.lat, lng: place.lng } : v;
-        outline = await buildingAt(at.lat, at.lng);
-      }
-      if (outline === undefined) return; // couldn't ask: next time
-      await client.rpc("set_stop_outline", { p_visit_id: v.id, p_outline: outline });
-    }),
-  );
-}
