@@ -31,6 +31,15 @@ const missed = (a: Spot & { t: number }, b: Spot & { t: number }) => b.t - a.t >
 const ms = (s: string) => +new Date(s);
 const spot = (s: { lat: number; lng: number }): Spot => ({ lat: s.lat, lng: s.lng });
 
+// The angle at a (degrees) between the directions to b and to c.
+function angleAt(a: Spot, b: Spot, c: Spot) {
+  const k = Math.cos((a.lat * Math.PI) / 180);
+  const v1 = { x: (b.lng - a.lng) * k, y: b.lat - a.lat };
+  const v2 = { x: (c.lng - a.lng) * k, y: c.lat - a.lat };
+  const l = Math.hypot(v1.x, v1.y) * Math.hypot(v2.x, v2.y);
+  return l ? (Math.acos(Math.max(-1, Math.min(1, (v1.x * v2.x + v1.y * v2.y) / l))) * 180) / Math.PI : 0;
+}
+
 // Metres between two spots (good enough at city scale).
 export function metres(a: Spot, b: Spot) {
   const k = Math.PI / 180;
@@ -149,10 +158,12 @@ export function buildTrips(visits: Visit[], points: RoutePoint[]): Trip[] {
         }
         const path = run.map(spot);
         if (r === 0 && joinsFrom) {
-          // You usually leave a building the way you came in: start from that door, unless the
-          // dots plainly head off another way (the first one is much nearer the stop than the door).
+          // You usually leave a building the way you came in: start from that door, but only when
+          // the way you headed off is on that side (the door no further from your first dot than
+          // the stop is, and within 60° of it). Otherwise straight from the stop: one clean line
+          // inside the building, never a zigzag through it.
           const d = door.get(from!.id);
-          if (d && metres(d, first) > 10 && metres(d, first) < metres(from!, first) + 50) path.unshift(d);
+          if (d && metres(d, first) > 10 && metres(d, first) <= metres(from!, first) && angleAt(from!, d, first) <= 60) path.unshift(d);
           path.unshift(spot(from!));
         }
         if (r === runs.length - 1 && joinsTo) path.push(spot(to!));
@@ -211,4 +222,21 @@ export function decodePolyline(encoded: string, precision = 5): Spot[] {
     out.push({ lat: lat / f, lng: lng / f });
   }
   return out;
+}
+
+// Your entries win: a trip's times give way to what you logged. If you stopped a job a minute
+// after the phone says you left (you were still finishing up), the trip starts when the job
+// ended; if you started one before the phone noticed you'd arrived, the trip ends then. Same as
+// the day bar, so hovering a route lights up exactly its Commute.
+export function fitToEntries(trips: Trip[], blocks: { started_at: string; ended_at: string | null; source: string }[], now = Date.now()): Trip[] {
+  const mine = blocks.filter((b) => b.source !== "location").map((b) => ({ start: +new Date(b.started_at), end: b.ended_at ? +new Date(b.ended_at) : now }));
+  return trips.map((t) => {
+    let start = t.start;
+    let end = t.end;
+    for (const b of mine) {
+      if (b.start < start && b.end > start && b.end < end) start = b.end; // still on your last thing
+      if (b.start > start && b.start < end && b.end > end) end = b.start; // already on your next thing
+    }
+    return start === t.start && end === t.end ? t : { ...t, start, end };
+  });
 }

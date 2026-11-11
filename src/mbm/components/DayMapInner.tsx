@@ -10,7 +10,7 @@ import { useConfirm } from "@/components/ui/ConfirmDialog";
 import type { Activity, Block, RoutePoint, Visit } from "@/mbm/data";
 import { clock, span } from "@/mbm/time";
 import { HtmlMarker, KEY, stylesFor } from "./mapBits";
-import { buildTrips, decodePolyline, metres, type Piece, type Spot, type Trip } from "@/mbm/trips";
+import { fitToEntries, buildTrips, decodePolyline, metres, type Piece, type Spot, type Trip } from "@/mbm/trips";
 import { snapLeg } from "@/mbm/snap";
 import { splitLegs, waitSpot } from "@/mbm/legs";
 import { despike, makeTrails } from "@/mbm/trails";
@@ -61,7 +61,7 @@ export default function DayMapInner({
   // What the pointer is on: trips under it (several, where paths overlap) or a stop.
   const [pointed, setPointed] = useState<{ trips: string[]; stops: string[]; x: number; y: number } | null>(null);
   const box = useRef<HTMLDivElement>(null);
-  const built = useMemo(() => buildTrips(visits, points), [visits, points]);
+  const built = useMemo(() => fitToEntries(buildTrips(visits, points), blocks), [visits, points, blocks]);
   const trips = useFilledTrips(built, points);
   // What lights up for the hovered stretch: the trips (moving) or the stops (still) during it.
   const barLit = useMemo(() => {
