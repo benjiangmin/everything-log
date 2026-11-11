@@ -461,3 +461,33 @@ export async function trailCells(box: { minLat: number; maxLat: number; minLng: 
   if (error || !Array.isArray(data)) return [];
   return (data as number[][]).map(([lat, lng, n, c2, s2]) => ({ lat: Number(lat), lng: Number(lng), n: Number(n), c2: Number(c2), s2: Number(s2) }));
 }
+
+// "This route looks wrong" (029_route_reports.sql): what was drawn, the dots it came from, and
+// your note. The cases routes get tested against.
+export async function reportRoute(r: {
+  start: number;
+  end: number;
+  fromId?: string | null;
+  toId?: string | null;
+  note: string;
+  drawn: { lat: number; lng: number }[][];
+  dots: [string, number, number, number | null, number | null][];
+  legs: { mode: string; start: number; end: number }[];
+  version: string;
+}): Promise<Result> {
+  if (!Number.isFinite(r.start) || !Number.isFinite(r.end) || r.end < r.start) return fail("That trip doesn't work.");
+  const round = (v: number) => Math.round(v * 1e6) / 1e6;
+  const { error } = await (await mbm()).from("route_reports").insert({
+    trip_start: new Date(r.start).toISOString(),
+    trip_end: new Date(r.end).toISOString(),
+    from_visit: r.fromId && isUuid(r.fromId) ? r.fromId : null,
+    to_visit: r.toId && isUuid(r.toId) ? r.toId : null,
+    note: r.note.trim().slice(0, 2000) || null,
+    drawn: r.drawn.slice(0, 50).map((line) => line.slice(0, 5000).map((p) => [round(p.lat), round(p.lng)])),
+    dots: r.dots.slice(0, 10000),
+    legs: r.legs.slice(0, 200),
+    version: r.version.slice(0, 40),
+  });
+  if (error) return fail(/route_reports/.test(error.message) ? "Run supabase/minute-by-minute/029_route_reports.sql first." : error.message);
+  return { ok: true };
+}

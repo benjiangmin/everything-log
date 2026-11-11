@@ -2,7 +2,10 @@
 
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { APIProvider, InfoWindow, Map, useMap, useMapsLibrary } from "@vis.gl/react-google-maps";
-import { moveStop, namePlace, rememberedRoute, removeStop, saveBlock, trailCells } from "@/app/mbm/actions";
+import { moveStop, namePlace, rememberedRoute, removeStop, reportRoute, saveBlock, trailCells } from "@/app/mbm/actions";
+
+// Which version of the path engine drew a route (saved with "Route looks wrong" reports).
+const PATH_ENGINE = "legs+trails+match-v1 (2026-11-10)";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
 import type { Activity, Block, RoutePoint, Visit } from "@/mbm/data";
 import { clock, span } from "@/mbm/time";
@@ -50,8 +53,9 @@ export default function DayMapInner({
   const [moving, setMoving] = useState<Visit | null>(null); // "click where it really is"
   const [moveNote, setMoveNote] = useState<string | null>(null);
   const [, runMove] = useTransition();
-  // A trip you clicked that has no Commute on the bar: offer to add one.
-  const [adding, setAdding] = useState<{ trip: Trip; x: number; y: number; note?: string } | null>(null);
+  // A trip you clicked: "Add as Commute" (when nothing's tracked for it), and "Route looks wrong".
+  const [adding, setAdding] = useState<{ trip: Trip; x: number; y: number; untracked: boolean; note?: string; report?: "writing" | "sent" } | null>(null);
+  const [reportText, setReportText] = useState("");
   const [addPending, runAdd] = useTransition();
   const [zoom, setZoom] = useState(15);
   // What the pointer is on: trips under it (several, where paths overlap) or a stop.
@@ -129,9 +133,11 @@ export default function DayMapInner({
         onClick={(e) => {
           const at = e.detail.latLng;
           if (!moving) {
-            // Clicked a trip nothing was tracked for: "Add as Commute".
-            const t = pointed ? trips.find((x) => pointed.trips.includes(x.key) && tripRow(x, blocks, activities, tz).untracked) : undefined;
-            setAdding(t && pointed ? { trip: t, x: pointed.x, y: pointed.y } : null);
+            // Clicked a trip: its menu (the untracked one first, where paths overlap).
+            const under = pointed ? trips.filter((x) => pointed.trips.includes(x.key)) : [];
+            const t = under.find((x) => tripRow(x, blocks, activities, tz).untracked) ?? under[0];
+            setReportText("");
+            setAdding(t && pointed ? { trip: t, x: pointed.x, y: pointed.y, untracked: tripRow(t, blocks, activities, tz).untracked ?? false } : null);
             return;
           }
           if (!at) return;
@@ -268,23 +274,82 @@ export default function DayMapInner({
           className="absolute z-40 w-max -translate-x-1/2 -translate-y-full rounded-card bg-paper p-1.5 text-sm shadow-xl shadow-ink/20 ring-1 ring-line"
           style={{ left: adding.x, top: adding.y - 12 }}
         >
-          <button
-            type="button"
-            disabled={addPending}
-            onClick={() =>
-              runAdd(async () => {
-                const res = await saveBlock({ name: "Commute", start: new Date(adding.trip.start).toISOString(), end: new Date(adding.trip.end).toISOString() });
-                if (res.ok) setAdding(null);
-                else setAdding((a) => (a ? { ...a, note: res.message } : a));
-              })
-            }
-            className="rounded-control px-3 py-1.5 font-semibold text-ink hover:bg-surface"
-          >
-            {addPending ? "Adding…" : `Add as Commute · ${clock(new Date(adding.trip.start), tz)} – ${clock(new Date(adding.trip.end), tz)}`}
-          </button>
-          <button type="button" onClick={() => setAdding(null)} className="rounded-control px-2 py-1.5 text-muted hover:bg-surface">
-            Cancel
-          </button>
+          {adding.report === "sent" ? (
+            <p className="px-3 py-1.5 text-ink">Saved. Thanks: this one&rsquo;s a test case now.</p>
+          ) : adding.report === "writing" ? (
+            <form
+              className="flex w-[min(22rem,80vw)] flex-col gap-1.5 p-1"
+              onSubmit={(e) => {
+                e.preventDefault();
+                const t = adding.trip;
+                runAdd(async () => {
+                  const res = await reportRoute({
+                    start: t.start,
+                    end: t.end,
+                    fromId: t.fromId,
+                    toId: t.toId,
+                    note: reportText,
+                    drawn: t.pieces.map((p) => p.path),
+                    dots: points
+                      .filter((p) => +new Date(p.at) >= t.start - 60_000 && +new Date(p.at) <= t.end + 60_000)
+                      .map((p) => [p.at, p.lat, p.lng, p.accuracy_m ?? null, p.speed_mps ?? null] as [string, number, number, number | null, number | null]),
+                    legs: t.pieces.flatMap((p) => (p.dots ? splitLegs(p.dots).map((l) => ({ mode: l.mode, start: l.start, end: l.end })) : [{ mode: "missing", start: t.start, end: t.end }])),
+                    version: PATH_ENGINE,
+                  });
+                  if (res.ok) {
+                    setAdding((a) => (a ? { ...a, report: "sent", note: undefined } : a));
+                    setTimeout(() => setAdding((a) => (a?.report === "sent" ? null : a)), 1600);
+                  } else setAdding((a) => (a ? { ...a, note: res.message } : a));
+                });
+              }}
+            >
+              <label className="px-1 text-xs font-semibold text-muted" htmlFor="route-report">
+                What&rsquo;s wrong with this route? (optional)
+              </label>
+              <textarea
+                id="route-report"
+                autoFocus
+                rows={3}
+                value={reportText}
+                onChange={(e) => setReportText(e.target.value)}
+                placeholder="I went up Lake St, not through the building…"
+                className="w-full resize-none rounded-control border border-line bg-paper px-2.5 py-2 text-sm outline-none focus:border-ink"
+              />
+              <div className="flex justify-end gap-1">
+                <button type="button" onClick={() => setAdding(null)} className="rounded-control px-2 py-1.5 text-muted hover:bg-surface">
+                  Cancel
+                </button>
+                <button type="submit" disabled={addPending} className="rounded-control bg-accent px-3 py-1.5 font-semibold text-accent-ink disabled:opacity-60">
+                  {addPending ? "Saving…" : "Save"}
+                </button>
+              </div>
+            </form>
+          ) : (
+            <>
+              {adding.untracked && (
+                <button
+                  type="button"
+                  disabled={addPending}
+                  onClick={() =>
+                    runAdd(async () => {
+                      const res = await saveBlock({ name: "Commute", start: new Date(adding.trip.start).toISOString(), end: new Date(adding.trip.end).toISOString() });
+                      if (res.ok) setAdding(null);
+                      else setAdding((a) => (a ? { ...a, note: res.message } : a));
+                    })
+                  }
+                  className="rounded-control px-3 py-1.5 font-semibold text-ink hover:bg-surface"
+                >
+                  {addPending ? "Adding…" : `Add as Commute · ${clock(new Date(adding.trip.start), tz)} – ${clock(new Date(adding.trip.end), tz)}`}
+                </button>
+              )}
+              <button type="button" onClick={() => setAdding((a) => (a ? { ...a, report: "writing", note: undefined } : a))} className="rounded-control px-3 py-1.5 text-ink hover:bg-surface">
+                Route looks wrong
+              </button>
+              <button type="button" onClick={() => setAdding(null)} className="rounded-control px-2 py-1.5 text-muted hover:bg-surface">
+                Cancel
+              </button>
+            </>
+          )}
           {adding.note && <p className="px-3 pb-1 text-xs text-danger">{adding.note}</p>}
         </div>
       )}

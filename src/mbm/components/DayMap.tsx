@@ -39,7 +39,12 @@ export default function DayMap({
           <h2 className="font-display text-lg font-semibold">Where you went</h2>
           {!empty && (
             <p className="text-xs text-muted">
-              Hover a route or stop to see it on the bar. Dashed: the phone missed that bit. Click a stop to rename, move or remove it.
+              Hover a route or stop to see it on the bar. Dashed: the phone missed that bit. Click a stop to rename, move or remove it; click a route that
+              looks wrong to report it (
+              <a href="/mbm/route-reports" className="underline underline-offset-2 hover:text-ink">
+                download reports
+              </a>
+              ).
             </p>
           )}
         </div>
