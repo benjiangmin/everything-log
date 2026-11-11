@@ -1,9 +1,11 @@
 "use server";
 
+import { googleStatus, syncCalendar } from "@/mbm/google";
+
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { mbm, mbmReady } from "@/mbm/supabase";
-import { getDay, getNowInfo, type Day, type NowInfo } from "@/mbm/data";
+import { getDay, getNowInfo, mbmTz, type Day, type NowInfo } from "@/mbm/data";
 import { PALETTE } from "@/mbm/colors";
 
 // NOTE: the whole site also sits behind the password lock (src/proxy.ts). On top of that,
@@ -489,5 +491,33 @@ export async function reportRoute(r: {
     version: r.version.slice(0, 40),
   });
   if (error) return fail(/route_reports/.test(error.message) ? "Run supabase/minute-by-minute/029_route_reports.sql first." : error.message);
+  return { ok: true };
+}
+
+// ---------- Best guesses (030_suggestions.sql) ----------
+
+export type Guess = { activity_id: string; name: string; color: string; confidence: number; why: string[] };
+
+// Up to two best guesses for right now (where you are: the stop you're at). Brings Google
+// Calendar up to date first, at most every 10 minutes. [] if there's nothing to go on yet.
+export async function bestGuesses(): Promise<Guess[]> {
+  const client = await mbm();
+  await syncCalendar(client).catch(() => null);
+  const { data, error } = await client.rpc("suggest", { p_at: new Date().toISOString(), p_tz: mbmTz(), p_limit: 2 });
+  if (error || !Array.isArray(data)) return [];
+  return (data as Guess[]).slice(0, 2);
+}
+
+// Google Calendar: connected? (null: 030 isn't run yet)
+export async function googleInfo() {
+  return googleStatus(await mbm());
+}
+
+export async function disconnectGoogle(): Promise<Result> {
+  const client = await mbm();
+  const { error } = await client.from("google_accounts").delete().not("user_id", "is", null);
+  if (error) return fail(error.message);
+  await client.from("calendar_events").delete().not("user_id", "is", null);
+  refresh();
   return { ok: true };
 }

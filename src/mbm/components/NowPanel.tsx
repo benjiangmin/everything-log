@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
-import { nowInfo, startEntry } from "@/app/mbm/actions";
+import { bestGuesses, nowInfo, startEntry, type Guess } from "@/app/mbm/actions";
 import type { NowInfo } from "@/mbm/data";
 import { clock, dayKeyOf, hhmm, zonedTime } from "@/mbm/time";
 import ActivityInput from "./ActivityInput";
@@ -20,6 +20,18 @@ export default function NowPanel({ switching = false, onClose }: { switching?: b
   const [since, setSince] = useState<Since>("last");
   const [custom, setCustom] = useState("");
   const [pending, run] = useTransition();
+  const [guesses, setGuesses] = useState<Guess[]>([]);
+
+  // Best guesses for right now (your history, where you are, your calendar): at most two.
+  useEffect(() => {
+    let live = true;
+    bestGuesses()
+      .then((g) => live && setGuesses(g))
+      .catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, []);
 
   useEffect(() => {
     let live = true;
@@ -39,7 +51,6 @@ export default function NowPanel({ switching = false, onClose }: { switching?: b
   const byId = new Map((info?.activities ?? []).map((a) => [a.id, a]));
   const running = info?.running ?? [];
   const names = running.map((b) => (b.activity_id ? byId.get(b.activity_id)?.name : null) ?? "Something");
-  // (No suggestion chips for now: they come back once they're smart. Typing still suggests matches.)
 
   // What "since last entry" means right now, shown on the button.
   const lastLabel = (() => {
@@ -93,7 +104,28 @@ export default function NowPanel({ switching = false, onClose }: { switching?: b
           }}
           className={`flex flex-col gap-4 ${pending ? "opacity-70" : ""}`}
         >
-          <ActivityInput activities={info.activities} value={text} onChange={setText} onEnter={go} placeholder="Cooking, Class, Gaming…" autoFocus />
+          {guesses.length > 0 && !text && (
+            <div aria-label="Best guesses" className="flex flex-col gap-2">
+              <p className="text-sm font-semibold text-ink">Best guess{guesses.length > 1 ? "es" : ""}</p>
+              {guesses.map((g) => (
+                <button
+                  key={g.activity_id}
+                  type="button"
+                  disabled={pending}
+                  onClick={() => go(g.name)}
+                  className="flex items-center gap-3 rounded-control bg-surface px-3.5 py-2.5 text-left ring-1 ring-line transition-colors hover:bg-line/60"
+                >
+                  <span aria-hidden="true" className="size-3 shrink-0 rounded-full" style={{ background: g.color }} />
+                  <span className="min-w-0 flex-1">
+                    <span className="block font-semibold text-ink">{g.name}</span>
+                    {g.why[0] && <span className="block truncate text-xs text-muted">{g.why.slice(0, 2).join(" · ")}</span>}
+                  </span>
+                  <span className="shrink-0 text-xs font-semibold text-muted">Start →</span>
+                </button>
+              ))}
+            </div>
+          )}
+          <ActivityInput activities={info.activities} value={text} onChange={setText} onEnter={go} placeholder={guesses.length ? "Or type something else…" : "Cooking, Class, Gaming…"} autoFocus />
 
           {/* Started when */}
           <div>

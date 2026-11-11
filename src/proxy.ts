@@ -9,6 +9,9 @@ export async function proxy(request: NextRequest) {
   const { pathname, search } = request.nextUrl;
   // The login page, and the address Resend delivers emails to (it checks its own signature).
   if (pathname === "/login" || pathname === "/api/inbound-email") return NextResponse.next();
+  // Minute by Minute's phone API: the phone signs in with its own Minute by Minute session (the
+  // route checks it), never with the everything-log's password.
+  if (pathname.startsWith("/mbm/api/")) return NextResponse.next();
   // Minute by Minute is its own app with its own sign-in. Once MBM_PUBLIC=1 is set, other people
   // can use it without the everything-log's password (their data is theirs: row level security).
   if (process.env.MBM_PUBLIC === "1" && (pathname === "/mbm" || pathname.startsWith("/mbm/"))) return withMbmSession(request);
