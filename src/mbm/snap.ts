@@ -7,8 +7,7 @@ import { decodePolyline, metres, type Spot } from "./trips";
 // trip is snapped leg by leg (walk, bike, ride: see legs.ts), each the way that kind of travel
 // goes, and your dots win where they disagree with the map. Uses Valhalla on the
 // OpenStreetMap community's public server (free, no account; it knows campus footpaths).
-// Answers are kept in this browser, so each stretch is only sent once. Returns null if it can't
-// (offline, server busy, or a match that looks wrong): then the map just draws your dots.
+// The server's answers are kept in this browser, so each stretch is only sent once.
 const SERVER = "https://valhalla1.openstreetmap.de/trace_route";
 const MAX_POINTS = 300;
 
@@ -20,69 +19,148 @@ const COSTING: Record<"walk" | "bike" | "ride", { costing: string; costing_optio
   ride: { costing: "bus" },
 };
 
-// Snaps one leg's dots onto the paths or roads it most likely followed. Your dots win: a match
-// is only used where it agrees with them (most dots close to it, judged by how exact each dot
-// was), so a shortcut the map doesn't know, or a match that wandered off, is drawn through your
-// dots instead. null: draw the dots.
+// Snaps one leg's dots onto the paths or roads it most likely followed. The map's paths are the
+// starting point (GPS dots are never exactly where you were: near buildings they drift 20-50 m);
+// your dots only win where they clearly show a shortcut the map doesn't know. null: draw the
+// dots (the server couldn't match it, or the match is plainly some other route).
 export async function snapLeg(dots: Dot[], mode: "walk" | "bike" | "ride"): Promise<Spot[] | null> {
   const raw = dots.filter((s, i) => i === 0 || s.lat !== dots[i - 1].lat || s.lng !== dots[i - 1].lng);
   if (raw.length < 3) return null; // (two dots: a straight line is as good as anything)
   let length = 0;
   for (let i = 1; i < raw.length; i++) length += metres(raw[i - 1], raw[i]);
   if (length < 80) return null;
-
   const step = Math.ceil(raw.length / MAX_POINTS);
   const shape = raw.filter((_, i) => i % step === 0 || i === raw.length - 1);
-  const id = `mbm-snap:v8:${mode}:${shape.length}:${shape[0].lat.toFixed(5)},${shape[0].lng.toFixed(5)}:${shape[shape.length - 1].lat.toFixed(5)},${shape[shape.length - 1].lng.toFixed(5)}`;
-  try {
-    const kept = localStorage.getItem(id);
-    if (kept) return kept === "none" ? null : (JSON.parse(kept) as Spot[]);
-  } catch {}
-
-  // How far off the phone said each dot could be: tight dots pin the match down, loose ones let
-  // it look further.
-  const acc = (d: Dot) => Math.min(50, Math.max(5, d.acc ?? 15));
-  const typical = [...shape.map(acc)].sort((a, b) => a - b)[Math.floor(shape.length / 2)];
-  try {
-    const res = await fetch(SERVER, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        shape: shape.map((s) => ({ lat: s.lat, lon: s.lng, time: Math.round(s.t / 1000), radius: Math.round(acc(s) * 2) })),
-        ...COSTING[mode],
-        shape_match: "map_snap",
-        use_timestamps: true,
-        directions_type: "none",
-        trace_options: { search_radius: Math.round(Math.min(60, typical * 2.5)), gps_accuracy: Math.round(typical), breakage_distance: 400, turn_penalty_factor: 300 },
-      }),
-    });
-    if (!res.ok) return remember(id, null, res.status === 400); // 400: it can't match this one, don't ask again
-    const body = (await res.json()) as { trip?: { legs?: { shape?: string }[] } };
-    const matched = (body.trip?.legs ?? []).flatMap((l) => (l.shape ? decodePolyline(l.shape, 6) : []));
-    if (matched.length < 2) return remember(id, null, true);
-    // Does it agree with your dots? Not a detour (much longer than the dots); then, stretch by
-    // stretch: where your dots are close to it (within twice how exact each dot was, at least
-    // 20 m) it's the match, and where a run of them is off it (a shortcut the map doesn't know)
-    // it's your dots.
-    let len = 0;
-    for (let i = 1; i < matched.length; i++) len += metres(matched[i - 1], matched[i]);
-    if (len > length * 1.5 + 120) return remember(id, null, true);
-    const near = raw.map((d) => project(d, matched).dist <= Math.max(20, acc(d) * 2));
-    if (near.filter(Boolean).length < raw.length * 0.5) return remember(id, null, true); // mostly elsewhere: your dots
-    return remember(id, blend(raw, matched, near), true);
-  } catch {
-    return null; // offline: try again next time
-  }
+  const matched = await matchOnce(shape, mode);
+  if (!matched) return null;
+  return judge(raw, matched, length);
 }
 
-// The match where your dots agree with it, your own dots where they don't. A stretch of dots off
-// the match is one of two things, told apart by comparing lengths between where the dots leave the
-// match and where they rejoin it:
-//   - a shortcut the map doesn't know (cutting across a lawn): your dots are about as short as
-//     the match or shorter, which goes the long way round → your dots;
-//   - the GPS drifting off and back (common near buildings): your dots go out and come back, so
-//     they're longer than the match between the same two points → the match.
-// A single dot off the match is always a wobble.
+// How far off the phone said a dot could be.
+const accOf = (d: Dot) => Math.min(50, Math.max(5, d.acc ?? 15));
+
+// Whether (and where) to use the match. Worked out fresh every time from the server's answer, so
+// improving these rules never needs the server asked again.
+function judge(raw: Dot[], matched: Spot[], length: number): Spot[] | null {
+  let len = 0;
+  for (let i = 1; i < matched.length; i++) len += metres(matched[i - 1], matched[i]);
+  if (len > length * 1.6 + 150) return null; // a long detour: not your route
+  const near = raw.map((d) => project(d, matched).dist <= Math.max(25, accOf(d) * 2.5));
+  if (near.filter(Boolean).length < raw.length * 0.4) return null; // mostly somewhere else
+  return blend(raw, matched, near);
+}
+
+// The server's match for a shape, kept in this browser (only its raw answer: the rules above are
+// applied each time). Requests go one at a time, a little apart, and are retried when the
+// server is busy: the public server turns away bursts, and a turned-away request used to mean
+// a day of wobbly lines.
+async function matchOnce(shape: Dot[], mode: "walk" | "bike" | "ride"): Promise<Spot[] | null> {
+  tidyOldAnswers();
+  const id = `mbm-match:v1:${mode}:${hash(shape.map((s) => `${s.lat.toFixed(5)},${s.lng.toFixed(5)}`).join(";"))}`;
+  try {
+    const kept = localStorage.getItem(id);
+    if (kept) return kept === "none" ? null : decodePolyline(kept, 6);
+  } catch {}
+  const typical = [...shape.map(accOf)].sort((a, b) => a - b)[Math.floor(shape.length / 2)];
+  const body = JSON.stringify({
+    shape: shape.map((s) => ({ lat: s.lat, lon: s.lng, time: Math.round(s.t / 1000), radius: Math.round(accOf(s) * 2) })),
+    ...COSTING[mode],
+    shape_match: "map_snap",
+    use_timestamps: true,
+    directions_type: "none",
+    trace_options: { search_radius: Math.round(Math.min(60, typical * 2.5)), gps_accuracy: Math.round(typical), breakage_distance: 400, turn_penalty_factor: 300 },
+  });
+  for (let attempt = 0; attempt < 4; attempt++) {
+    let res: Response;
+    try {
+      res = await queued(() => fetch(SERVER, { method: "POST", headers: { "Content-Type": "application/json" }, body }));
+    } catch {
+      return null; // offline: next time
+    }
+    if (res.ok) {
+      const answer = (await res.json().catch(() => ({}))) as { trip?: { legs?: { shape?: string }[] } };
+      const shapes = (answer.trip?.legs ?? []).map((l) => l.shape).filter((x): x is string => !!x);
+      const matched = shapes.flatMap((x) => decodePolyline(x, 6));
+      if (matched.length < 2) return keep(id, null);
+      return keep(id, matched);
+    }
+    if (res.status === 400) return keep(id, null); // it can't match this one: don't ask again
+    if (![429, 502, 503, 504].includes(res.status)) return null;
+    await sleep(2000 * 2 ** attempt); // busy: wait and try again
+  }
+  return null;
+}
+
+// Older versions kept their (already judged) answers under "mbm-snap:": cleared out once.
+let tidied = false;
+function tidyOldAnswers() {
+  if (tidied) return;
+  tidied = true;
+  try {
+    for (let i = localStorage.length - 1; i >= 0; i--) {
+      const k = localStorage.key(i);
+      if (k?.startsWith("mbm-snap:")) localStorage.removeItem(k);
+    }
+  } catch {}
+}
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+// One request at a time, at least 1.1 s apart.
+let chain: Promise<unknown> = Promise.resolve();
+let lastAsk = 0;
+function queued<T>(fn: () => Promise<T>): Promise<T> {
+  const run = chain.then(async () => {
+    const wait = lastAsk + 1100 - Date.now();
+    if (wait > 0) await sleep(wait);
+    lastAsk = Date.now();
+    return fn();
+  });
+  chain = run.catch(() => undefined);
+  return run;
+}
+
+function keep(id: string, path: Spot[] | null) {
+  try {
+    localStorage.setItem(id, path ? encodePolyline(path, 6) : "none");
+  } catch {}
+  return path;
+}
+
+function hash(s: string) {
+  let h = 5381;
+  for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0;
+  return (h >>> 0).toString(36) + s.length.toString(36);
+}
+
+// Google-style polyline, to keep matches small in this browser's storage.
+function encodePolyline(path: Spot[], precision: number) {
+  const f = 10 ** precision;
+  let out = "";
+  let plat = 0;
+  let plng = 0;
+  const put = (v: number) => {
+    let n = v < 0 ? ~(v << 1) : v << 1;
+    while (n >= 0x20) {
+      out += String.fromCharCode((0x20 | (n & 0x1f)) + 63);
+      n >>= 5;
+    }
+    out += String.fromCharCode(n + 63);
+  };
+  for (const p of path) {
+    const lat = Math.round(p.lat * f);
+    const lng = Math.round(p.lng * f);
+    put(lat - plat);
+    put(lng - plng);
+    plat = lat;
+    plng = lng;
+  }
+  return out;
+}
+
+// The match, except where your dots clearly show a shortcut it doesn't know (cutting across a
+// lawn, where the map goes the long way round). Compared between where the dots leave the match
+// and where they rejoin it. Dots drifting off and back (common near buildings) stay on the match.
 function blend(raw: Dot[], matched: Spot[], near: boolean[]): Spot[] {
   const ok = near.map((n, i) => n || (i > 0 && i < near.length - 1 && near[i - 1] && near[i + 1]));
   for (let i = 0; i < raw.length; i++) {
@@ -97,7 +175,13 @@ function blend(raw: Dot[], matched: Spot[], near: boolean[]): Spot[] {
       let dotLen = 0;
       for (let k = before + 1; k <= after; k++) dotLen += metres(raw[k - 1], raw[k]);
       const matchLen = b.along - a.along;
-      if (matchLen >= 0 && dotLen > matchLen * 1.15 + 15) for (let k = i; k <= j; k++) ok[k] = true; // drifted off and back
+      // Your dots only win for a clear shortcut: a few of them (3+, over 25 s+), sure of
+      // themselves (±15 m or better), where the map goes well round (30%+ further). Anything
+      // less is the GPS wandering, and the map's path is the better guess.
+      const run = raw.slice(i, j + 1);
+      const sure = [...run.map(accOf)].sort((x, y) => x - y)[Math.floor(run.length / 2)] <= 15;
+      const shortcut = run.length >= 3 && run[run.length - 1].t - run[0].t >= 25_000 && sure && matchLen > dotLen * 1.3 + 25;
+      if (!shortcut) for (let k = i; k <= j; k++) ok[k] = true;
     }
     i = j;
   }
@@ -150,13 +234,4 @@ function slice(path: Spot[], a: ReturnType<typeof project>, b: ReturnType<typeof
     return { lat: p0.lat + (p1.lat - p0.lat) * q.u, lng: p0.lng + (p1.lng - p0.lng) * q.u };
   };
   return [at(a), ...path.slice(a.seg, b.seg), at(b)];
-}
-
-function remember(id: string, path: Spot[] | null, keep: boolean) {
-  if (keep) {
-    try {
-      localStorage.setItem(id, path ? JSON.stringify(path) : "none");
-    } catch {}
-  }
-  return path;
 }
