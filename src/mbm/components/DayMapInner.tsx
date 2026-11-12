@@ -2,7 +2,8 @@
 
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { APIProvider, InfoWindow, Map, useMap, useMapsLibrary } from "@vis.gl/react-google-maps";
-import { moveStop, namePlace, rememberedRoute, removeStop, reportRoute, saveBlock, trailCells } from "@/app/mbm/actions";
+import { useRouter } from "next/navigation";
+import { moveStop, namePlace, rememberedRoute, removeStop, reportRoute, saveBlock, setPlaceOutline, trailCells } from "@/app/mbm/actions";
 
 // Which version of the path engine drew a route (saved with "Route looks wrong" reports).
 const PATH_ENGINE = "legs+trails+match-v1 (2026-11-10)";
@@ -14,7 +15,7 @@ import { fitToEntries, buildTrips, decodePolyline, metres, type Piece, type Spot
 import { snapLeg } from "@/mbm/snap";
 import { splitLegs, waitSpot } from "@/mbm/legs";
 import { despike, makeTrails } from "@/mbm/trails";
-import { nearOutline } from "@/mbm/buildings";
+import { buildingAt, nearOutline } from "@/mbm/buildings";
 import { isMoving } from "@/mbm/moving";
 
 // The stretch you're hovering on the day bar. moving: light up the route (Commute); still: the
@@ -63,6 +64,7 @@ export default function DayMapInner({
   const box = useRef<HTMLDivElement>(null);
   const built = useMemo(() => fitToEntries(buildTrips(visits, points), blocks), [visits, points, blocks]);
   const trips = useFilledTrips(built, points);
+  usePlaceBuildings(visits);
   // What lights up for the hovered stretch: the trips (moving) or the stops (still) during it.
   const barLit = useMemo(() => {
     if (!focus) return null;
@@ -666,6 +668,36 @@ function Dots({ points, tz }: { points: RoutePoint[]; tz: string }) {
     return () => layer.setMap(null);
   }, [map, maps, points, tz]);
   return null;
+}
+
+// Your places' buildings: looked up (OpenStreetMap, from this browser) for any place that doesn't
+// have one yet, one at a time in the background, and saved. Then a stop is "at" a place when
+// it's in that building, however big; the next phone sync redoes the day that way.
+function usePlaceBuildings(visits: Visit[]) {
+  const router = useRouter();
+  const tried = useRef(new Set<string>());
+  useEffect(() => {
+    const todo = new globalThis.Map<string, { lat: number; lng: number }>(); // (Map here is the map component)
+    for (const v of visits) if (v.placeId && v.placeNeedsOutline && !tried.current.has(v.placeId)) todo.set(v.placeId, { lat: v.lat, lng: v.lng });
+    if (!todo.size) return;
+    let live = true;
+    (async () => {
+      let saved = false;
+      for (const [id, at] of todo) {
+        if (!live) return;
+        tried.current.add(id);
+        const outline = await buildingAt(at.lat, at.lng);
+        if (outline === undefined) continue; // (the map servers are busy: next time)
+        const res = await setPlaceOutline(id, outline);
+        if (res.ok && outline) saved = true;
+        await new Promise((r) => setTimeout(r, 1200));
+      }
+      if (saved && live) router.refresh();
+    })();
+    return () => {
+      live = false;
+    };
+  }, [visits, router]);
 }
 
 // Zooms to show the whole day: when the day opens (not every time new dots come in from the

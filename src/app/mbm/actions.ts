@@ -521,3 +521,13 @@ export async function disconnectGoogle(): Promise<Result> {
   refresh();
   return { ok: true };
 }
+
+// A place's building, found by your browser (OpenStreetMap), or null: it isn't in one
+// (032_places_by_building.sql). Then "at this place" means "in this building", whatever its size.
+export async function setPlaceOutline(placeId: string, outline: [number, number][] | null): Promise<Result> {
+  if (!isUuid(placeId)) return fail("Bad place.");
+  const clean = outline && outline.length >= 3 && outline.length <= 2000 ? outline.map(([a, b]) => [Math.round(a * 1e7) / 1e7, Math.round(b * 1e7) / 1e7]) : null;
+  const { error } = await (await mbm()).rpc("set_place_outline", { p_place: placeId, p_outline: clean });
+  if (error) return fail(/set_place_outline/.test(error.message) ? "Run supabase/minute-by-minute/032_places_by_building.sql first." : error.message);
+  return { ok: true };
+}
