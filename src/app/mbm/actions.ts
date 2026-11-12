@@ -1,6 +1,7 @@
 "use server";
 
 import { googleStatus, syncCalendar } from "@/mbm/google";
+import { buildingAt } from "@/mbm/buildings";
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
@@ -530,4 +531,14 @@ export async function setPlaceOutline(placeId: string, outline: [number, number]
   const { error } = await (await mbm()).rpc("set_place_outline", { p_place: placeId, p_outline: clean });
   if (error) return fail(/set_place_outline/.test(error.message) ? "Run supabase/minute-by-minute/032_places_by_building.sql first." : error.message);
   return { ok: true };
+}
+
+// The same building lookup, from the website's server (when your browser couldn't reach
+// OpenStreetMap). Saves it too. "busy": try again later.
+export async function lookupPlaceOutline(placeId: string, lat: number, lng: number): Promise<"found" | "none" | "busy" | string> {
+  if (!isUuid(placeId) || !Number.isFinite(lat) || !Number.isFinite(lng)) return "Bad place.";
+  const outline = await buildingAt(lat, lng);
+  if (outline === undefined) return "busy";
+  const res = await setPlaceOutline(placeId, outline);
+  return res.ok ? (outline ? "found" : "none") : res.message;
 }

@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { APIProvider, InfoWindow, Map, useMap, useMapsLibrary } from "@vis.gl/react-google-maps";
 import { useRouter } from "next/navigation";
-import { moveStop, namePlace, rememberedRoute, removeStop, reportRoute, saveBlock, setPlaceOutline, trailCells } from "@/app/mbm/actions";
+import { lookupPlaceOutline, moveStop, namePlace, rememberedRoute, removeStop, reportRoute, saveBlock, setPlaceOutline, trailCells } from "@/app/mbm/actions";
 
 // Which version of the path engine drew a route (saved with "Route looks wrong" reports).
 const PATH_ENGINE = "legs+trails+match-v1 (2026-11-10)";
@@ -64,7 +64,7 @@ export default function DayMapInner({
   const box = useRef<HTMLDivElement>(null);
   const built = useMemo(() => fitToEntries(buildTrips(visits, points), blocks), [visits, points, blocks]);
   const trips = useFilledTrips(built, points);
-  usePlaceBuildings(visits);
+  const buildings = usePlaceBuildings(visits);
   // What lights up for the hovered stretch: the trips (moving) or the stops (still) during it.
   const barLit = useMemo(() => {
     if (!focus) return null;
@@ -270,6 +270,7 @@ export default function DayMapInner({
           {focus?.kind === "moving" ? "No route recorded then" : "No location recorded then"}
         </p>
       )}
+      <BuildingNote status={buildings} needsSql={visits.some((v) => v.place && !v.placeId)} />
     </APIProvider>
       {adding && (
         <div
@@ -670,34 +671,69 @@ function Dots({ points, tz }: { points: RoutePoint[]; tz: string }) {
   return null;
 }
 
-// Your places' buildings: looked up (OpenStreetMap, from this browser) for any place that doesn't
-// have one yet, one at a time in the background, and saved. Then a stop is "at" a place when
-// it's in that building, however big; the next phone sync redoes the day that way.
-function usePlaceBuildings(visits: Visit[]) {
+// Your places' buildings: looked up (OpenStreetMap) for any place that doesn't have one yet, one
+// at a time in the background, and saved: from this browser, or the website's server if the
+// browser can't get through. Then a stop is "at" a place when it's in that building, however
+// big; the next phone sync redoes the day that way. Each place is looked up once per visit to
+// the page (it keeps going even when the page refreshes itself).
+const lookedUp = new Set<string>();
+type BuildingStatus = { looking: number; found: number; none: number; busy: number; problem?: string };
+
+function usePlaceBuildings(visits: Visit[]): BuildingStatus | null {
   const router = useRouter();
-  const tried = useRef(new Set<string>());
+  const [status, setStatus] = useState<BuildingStatus | null>(null);
   useEffect(() => {
     const todo = new globalThis.Map<string, { lat: number; lng: number }>(); // (Map here is the map component)
-    for (const v of visits) if (v.placeId && v.placeNeedsOutline && !tried.current.has(v.placeId)) todo.set(v.placeId, { lat: v.lat, lng: v.lng });
+    for (const v of visits) if (v.placeId && v.placeNeedsOutline && !lookedUp.has(v.placeId)) todo.set(v.placeId, { lat: v.lat, lng: v.lng });
     if (!todo.size) return;
-    let live = true;
+    for (const id of todo.keys()) lookedUp.add(id);
     (async () => {
+      await Promise.resolve();
+      setStatus((s) => ({ found: 0, none: 0, busy: 0, ...s, looking: (s?.looking ?? 0) + todo.size }));
       let saved = false;
       for (const [id, at] of todo) {
-        if (!live) return;
-        tried.current.add(id);
-        const outline = await buildingAt(at.lat, at.lng);
-        if (outline === undefined) continue; // (the map servers are busy: next time)
-        const res = await setPlaceOutline(id, outline);
-        if (res.ok && outline) saved = true;
+        let result: string = "busy";
+        const outline = await buildingAt(at.lat, at.lng).catch(() => undefined);
+        if (outline !== undefined) {
+          const res = await setPlaceOutline(id, outline).catch((e: Error) => ({ ok: false as const, message: e.message }));
+          result = res.ok ? (outline ? "found" : "none") : res.message;
+        } else {
+          result = await lookupPlaceOutline(id, at.lat, at.lng).catch(() => "busy"); // (try from the server)
+        }
+        if (result === "found") saved = true;
+        if (result === "busy") lookedUp.delete(id); // (try again next time)
+        setStatus((s) => {
+          const n = { found: 0, none: 0, busy: 0, looking: 1, ...s };
+          n.looking = Math.max(0, n.looking - 1);
+          if (result === "found") n.found++;
+          else if (result === "none") n.none++;
+          else if (result === "busy") n.busy++;
+          else n.problem = result;
+          return n;
+        });
         await new Promise((r) => setTimeout(r, 1200));
       }
-      if (saved && live) router.refresh();
+      if (saved) router.refresh();
     })();
-    return () => {
-      live = false;
-    };
   }, [visits, router]);
+  return status;
+}
+
+// A small note on the map while buildings are being looked up (and if it couldn't).
+function BuildingNote({ status, needsSql }: { status: BuildingStatus | null; needsSql: boolean }) {
+  if (needsSql) status = { looking: 0, found: 0, none: 0, busy: 0, problem: "Buildings are off: run 032_places_by_building.sql in Supabase." };
+  if (!status) return null;
+  const text = status.problem
+    ? status.problem
+    : status.looking
+      ? `Finding your places' buildings… (${status.found + status.none + status.busy} of ${status.found + status.none + status.busy + status.looking})`
+      : status.busy
+        ? "Couldn't reach OpenStreetMap for some buildings: it'll try again next time."
+        : status.found
+          ? `Found ${status.found} building${status.found === 1 ? "" : "s"}.`
+          : null;
+  if (!text) return null;
+  return <div className="pointer-events-none absolute bottom-3 left-3 z-10 max-w-[80%] rounded-control bg-paper/95 px-3 py-1.5 text-xs text-ink shadow ring-1 ring-line">{text}</div>;
 }
 
 // Zooms to show the whole day: when the day opens (not every time new dots come in from the

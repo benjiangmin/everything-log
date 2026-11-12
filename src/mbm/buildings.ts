@@ -20,13 +20,8 @@ export async function buildingAt(lat: number, lng: number, log?: string[]): Prom
   const q = `[out:json][timeout:8];(way(${at})[building];relation(${at})[building];);out geom;`;
   for (const server of SERVERS) {
     try {
-      const res = await fetch(server, {
-        method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded", Accept: "application/json" },
-        body: "data=" + encodeURIComponent(q),
-        signal: AbortSignal.timeout(7000),
-        cache: "no-store",
-      });
+      // (A plain GET: works from a browser page and from a server alike.)
+      const res = await fetch(`${server}?data=${encodeURIComponent(q)}`, { signal: AbortSignal.timeout(9000), cache: "no-store" });
       if (!res.ok) {
         log?.push(`${server}: HTTP ${res.status}`);
         continue;
