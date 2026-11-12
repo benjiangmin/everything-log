@@ -733,7 +733,7 @@ function BuildingNote({ status, needsSql }: { status: BuildingStatus | null; nee
           ? `Found ${status.found} building${status.found === 1 ? "" : "s"}.`
           : null;
   if (!text) return null;
-  return <div className="pointer-events-none absolute bottom-3 left-3 z-10 max-w-[80%] rounded-control bg-paper/95 px-3 py-1.5 text-xs text-ink shadow ring-1 ring-line">{text}</div>;
+  return <div className="pointer-events-none absolute bottom-8 left-1/2 z-10 max-w-[80%] -translate-x-1/2 rounded-control bg-paper/95 px-3 py-1.5 text-xs text-ink shadow ring-1 ring-line">{text}</div>;
 }
 
 // Zooms to show the whole day: when the day opens (not every time new dots come in from the
