@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { saveProfile } from "@/app/mbm/actions";
-import { RACES, STATES, type Profile } from "@/mbm/life";
+import { EDUCATION, EXERCISE, RACES, SMOKING, STATES, type Profile } from "@/mbm/life";
 
 const field = "w-full rounded-control border border-line bg-paper px-3 py-2.5 text-ink focus:border-ink";
 
@@ -67,6 +67,25 @@ export default function AboutYouForm({ profile, onDone }: { profile: Profile | n
           ))}
         </select>
       </label>
+      {(
+        [
+          ["education", "School", EDUCATION, profile?.education],
+          ["smoking", "Smoking", SMOKING, profile?.smoking],
+          ["exercise", "Exercise", EXERCISE, profile?.exercise],
+        ] as const
+      ).map(([key, label, options, value]) => (
+        <label key={key} className={`grid gap-1.5 text-sm font-semibold ${key === "exercise" ? "sm:col-span-2" : ""}`}>
+          {label}
+          <select name={key} defaultValue={value ?? ""} className={field} style={{ outline: "none" }}>
+            <option value="">Choose…</option>
+            {options.map((o) => (
+              <option key={o.id} value={o.id}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+        </label>
+      ))}
       <p className="text-xs text-muted sm:col-span-2">
         Only used here, to pick the right life table. Anything you leave out uses everyone&apos;s average. Life tables only come by female and male.
       </p>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { aheadItems, ageAt, RACE_LABEL, yearsLeft, type Profile } from "@/mbm/life";
+import { adjustments, aheadItems, ageAt, RACE_LABEL, yearsLeft, type Profile } from "@/mbm/life";
 import AboutYouForm from "./AboutYouForm";
 import AboutYouSteps from "./AboutYouSteps";
 
@@ -42,12 +42,27 @@ export default function AheadView({
   const card = useRef<HTMLDivElement>(null);
   const [stuck, setStuck] = useState(false);
   const [slot, setSlot] = useState<number | null>(null);
+  // Measured once at full size (and again if the window's width changes it), never while it's
+  // shrunk or growing back: measuring mid-animation had kept a too-short slot.
+  const stuckRef = useRef(false);
   useEffect(() => {
-    if (!stuck && card.current) {
-      const h = card.current.offsetHeight;
-      queueMicrotask(() => setSlot(h));
-    }
-  }, [stuck, editing]);
+    stuckRef.current = stuck;
+  }, [stuck]);
+  useEffect(() => {
+    const measure = () => {
+      if (!stuckRef.current && card.current) setSlot(card.current.offsetHeight);
+    };
+    queueMicrotask(measure);
+    let w = window.innerWidth;
+    const onResize = () => {
+      if (window.innerWidth !== w) {
+        w = window.innerWidth;
+        if (!stuckRef.current) measure();
+      }
+    };
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, [editing]);
   useEffect(() => {
     const el = sentinel.current;
     if (!el) return;
@@ -86,7 +101,10 @@ export default function AheadView({
   }
 
   const age = ageAt(profile.birthday, renderedAt);
-  const left = yearsLeft(age, profile.sex, profile.race, profile.state);
+  const base = yearsLeft(age, profile.sex, profile.race, profile.state);
+  const adj = adjustments(profile);
+  const left = Math.max(1, base + adj.reduce((n, a) => n + a.years, 0));
+  const missing = [!profile.education && "education", !profile.smoking && "smoking", !profile.exercise && "exercise"].filter(Boolean) as string[];
   const total = age + left;
   const livedPct = (age / total) * 100;
   const all = aheadItems(averages, colors).map((it) => ({ ...it, years: (left * it.perDay) / 86400 }));
@@ -209,6 +227,23 @@ export default function AheadView({
         />
         <Stat label="Likely left" value={`${yrs(left)} years`} note={`about ${Math.round(left * 52.18).toLocaleString()} weeks`} />
         <Stat label="Left over" value={`${yrs(Math.max(0, left - taken))} years`} note="after everything below" onHover={(on) => setHover(on ? "all" : null)} />
+      </div>
+
+      {/* What the estimate is built from. */}
+      <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">
+        <span className="rounded-full bg-surface px-3 py-1 text-muted">
+          Life table: <span className="font-semibold text-ink">{who || "everyone in the U.S."}</span> · <span className="num">{yrs(base)}</span> years left
+        </span>
+        {adj.map((a) => (
+          <span key={a.label} className="rounded-full bg-surface px-3 py-1 text-muted">
+            {a.label} <span className={`num font-semibold ${a.years >= 0 ? "text-[#4f6b45]" : "text-danger"}`}>{a.years >= 0 ? "+" : "−"}{Math.abs(a.years).toFixed(1)}</span>
+          </span>
+        ))}
+        {missing.length > 0 && (
+          <button type="button" onClick={() => setEditing(true)} className="rounded-full border border-dashed border-line px-3 py-1 font-semibold text-muted hover:border-ink/40 hover:text-ink">
+            + Add your {missing.join(", ")} for a closer estimate
+          </button>
+        )}
       </div>
 
       {/* Where it goes. */}

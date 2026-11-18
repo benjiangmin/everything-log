@@ -3,18 +3,18 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useTransition, type ReactNode } from "react";
 import { saveProfile } from "@/app/mbm/actions";
-import { RACES, STATES } from "@/mbm/life";
+import { EDUCATION, EXERCISE, RACES, SMOKING, STATES } from "@/mbm/life";
 
 // The first time: one question at a time, sliding to the next (like the phone's setup). Every
 // one can be skipped. All of them at once, later: "Edit your details" (AboutYouForm).
-type Answers = { name: string; birthday: string; sex: string; race: string; state: string };
-const STEPS = 5;
+type Answers = { name: string; birthday: string; sex: string; race: string; state: string; education: string; smoking: string; exercise: string };
+const STEPS = 8;
 
 export default function AboutYouSteps() {
   const router = useRouter();
   const [step, setStep] = useState(0);
   const [dir, setDir] = useState<"fwd" | "back">("fwd");
-  const [a, setA] = useState<Answers>({ name: "", birthday: "", sex: "", race: "", state: "" });
+  const [a, setA] = useState<Answers>({ name: "", birthday: "", sex: "", race: "", state: "", education: "", smoking: "", exercise: "" });
   const [search, setSearch] = useState("");
   const [message, setMessage] = useState<string | null>(null);
   const [pending, start] = useTransition();
@@ -139,19 +139,55 @@ export default function AboutYouSteps() {
               ref={input}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && states.length === 1 && set("state", states[0], STEPS)}
+              onKeyDown={(e) => e.key === "Enter" && states.length === 1 && set("state", states[0], 5)}
               placeholder="Search"
               className="w-full rounded-control border border-line bg-surface px-3 py-2.5 focus:border-ink"
               style={{ outline: "none" }}
             />
             <div className="mt-3 grid max-h-72 gap-2 overflow-y-auto pr-1 [scrollbar-width:thin] sm:grid-cols-2">
               {states.map((s) => (
-                <Choice key={s} on={a.state === s} onClick={() => set("state", s, STEPS)}>
+                <Choice key={s} on={a.state === s} onClick={() => set("state", s, 5)}>
                   {s}
                 </Choice>
               ))}
             </div>
-            <Skip onClick={() => set("state", "", STEPS)}>{pending ? "Saving…" : "Not in the U.S. / skip"}</Skip>
+            <Skip onClick={() => set("state", "", 5)}>Not in the U.S. / skip</Skip>
+          </Ask>
+        )}
+        {step === 5 && (
+          <Ask title="How far did you go in school?" hint="One of the biggest differences in how long people live. Still in college counts as your degree.">
+            <div className="grid gap-2.5">
+              {EDUCATION.map((x) => (
+                <Choice key={x.id} on={a.education === x.id} onClick={() => set("education", x.id, 6)}>
+                  {x.label}
+                </Choice>
+              ))}
+            </div>
+            <Skip onClick={() => set("education", "", 6)}>Skip</Skip>
+          </Ask>
+        )}
+        {step === 6 && (
+          <Ask title="Do you smoke?" hint="Smoking takes about ten years off, on average. Quitting young gives most of them back.">
+            <div className="grid gap-2.5 sm:grid-cols-3">
+              {SMOKING.map((x) => (
+                <Choice key={x.id} on={a.smoking === x.id} onClick={() => set("smoking", x.id, 7)}>
+                  {x.label}
+                </Choice>
+              ))}
+            </div>
+            <Skip onClick={() => set("smoking", "", 7)}>Skip</Skip>
+          </Ask>
+        )}
+        {step === 7 && (
+          <Ask title="How much do you exercise?" hint="Anything that gets you breathing harder counts, a brisk walk included.">
+            <div className="grid gap-2.5 sm:grid-cols-2">
+              {EXERCISE.map((x) => (
+                <Choice key={x.id} on={a.exercise === x.id} onClick={() => set("exercise", x.id, STEPS)}>
+                  {x.label}
+                </Choice>
+              ))}
+            </div>
+            <Skip onClick={() => set("exercise", "", STEPS)}>{pending ? "Saving…" : "Skip"}</Skip>
             {message && (
               <p role="alert" className="mt-3 text-sm text-danger">
                 {message}

@@ -9,7 +9,63 @@
 
 export type Sex = "female" | "male";
 export type Race = "hispanic" | "aian" | "asian" | "black" | "white" | "other";
-export type Profile = { name: string | null; birthday: string | null; sex: Sex | null; race: Race | null; state: string | null; skipped: boolean };
+export type Education = "less_hs" | "hs" | "some_college" | "bachelors";
+export type Smoking = "never" | "former" | "current";
+export type Exercise = "none" | "lt75" | "75_149" | "150_299" | "300_449" | "450";
+export type Profile = {
+  name: string | null;
+  birthday: string | null;
+  sex: Sex | null;
+  race: Race | null;
+  state: string | null;
+  education?: Education | null;
+  smoking?: Smoking | null;
+  exercise?: Exercise | null;
+  skipped: boolean;
+};
+
+// Beyond the life table: three things with big, well-measured effects, as years added to (or
+// taken from) the average for people like you. Rough by nature: each study compares groups,
+// and the table's average already mixes everyone, so each is measured against that mix.
+//
+// Education: IHME, Lancet Public Health 2025, life expectancy at 25 in 2019 by education
+//   (college 84.2, some college 82.1, high school 77.3, less 73.5), against their weighted
+//   average (~80.7). Still in college counts as your degree's group.
+// Smoking: Jha et al., NEJM 2013: current smokers lose 10+ years against never-smokers;
+//   quitting before 35 gives back about 10. Against today's mix (~1 in 9 adults smoke).
+// Exercise: Moore et al., PLOS Medicine 2012, years gained against none (75 min/week: 1.8,
+//   75-149: 2.5, 150-299: 3.4, 300-449: 4.2, 450+: 4.5), against the typical mix.
+export const EDUCATION: { id: Education; label: string; years: number }[] = [
+  { id: "less_hs", label: "Didn't finish high school", years: -7.2 },
+  { id: "hs", label: "High school or GED", years: -3.4 },
+  { id: "some_college", label: "Some college or an associate degree", years: 1.4 },
+  { id: "bachelors", label: "Bachelor's or more (or working on one)", years: 3.5 },
+];
+export const SMOKING: { id: Smoking; label: string; years: number }[] = [
+  { id: "never", label: "Never smoked", years: 1.0 },
+  { id: "former", label: "Used to, quit", years: 0 },
+  { id: "current", label: "Smoke now", years: -9.0 },
+];
+export const EXERCISE: { id: Exercise; label: string; years: number }[] = [
+  { id: "none", label: "Hardly any", years: -2.6 },
+  { id: "lt75", label: "Under 75 minutes a week", years: -0.8 },
+  { id: "75_149", label: "75 to 150 minutes a week", years: -0.1 },
+  { id: "150_299", label: "150 to 300 minutes a week", years: 0.8 },
+  { id: "300_449", label: "300 to 450 minutes a week", years: 1.6 },
+  { id: "450", label: "More than 450 minutes a week", years: 1.9 },
+];
+
+// The adjustments that apply, with what each is.
+export function adjustments(p: Profile): { label: string; years: number }[] {
+  const out: { label: string; years: number }[] = [];
+  const e = EDUCATION.find((x) => x.id === p.education);
+  if (e) out.push({ label: e.label, years: e.years });
+  const s = SMOKING.find((x) => x.id === p.smoking);
+  if (s) out.push({ label: s.label, years: s.years });
+  const x = EXERCISE.find((y) => y.id === p.exercise);
+  if (x) out.push({ label: `Exercise: ${x.label.toLowerCase()}`, years: x.years });
+  return out;
+}
 
 export const RACES: { id: Race; label: string }[] = [
   { id: "hispanic", label: "Hispanic or Latino" },
@@ -109,7 +165,7 @@ export function aheadItems(avg: { days: number; perDay: Record<string, number>; 
   const commute = mine("Commute");
   out.push(
     commute
-      ? { key: "Commute", label: "Getting places", perDay: commute, mine: true, source: days, color: colors.Commute ?? "#c9b8a6" }
+      ? { key: "Commute", label: "Commute", perDay: commute, mine: true, source: days, color: colors.Commute ?? "#c9b8a6" }
       : { key: "Commute", label: "Commuting", perDay: ((27.2 * 2 * 250) / 365) * 60, mine: false, source: "U.S. average (Census ACS, 2024)", color: colors.Commute ?? "#c9b8a6" },
   );
   if (enough && avg!.screenPerDay > 60) out.push({ key: "screen", label: "On your phone", perDay: avg!.screenPerDay, mine: true, source: days, color: "#6d7f99" });

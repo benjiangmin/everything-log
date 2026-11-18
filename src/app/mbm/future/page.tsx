@@ -27,7 +27,12 @@ async function Future() {
   if (!user) redirect("/mbm/login?next=/mbm/future");
   const client = await mbm();
   const [profile, avg, acts, renderedAt] = await Promise.all([
-    client.from("profiles").select("name, birthday, sex, race, state, skipped").maybeSingle(),
+    // (039 adds education, smoking and exercise; until it's run, just the first ones.)
+    client
+      .from("profiles")
+      .select("name, birthday, sex, race, state, education, smoking, exercise, skipped")
+      .maybeSingle()
+      .then(async (r) => (r.error ? await client.from("profiles").select("name, birthday, sex, race, state, skipped").maybeSingle() : r)),
     client.rpc("daily_averages", { p_days: 30, p_tz: mbmTz() }),
     client.from("activities").select("name, color"),
     loadedAt(),

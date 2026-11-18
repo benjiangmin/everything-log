@@ -601,7 +601,7 @@ async function unlockDaysOf(client: Awaited<ReturnType<typeof mbm>>, visitId: st
 // Saved from the Future page's form (or the phone's first-run setup). Everything's optional.
 export async function saveProfile(formData: FormData): Promise<Result> {
   if (!mbmReady()) return fail("Not connected.");
-  const { RACES, STATES } = await import("@/mbm/life");
+  const { RACES, STATES, EDUCATION, SMOKING, EXERCISE } = await import("@/mbm/life");
   const text = (k: string, n: number) => String(formData.get(k) ?? "").trim().slice(0, n) || null;
   const birthday = text("birthday", 10);
   if (birthday && (!/^\d{4}-\d{2}-\d{2}$/.test(birthday) || +new Date(birthday) > Date.now() || birthday < "1900-01-02")) return fail("That birthday doesn't look right.");
@@ -614,13 +614,21 @@ export async function saveProfile(formData: FormData): Promise<Result> {
     sex: sex === "female" || sex === "male" ? sex : null,
     race: RACES.some((r) => r.id === race) ? race : null,
     state: state && state in STATES ? state : null,
+    education: EDUCATION.find((x) => x.id === text("education", 20))?.id ?? null,
+    smoking: SMOKING.find((x) => x.id === text("smoking", 20))?.id ?? null,
+    exercise: EXERCISE.find((x) => x.id === text("exercise", 20))?.id ?? null,
     skipped: false,
     updated_at: new Date().toISOString(),
   };
   const client = await mbm();
   const { data: auth } = await client.auth.getUser();
   if (!auth.user) return fail("Sign in again.");
-  const { error } = await client.from("profiles").upsert({ user_id: auth.user.id, ...row });
+  let { error } = await client.from("profiles").upsert({ user_id: auth.user.id, ...row });
+  // (039 not run yet: save the rest.)
+  if (error && /education|smoking|exercise/.test(error.message)) {
+    const rest = Object.fromEntries(Object.entries(row).filter(([k]) => !["education", "smoking", "exercise"].includes(k)));
+    ({ error } = await client.from("profiles").upsert({ user_id: auth.user.id, ...rest }));
+  }
   if (error) return fail(/relation .* does not exist|schema cache/i.test(error.message) ? "Run 038_about_you.sql first." : error.message);
   revalidatePath("/mbm/future");
   revalidatePath("/mbm");
