@@ -103,7 +103,12 @@ export default function AheadView({
           )}
         </div>
         <div className="mt-6 grid gap-3 sm:grid-cols-3">
-          <Stat label="Lived" value={`${yrs(age)} years`} note={`${Math.round(age * YEAR_DAYS).toLocaleString()} days`} />
+          {/* Your age the way people say it (20, not 20.5 rounded up), then the months. */}
+          <Stat
+            label="Lived"
+            value={`${Math.floor(age)} years`}
+            note={`${Math.floor((age % 1) * 12)} months on top · ${Math.floor(age * YEAR_DAYS).toLocaleString()} days`}
+          />
           <Stat label="Likely left" value={`${yrs(left)} years`} note={`about ${Math.round(left * 52.18).toLocaleString()} weeks`} />
           <Stat label="Left over" value={`${yrs(Math.max(0, left - taken))} years`} note="after everything below" onHover={(on) => setHover(on ? "all" : null)} />
         </div>
