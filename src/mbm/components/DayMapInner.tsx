@@ -57,6 +57,7 @@ export default function DayMapInner({
   liveColor?: string | null; // today: show where you are now, pulsing, in this color
 }) {
   const [open, setOpen] = useState<Visit | null>(null);
+  const [refit, setRefit] = useState(0); // (bumped by "Whole day": zoom back out to all of it)
   const [moving, setMoving] = useState<Visit | null>(null); // "click where it really is"
   const [moveNote, setMoveNote] = useState<string | null>(null);
   const [, runMove] = useTransition();
@@ -153,6 +154,7 @@ export default function DayMapInner({
 
   return (
     <div ref={box} className="relative size-full" onMouseLeave={() => pointed && point(null)}>
+    {all.length > 1 && <WholeDay onClick={() => setRefit((n) => n + 1)} />}
     <APIProvider apiKey={KEY}>
       <Map
         styles={stylesFor(zoom)}
@@ -184,7 +186,7 @@ export default function DayMapInner({
         }}
         className="size-full"
       >
-        <FitTo spots={all} top={topCover} />
+        <FitTo spots={all} top={topCover} again={refit} />
         <PointerTrack trips={trips} onHit={(hit, e) => point(hit.length ? { trips: hit, stops: [], ...where(e) } : null)} />
         {showDots && <Dots points={outdoorDots} tz={tz} />}
         {/* The building you were in, lit up while you hover the stop (here or on the day bar). */}
@@ -249,8 +251,12 @@ export default function DayMapInner({
             <HtmlMarker key={v.id} position={{ lat: v.lat, lng: v.lng }} zIndex={on ? 3 : 1}>
               <button
                 type="button"
-                onClick={() => setOpen(v)}
-                onMouseEnter={(e) => point({ trips: [], stops: samePlace(visits, v).map((x) => x.id), ...where(e) })}
+                // Clicking it: its box opens, and the hover bubble goes (it was in the way of the box).
+                onClick={() => {
+                  point(null);
+                  setOpen(v);
+                }}
+                onMouseEnter={(e) => open?.id !== v.id && point({ trips: [], stops: samePlace(visits, v).map((x) => x.id), ...where(e) })}
                 onMouseLeave={() => point(null)}
                 aria-label={name ?? "Unnamed stop"}
                 className={`flex cursor-pointer flex-col items-center transition-[opacity,transform] duration-150 ${dim ? "opacity-35" : ""} ${on ? "scale-125" : ""}`}
@@ -919,7 +925,7 @@ function BuildingNote({ status, needsSql }: { status: BuildingStatus | null; nee
 
 // Zooms to show the whole day: when the day opens (not every time new dots come in from the
 // phone, so the map doesn't jump while you look around).
-function FitTo({ spots, top = 0 }: { spots: Spot[]; top?: number }) {
+function FitTo({ spots, top = 0, again = 0 }: { spots: Spot[]; top?: number; again?: number }) {
   const map = useMap();
   const core = useMapsLibrary("core");
   const key = spots.length ? `${spots[0].lat},${spots[0].lng}` : "";
@@ -934,8 +940,25 @@ function FitTo({ spots, top = 0 }: { spots: Spot[]; top?: number }) {
     for (const s of spots) bounds.extend(s);
     map.fitBounds(bounds, top ? { top: top + 32, right: 48, bottom: 48, left: 48 } : 48);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only for a new day (or a new cover)
-  }, [map, core, key, top]);
+  }, [map, core, key, top, again]);
   return null;
+}
+
+// Back to the whole day (in the corner where the zoom buttons were).
+function WholeDay({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title="Show the whole day"
+      className="absolute bottom-4 right-4 z-10 flex items-center gap-2 rounded-full bg-paper/95 px-3.5 py-2 text-sm font-semibold text-ink shadow-lg shadow-ink/15 ring-1 ring-line backdrop-blur transition-colors hover:bg-surface"
+    >
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+      Whole day
+    </button>
+  );
 }
 
 // (Google's popup pads only its left side; the extra right padding below evens it out.)
