@@ -60,7 +60,8 @@ export default function StatsView({
         <Apps apps={stats.apps} />
       </div>
 
-      <Unmarked gaps={stats.gaps} range={range} tz={tz} dayKey={dayKey} />
+      {/* (Only for a day: over a week or more, the longest stretches weren't much use.) */}
+      {range === "day" && <Unmarked gaps={stats.gaps} range={range} tz={tz} dayKey={dayKey} />}
     </div>
   );
 }

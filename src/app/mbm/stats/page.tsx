@@ -52,6 +52,8 @@ async function StatsFor({ range, day: asked, q }: { range: Range; day?: string; 
         <RangeRail range={range} hrefFor={(r) => href(r, asked)} />
       </aside>
       <div className="min-w-0">
+      {/* Which day / week / month / year this is: stays at the top as you scroll. */}
+      <div className="sticky top-16 z-20 -mx-2 bg-paper/95 px-2 pb-3 pt-3 backdrop-blur">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="flex items-center gap-2 text-sm font-semibold capitalize" style={{ color: RANGE_COLOR[range] }}>
           <span aria-hidden="true" className="size-2.5 rounded-full" style={{ background: RANGE_COLOR[range] }} />
@@ -81,6 +83,7 @@ async function StatsFor({ range, day: asked, q }: { range: Range; day?: string; 
         </div>
       </div>
       <h1 className="mt-2 font-display text-3xl font-semibold tracking-tight sm:text-4xl">{period.title}</h1>
+      </div>
       {stats instanceof Error ? (
         <p className="mt-6 rounded-card bg-surface px-5 py-4 text-sm text-danger">{stats.message}</p>
       ) : (

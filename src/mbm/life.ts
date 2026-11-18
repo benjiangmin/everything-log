@@ -168,7 +168,7 @@ export function aheadItems(avg: { days: number; perDay: Record<string, number>; 
       ? { key: "Commute", label: "Commute", perDay: commute, mine: true, source: days, color: colors.Commute ?? "#c9b8a6" }
       : { key: "Commute", label: "Commuting", perDay: ((27.2 * 2 * 250) / 365) * 60, mine: false, source: "U.S. average (Census ACS, 2024)", color: colors.Commute ?? "#c9b8a6" },
   );
-  if (enough && avg!.screenPerDay > 60) out.push({ key: "screen", label: "On your phone", perDay: avg!.screenPerDay, mine: true, source: days, color: "#6d7f99" });
+  if (enough && avg!.screenPerDay > 60) out.push({ key: "screen", label: "Screen time", perDay: avg!.screenPerDay, mine: true, source: days, color: "#6d7f99" });
   // Then everything else you track (10 min a week or more), biggest first. (The page shows sleep
   // and phone by default; these only when you add them: most won't last 10 years.)
   if (enough) {

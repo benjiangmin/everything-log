@@ -110,7 +110,9 @@ export default function AheadView({
   const all = aheadItems(averages, colors).map((it) => ({ ...it, years: (left * it.perDay) / 86400 }));
   const items = all.filter((it) => shownKeys.includes(it.key));
   const addable = all.filter((it) => !items.includes(it));
-  const matches = addable.filter((it) => it.label.toLowerCase().includes(query.trim().toLowerCase())).slice(0, 6);
+  // (Screen time isn't something you track, so it's found by "phone" too.)
+  const words = (it: { key: string; label: string }) => (it.key === "screen" ? `${it.label} phone apps` : it.label).toLowerCase();
+  const matches = addable.filter((it) => words(it).includes(query.trim().toLowerCase())).slice(0, 6);
   const add = (key: string) => {
     keep([...shownKeys, key]);
     setQuery("");

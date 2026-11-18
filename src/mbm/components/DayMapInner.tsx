@@ -681,7 +681,25 @@ function useFilledTrips(trips: Trip[], points: RoutePoint[]): { trips: Trip[]; s
     }
   }, [trips, ready, trails]);
   const filled = useMemo(
-    () => trips.map((t) => ({ ...t, pieces: t.pieces.map((p, i) => (better[pieceKey(t, i)] ? { ...p, path: better[pieceKey(t, i)] } : p)) })),
+    () =>
+      trips.map((t) => {
+        const pieces = t.pieces.map((p, i) => (better[pieceKey(t, i)] ? { ...p, path: better[pieceKey(t, i)] } : p));
+        // A missed bit runs from where the piece before it is drawn to end, to where the next one
+        // is drawn to start (those were snapped or pulled onto your path, so they're not quite at
+        // the raw dots any more): no little gaps where they meet.
+        return {
+          ...t,
+          pieces: pieces.map((p, i) => {
+            if (!p.missing || p.path.length < 2) return p;
+            const before = pieces[i - 1]?.path;
+            const after = pieces[i + 1]?.path;
+            const path = [...p.path];
+            if (before?.length) path[0] = before[before.length - 1];
+            if (after?.length) path[path.length - 1] = after[0];
+            return { ...p, path };
+          }),
+        };
+      }),
     [trips, better],
   );
   // Every piece worked out (for saving a finished day's routes).
