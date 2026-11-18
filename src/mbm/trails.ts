@@ -38,8 +38,31 @@ export function makeTrails(cells: TrailCell[]) {
     return out;
   };
 
+  // How much of a walk is on paths you walk all the time (0 to 1): the share of its dots with
+  // a well-walked trail (FULL walks-through) running the same way close by.
+  function known(dots: Dot[]): number {
+    if (dots.length < 3) return 0;
+    let yes = 0;
+    dots.forEach((d, i) => {
+      const a = dots[Math.max(0, i - 1)];
+      const b = dots[Math.min(dots.length - 1, i + 1)];
+      const p = xy(d);
+      const pa = xy(a);
+      const pb = xy(b);
+      const heading = Math.atan2(pb.y - pa.y, pb.x - pa.x);
+      let seen = 0;
+      for (const c of around(p.x, p.y)) {
+        if (Math.hypot(c.x - p.x, c.y - p.y) > REACH) continue;
+        if (metres(a, b) >= 2 && Math.abs(Math.cos(c.axis - heading)) < 0.8) continue;
+        seen += c.n;
+      }
+      if (seen >= FULL) yes++;
+    });
+    return yes / dots.length;
+  }
+
   // Pulls a walk's dots onto your usual line.
-  return function center(dots: Dot[]): Dot[] {
+  function center(dots: Dot[]): Dot[] {
     return dots.map((d, i) => {
       const a = dots[Math.max(0, i - 1)];
       const b = dots[Math.min(dots.length - 1, i + 1)];
@@ -69,7 +92,21 @@ export function makeTrails(cells: TrailCell[]) {
       const shift = Math.max(-MAX_SHIFT, Math.min(MAX_SHIFT, (off / w) * strength));
       return { ...d, lat: d.lat + (ny * shift) / 110540, lng: d.lng + (nx * shift) / k };
     });
-  };
+  }
+
+  return { center, known };
+}
+
+// A light smoothing of a line drawn straight from your dots (each point nudged toward the
+// middle of its neighbours), so the GPS's little zigzags don't show. Ends stay put.
+export function smooth(path: Spot[]): Spot[] {
+  if (path.length < 3) return path;
+  return path.map((p, i) => {
+    if (i === 0 || i === path.length - 1) return p;
+    const a = path[i - 1];
+    const b = path[i + 1];
+    return { lat: (a.lat + 2 * p.lat + b.lat) / 4, lng: (a.lng + 2 * p.lng + b.lng) / 4 };
+  });
 }
 
 // Takes out sharp little divots: a point where the line doubles back on itself over a few

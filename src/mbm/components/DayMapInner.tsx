@@ -6,15 +6,15 @@ import { useRouter } from "next/navigation";
 import { lockDay, lookupPlaceOutline, moveStop, namePlace, rememberedRoute, removeStop, reportRoute, saveBlock, setPlaceOutline, trailCells } from "@/app/mbm/actions";
 
 // Which version of the path engine drew a route (saved with "Route looks wrong" reports).
-const PATH_ENGINE = "legs+trails+match-v1 (2026-11-10)";
+const PATH_ENGINE = "legs+trails+match-v2 (2026-11-18: your dots win on your own paths)";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
 import type { Activity, Block, LockedTrip, RoutePoint, Visit } from "@/mbm/data";
 import { clock, dayRange, span } from "@/mbm/time";
 import { HtmlMarker, KEY, stylesFor } from "./mapBits";
 import { fitToEntries, buildTrips, decodePolyline, metres, type Piece, type Spot, type Trip } from "@/mbm/trips";
 import { snapLeg } from "@/mbm/snap";
-import { splitLegs, waitSpot } from "@/mbm/legs";
-import { despike, makeTrails } from "@/mbm/trails";
+import { splitLegs, waitSpot, type Dot } from "@/mbm/legs";
+import { despike, makeTrails, smooth } from "@/mbm/trails";
 import { buildingAt, nearOutline } from "@/mbm/buildings";
 import { isMoving } from "@/mbm/moving";
 
@@ -647,10 +647,21 @@ function useFilledTrips(trips: Trip[], points: RoutePoint[]): { trips: Trip[]; s
           // wait is just where you stood, so a bus stop never turns into a detour.
           // (The path is [the stop, the door you left by] + your dots + [the next stop].)
           const head = p.path.slice(0, Math.max(0, p.path.length - (p.dots?.length ?? 0) - (p.ends?.to ? 1 : 0)));
-          // Walks are first pulled onto your usual line (your trails), then matched.
-          const legs = (p.dots ? splitLegs(p.dots) : []).map((l) => (center && l.mode === "walk" ? { ...l, dots: center(l.dots) } : l));
+          // Walks are first pulled onto your usual line (your trails). Then: on paths you walk all
+          // the time (most of it on a well-worn trail), or when the dots are dense and sure of
+          // themselves, your dots are the route (smoothed a little), not the map's: the map had
+          // put you down the middle of streets and round the Library Mall circle. Otherwise
+          // (new places, thin or wobbly dots) they're matched to the map's paths as before.
+          const legs = (p.dots ? splitLegs(p.dots) : []).map((l) =>
+            center && l.mode === "walk" ? { ...l, dots: center.center(l.dots), known: center.known(l.dots) } : { ...l, known: 0 },
+          );
           const drawn = await Promise.all(
-            legs.map(async (l) => (l.mode === "wait" ? [waitSpot(l)] : ((await snapLeg(l.dots, l.mode)) ?? l.dots.map((d) => ({ lat: d.lat, lng: d.lng }))))),
+            legs.map(async (l) => {
+              if (l.mode === "wait") return [waitSpot(l)];
+              const asDots = () => l.dots.map((d) => ({ lat: d.lat, lng: d.lng }));
+              if (l.mode === "walk" && (l.known >= 0.6 || trustworthy(l.dots))) return smooth(asDots());
+              return (await snapLeg(l.dots, l.mode)) ?? asDots();
+            }),
           );
           const body = despike(drawn.flat());
           if (legs.length && body.length >= 2) path = [...head, ...body, ...(p.ends?.to ? [b] : [])]; // (joined back to where it really starts and ends)
@@ -965,4 +976,13 @@ function reattach(trips: Trip[], visits: Visit[]): Trip[] {
     });
     return { ...t, pieces };
   });
+}
+
+// Dots good enough to be the route as they are: close together in time (a dot every 12 s or
+// so) and sure of where they were (±15 m or better), for most of the walk.
+function trustworthy(dots: Dot[]): boolean {
+  if (dots.length < 8) return false;
+  const gaps = dots.slice(1).map((d, i) => d.t - dots[i].t).sort((a, b) => a - b);
+  const accs = dots.map((d) => d.acc ?? 30).sort((a, b) => a - b);
+  return gaps[Math.floor(gaps.length / 2)] <= 12_000 && accs[Math.floor(accs.length * 0.7)] <= 15;
 }
