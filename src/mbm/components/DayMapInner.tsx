@@ -116,7 +116,7 @@ export default function DayMapInner({
     setPointed(p);
     if (!onPointer) return;
     if (!p) return onPointer(null);
-    const at = p.stops.length ? placeTime(visits.filter((v) => p.stops.includes(v.id)), blocks, activities, day) : null;
+    const at = p.stops.length ? placeTime(visits.filter((v) => p.stops.includes(v.id)), blocks, activities, day, visits) : null;
     const spans = [
       ...trips.filter((t) => p.trips.includes(t.key)).map((t) => ({ start: t.start, end: t.end })),
       // A place: just the stretches you tracked something there (all of it, if nothing was).
@@ -397,7 +397,7 @@ export default function DayMapInner({
           heading={!pointed.stops.length && pointed.trips.length > 1 ? `${pointed.trips.length} trips here` : undefined}
           rows={[
             ...trips.filter((t) => pointed.trips.includes(t.key)).map((t) => tripRow(t, blocks, activities, tz)),
-            ...(pointed.stops.length ? stopRows(visits.filter((v) => pointed.stops.includes(v.id)), blocks, activities, day) : []),
+            ...(pointed.stops.length ? stopRows(visits.filter((v) => pointed.stops.includes(v.id)), blocks, activities, day, visits) : []),
           ]}
         />
       )}
@@ -444,7 +444,7 @@ const total = (spans: Span[]) => spans.reduce((n, sp) => n + sp.end - sp.start, 
 
 // Your time at a place today, split the way the day bar shows it: each thing you tracked there
 // (longest first), and "Untracked" for the rest. Only within this day, and never past now.
-function placeTime(group: Visit[], blocks: Block[], activities: Activity[], day: Span | null) {
+function placeTime(group: Visit[], blocks: Block[], activities: Activity[], day: Span | null, all: Visit[] = group) {
   const lo = day?.start ?? -Infinity;
   const hi = Math.min(day?.end ?? Infinity, Date.now());
   const there = union(
@@ -461,6 +461,23 @@ function placeTime(group: Visit[], blocks: Block[], activities: Activity[], day:
     }
   }
   const byId = new globalThis.Map(activities.map((a) => [a.id, a]));
+  // Something you started here (or just after the phone thought you left) keeps you here until it
+  // ends, unless you show up at another stop first: the phone often loses you indoors (overnight
+  // it can think you wandered off), but you don't leave home in the middle of Sleep.
+  const elsewhere = all.filter((a) => !group.some((g) => g.id === a.id)).map((a) => +new Date(a.arrived_at));
+  const entries = blocks
+    .filter((b) => b.source !== "location" && b.activity_id && byId.get(b.activity_id) && byId.get(b.activity_id)!.name !== "Commute")
+    .map((b) => ({ start: +new Date(b.started_at), end: b.ended_at ? +new Date(b.ended_at) : Date.now() }))
+    .sort((a, b) => a.start - b.start);
+  for (const e of entries) {
+    if (!there.some((sp) => e.start >= sp.start - 60_000 && e.start <= sp.end + 30 * 60_000)) continue;
+    const stop = Math.min(e.end, hi, ...elsewhere.filter((t) => t > e.start));
+    const start = Math.max(lo, Math.min(e.start, ...there.filter((sp) => sp.end >= e.start - 30 * 60_000 && sp.start <= e.start).map((sp) => sp.end)));
+    if (stop > start) {
+      const merged = union([...there, { start, end: stop }]);
+      there.splice(0, there.length, ...merged);
+    }
+  }
   const each = new globalThis.Map<string, Span[]>();
   for (const b of blocks) {
     if (b.source === "location" || !b.activity_id) continue;
@@ -494,8 +511,8 @@ function placeTime(group: Visit[], blocks: Block[], activities: Activity[], day:
   return { tracked, untracked, untrackedMs: total(untracked) };
 }
 
-function stopRows(group: Visit[], blocks: Block[], activities: Activity[], day: Span | null): Row[] {
-  const { tracked, untrackedMs } = placeTime(group, blocks, activities, day);
+function stopRows(group: Visit[], blocks: Block[], activities: Activity[], day: Span | null, all: Visit[] = group): Row[] {
+  const { tracked, untrackedMs } = placeTime(group, blocks, activities, day, all);
   const rows: Row[] = tracked.map((t) => ({ key: t.activity.id, color: t.activity.color, title: t.activity.name, detail: span(t.ms) }));
   if (untrackedMs >= 60_000) rows.push({ key: "untracked", color: "#d6cbbd", title: "Untracked", detail: span(untrackedMs) });
   return rows;
