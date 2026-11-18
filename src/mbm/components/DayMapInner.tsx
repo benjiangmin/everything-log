@@ -668,7 +668,10 @@ function useFilledTrips(trips: Trip[], points: RoutePoint[]): { trips: Trip[]; s
         } else if (metres(a, b) >= 120) {
           const whole = t.pieces.length === 1 && t.fromId && t.toId;
           const remembered = whole ? await rememberedRoute(t.fromId!, t.toId!).catch(() => null) : null;
-          path = remembered ? [a, ...remembered, b] : await walkingRoute(a, b);
+          // (Joined to both ends: the route found starts and ends on the nearest street, which left
+          // a little gap to where your dots stop and start again.)
+          const found = remembered ?? (await walkingRoute(a, b));
+          path = found ? [a, ...found, b] : null;
         }
         if (path && path.length >= 2) setBetter((m) => ({ ...m, [key]: path! }));
         } finally {
