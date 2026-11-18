@@ -1,7 +1,8 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useState } from "react";
+import { useState, useTransition } from "react";
+import { unlockDay } from "@/app/mbm/actions";
 import type { Day } from "@/mbm/data";
 import type { Focus } from "./DayMapInner";
 
@@ -28,6 +29,7 @@ export default function DayMap({
 }) {
   const empty = day.visits.length === 0 && day.points.length === 0;
   const [showDots, setShowDots] = useState(false);
+  const [redrawing, redraw] = useTransition();
   return (
     // On the "Map" screen it fills the window under the day bar (see DayView).
     <section
@@ -45,6 +47,19 @@ export default function DayMap({
                 download reports
               </a>
               ).
+            </p>
+          )}
+          {day.locked && (
+            <p className="mt-0.5 text-xs text-muted">
+              This day&rsquo;s routes are saved as they were.{" "}
+              <button
+                type="button"
+                disabled={redrawing}
+                onClick={() => redraw(async () => void (await unlockDay(day.dayKey)))}
+                className="underline underline-offset-2 hover:text-ink"
+              >
+                {redrawing ? "Redrawing…" : "Redraw"}
+              </button>
             </p>
           )}
         </div>
@@ -90,6 +105,9 @@ export default function DayMap({
               onPointer={onPointer}
               gestures={gestures}
               topCover={bare ? 150 : 0}
+              dayKey={day.dayKey}
+              finished={day.finished}
+              locked={day.locked}
             />
           </div>
         </div>

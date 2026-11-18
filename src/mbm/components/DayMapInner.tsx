@@ -3,12 +3,12 @@
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { APIProvider, InfoWindow, Map, useMap, useMapsLibrary } from "@vis.gl/react-google-maps";
 import { useRouter } from "next/navigation";
-import { lookupPlaceOutline, moveStop, namePlace, rememberedRoute, removeStop, reportRoute, saveBlock, setPlaceOutline, trailCells } from "@/app/mbm/actions";
+import { lockDay, lookupPlaceOutline, moveStop, namePlace, rememberedRoute, removeStop, reportRoute, saveBlock, setPlaceOutline, trailCells } from "@/app/mbm/actions";
 
 // Which version of the path engine drew a route (saved with "Route looks wrong" reports).
 const PATH_ENGINE = "legs+trails+match-v1 (2026-11-10)";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
-import type { Activity, Block, RoutePoint, Visit } from "@/mbm/data";
+import type { Activity, Block, LockedTrip, RoutePoint, Visit } from "@/mbm/data";
 import { clock, span } from "@/mbm/time";
 import { HtmlMarker, KEY, stylesFor } from "./mapBits";
 import { fitToEntries, buildTrips, decodePolyline, metres, type Piece, type Spot, type Trip } from "@/mbm/trips";
@@ -37,7 +37,13 @@ export default function DayMapInner({
   onPointer,
   gestures = "cooperative",
   topCover = 0,
+  dayKey,
+  finished = false,
+  locked = null,
 }: {
+  dayKey?: string;
+  finished?: boolean; // the day's over: once drawn, its routes are saved (034_locked_days.sql)
+  locked?: LockedTrip[] | null; // its saved routes: drawn as they are, nothing worked out again
   gestures?: "cooperative" | "greedy";
   topCover?: number; // px at the top covered by something floating on the map: fit the day below it
   visits: Visit[];
@@ -62,8 +68,29 @@ export default function DayMapInner({
   // What the pointer is on: trips under it (several, where paths overlap) or a stop.
   const [pointed, setPointed] = useState<{ trips: string[]; stops: string[]; x: number; y: number } | null>(null);
   const box = useRef<HTMLDivElement>(null);
-  const built = useMemo(() => fitToEntries(buildTrips(visits, points), blocks), [visits, points, blocks]);
-  const trips = useFilledTrips(built, points);
+  const built = useMemo(() => (locked ? [] : fitToEntries(buildTrips(visits, points), blocks)), [visits, points, blocks, locked]);
+  const filled = useFilledTrips(built, points);
+  const trips: Trip[] = useMemo(() => (locked ? (locked as unknown as Trip[]) : filled.trips), [locked, filled.trips]);
+  // A finished day, all drawn: save its routes, so it's never redrawn differently later.
+  const saved = useRef(false);
+  useEffect(() => {
+    if (locked || !finished || !dayKey || !filled.settled || saved.current || !filled.trips.length) return;
+    const t = setTimeout(() => {
+      saved.current = true;
+      const strip = (x: Trip): LockedTrip => ({
+        key: x.key,
+        start: x.start,
+        end: x.end,
+        fromId: x.fromId ?? null,
+        toId: x.toId ?? null,
+        pace: x.pace ?? null,
+        pieces: x.pieces.map((p) => ({ path: p.path.map((s) => ({ lat: Math.round(s.lat * 1e6) / 1e6, lng: Math.round(s.lng * 1e6) / 1e6 })), missing: p.missing })),
+        waits: x.waits ?? [],
+      });
+      lockDay(dayKey, filled.trips.map(strip)).catch(() => undefined);
+    }, 4000);
+    return () => clearTimeout(t);
+  }, [locked, finished, dayKey, filled.settled, filled.trips]);
   const buildings = usePlaceBuildings(visits);
   // What lights up for the hovered stretch: the trips (moving) or the stops (still) during it.
   const barLit = useMemo(() => {
@@ -212,6 +239,7 @@ export default function DayMapInner({
           const name = v.place ?? v.auto_name;
           const on = lit?.stops.has(v.id) ?? false;
           const dim = dimming && !on;
+          const hovered = pointed?.stops.includes(v.id) ?? false; // (its name hides under the bubble's "what you were doing")
           return (
             <HtmlMarker key={v.id} position={{ lat: v.lat, lng: v.lng }} zIndex={on ? 3 : 1}>
               <button
@@ -227,7 +255,7 @@ export default function DayMapInner({
                   <span
                     className={`mb-1 whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-semibold shadow-sm ${
                       v.place ? "bg-[#3e281b] text-[#faf6f0]" : "bg-[#faf6f0] text-[#3e281b] ring-1 ring-[#3e281b]/30"
-                    }`}
+                    } ${hovered ? "invisible" : ""}`}
                   >
                     {name}
                   </span>
@@ -362,7 +390,7 @@ export default function DayMapInner({
           y={pointed.y}
           rows={[
             ...trips.filter((t) => pointed.trips.includes(t.key)).map((t) => tripRow(t, blocks, activities, tz)),
-            ...visits.filter((v) => pointed.stops.includes(v.id)).map((v) => stopRow(v, tz)),
+            ...visits.filter((v) => pointed.stops.includes(v.id)).map((v) => stopRow(v, blocks, activities, tz)),
           ]}
         />
       )}
@@ -392,13 +420,26 @@ function tripRow(t: Trip, blocks: Block[], activities: Activity[], tz: string): 
   };
 }
 
-function stopRow(v: Visit, tz: string): Row {
+// Hovering a stop: what you were doing there (its name is already on the map), and when.
+function stopRow(v: Visit, blocks: Block[], activities: Activity[], tz: string): Row {
+  const start = +new Date(v.arrived_at);
   const end = v.departed_at ? +new Date(v.departed_at) : Date.now();
+  const byId = new globalThis.Map(activities.map((a) => [a.id, a]));
+  // Your entries during the stop (not Commutes), longest first.
+  const doing = new globalThis.Map<string, number>();
+  for (const b of blocks) {
+    if (b.source === "location" || !b.activity_id) continue;
+    const a = byId.get(b.activity_id);
+    if (!a || a.name === "Commute") continue;
+    const overlap = Math.min(end, b.ended_at ? +new Date(b.ended_at) : Date.now()) - Math.max(start, +new Date(b.started_at));
+    if (overlap > 60_000) doing.set(a.id, (doing.get(a.id) ?? 0) + overlap);
+  }
+  const top = [...doing.entries()].sort((x, y) => y[1] - x[1]).map(([id]) => byId.get(id)!);
   return {
     key: v.id,
-    color: "#faf6f0",
-    title: v.place ?? v.auto_name ?? "Unnamed stop",
-    detail: `${clock(v.arrived_at, tz)} – ${v.departed_at ? clock(v.departed_at, tz) : "now"} · ${span(end - +new Date(v.arrived_at))}`,
+    color: top[0]?.color ?? "#faf6f0",
+    title: top.length ? top.slice(0, 3).map((a) => a.name).join(" · ") + (top.length > 3 ? ` +${top.length - 3}` : "") : "Nothing tracked here",
+    detail: `${clock(v.arrived_at, tz)} – ${v.departed_at ? clock(v.departed_at, tz) : "now"} · ${span(end - start)}`,
   };
 }
 
@@ -497,8 +538,9 @@ function PointerTrack({ trips, onHit }: { trips: Trip[]; onHit: (keys: string[],
 // snapped onto the real paths and roads (solid; see snap.ts). Bits it missed are filled in and
 // stay dashed: a whole missed trip uses a walk you recorded before between the same two places,
 // otherwise Google's walking route. Answers are kept in this browser.
-function useFilledTrips(trips: Trip[], points: RoutePoint[]): Trip[] {
+function useFilledTrips(trips: Trip[], points: RoutePoint[]): { trips: Trip[]; settled: boolean } {
   const [better, setBetter] = useState<Record<string, Spot[]>>({});
+  const [doneKeys, setDoneKeys] = useState<Set<string>>(() => new Set()); // (pieces worked out, drawn better or not)
   const asked = useRef(new Set<string>());
   // Your trails around the day (trails.ts), learned from your walks before it. Fetched once per
   // day; the pieces wait for them (a few hundred ms) so they're drawn the learned way first time.
@@ -528,6 +570,7 @@ function useFilledTrips(trips: Trip[], points: RoutePoint[]): Trip[] {
         const key = pieceKey(t, i);
         if (asked.current.has(key)) return;
         asked.current.add(key);
+        try {
         const a = p.path[0];
         const b = p.path[p.path.length - 1];
         let path: Spot[] | null = null;
@@ -552,13 +595,19 @@ function useFilledTrips(trips: Trip[], points: RoutePoint[]): Trip[] {
           path = remembered ? [a, ...remembered, b] : await walkingRoute(a, b);
         }
         if (path && path.length >= 2) setBetter((m) => ({ ...m, [key]: path! }));
+        } finally {
+          setDoneKeys((d) => new Set(d).add(key));
+        }
       });
     }
   }, [trips, ready, trails]);
-  return useMemo(
+  const filled = useMemo(
     () => trips.map((t) => ({ ...t, pieces: t.pieces.map((p, i) => (better[pieceKey(t, i)] ? { ...p, path: better[pieceKey(t, i)] } : p)) })),
     [trips, better],
   );
+  // Every piece worked out (for saving a finished day's routes).
+  const settled = ready && trips.every((t) => t.pieces.every((_, i) => doneKeys.has(pieceKey(t, i))));
+  return { trips: filled, settled };
 }
 
 // A piece, by what it covers (so a changed trip asks again only for pieces that changed).

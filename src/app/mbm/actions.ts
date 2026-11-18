@@ -6,8 +6,9 @@ import { buildingAt } from "@/mbm/buildings";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { mbm, mbmReady } from "@/mbm/supabase";
-import { getDay, getNowInfo, mbmTz, type Day, type NowInfo } from "@/mbm/data";
+import { getDay, getNowInfo, mbmTz, type Day, type LockedTrip, type NowInfo } from "@/mbm/data";
 import { PALETTE } from "@/mbm/colors";
+import { dayKeyOf, dayRange } from "@/mbm/time";
 
 // NOTE: the whole site also sits behind the password lock (src/proxy.ts). On top of that,
 // Minute by Minute needs its own sign-in, and the database only ever shows you your own rows.
@@ -290,6 +291,7 @@ export async function moveStop(visitId: string, lat: number, lng: number): Promi
   if (!isUuid(visitId)) return fail("That stop is gone.");
   if (![lat, lng].every(Number.isFinite) || Math.abs(lat) > 90 || Math.abs(lng) > 180) return fail("Click a spot on the map.");
   const client = await mbm();
+  await unlockDaysOf(client, visitId);
   const { data: v, error } = await client.from("visits").select("id, place_id").eq("id", visitId).maybeSingle();
   if (error) return fail(error.message);
   if (!v) return fail("That stop is gone.");
@@ -318,6 +320,7 @@ export async function moveStop(visitId: string, lat: number, lng: number): Promi
 export async function removeStop(visitId: string): Promise<Result> {
   if (!isUuid(visitId)) return fail("That stop is gone.");
   const client = await mbm();
+  await unlockDaysOf(client, visitId);
   // A LocoKit stop: remember it's removed, or the phone sends it back (016_locokit.sql).
   const { data: v } = await client.from("visits").select("lk_id").eq("id", visitId).maybeSingle();
   const lk = (v as { lk_id?: string | null } | null)?.lk_id;
@@ -336,6 +339,7 @@ export async function namePlace(visitId: string, name: string): Promise<Result> 
   if (!isUuid(visitId)) return fail("That stop is gone.");
   const clean = String(name ?? "").replace(/\s+/g, " ").trim().slice(0, 80);
   if (!clean) return fail("What is this place called?");
+  await unlockDaysOf(await mbm(), visitId);
   const { error } = await (await mbm()).rpc("name_place", { p_visit_id: visitId, p_name: clean });
   if (error) return fail(/name_place/.test(error.message) ? "Run supabase/minute-by-minute/005_location.sql first." : error.message);
   refresh();
@@ -541,4 +545,38 @@ export async function lookupPlaceOutline(placeId: string, lat: number, lng: numb
   if (outline === undefined) return "busy";
   const res = await setPlaceOutline(placeId, outline);
   return res.ok ? (outline ? "found" : "none") : res.message;
+}
+
+// ---------- Finished days keep their routes (034_locked_days.sql) ----------
+
+// Save a finished day's drawn routes, so it's never worked out again (the first save stays).
+export async function lockDay(dayKey: string, trips: LockedTrip[]): Promise<Result> {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dayKey) || !Array.isArray(trips)) return fail("Bad day.");
+  const { end } = dayRange(dayKey, mbmTz());
+  if (end.getTime() > Date.now() - 3 * 3600_000) return fail("That day isn't over yet.");
+  const { error } = await (await mbm())
+    .from("day_locks")
+    .upsert({ day: dayKey, trips: trips.slice(0, 300), version: "routes-v1" }, { onConflict: "user_id,day", ignoreDuplicates: true });
+  if (error) return fail(/day_locks/.test(error.message) ? "Run supabase/minute-by-minute/034_locked_days.sql first." : error.message);
+  return { ok: true };
+}
+
+// "Redraw": the day is worked out again (and saved again once it's drawn).
+export async function unlockDay(dayKey: string): Promise<Result> {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dayKey)) return fail("Bad day.");
+  const { error } = await (await mbm()).from("day_locks").delete().eq("day", dayKey);
+  if (error) return fail(error.message);
+  refresh();
+  return { ok: true };
+}
+
+// Changing a stop (moving, renaming, removing it) unlocks the days it's on.
+async function unlockDaysOf(client: Awaited<ReturnType<typeof mbm>>, visitId: string) {
+  const { data } = await client.from("visits").select("arrived_at, departed_at").eq("id", visitId).maybeSingle();
+  const v = data as { arrived_at: string; departed_at: string | null } | null;
+  if (!v) return;
+  const tz = mbmTz();
+  const from = dayKeyOf(new Date(v.arrived_at), tz);
+  const to = dayKeyOf(new Date(v.departed_at ?? Date.now()), tz);
+  await client.from("day_locks").delete().gte("day", from).lte("day", to);
 }

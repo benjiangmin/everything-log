@@ -44,6 +44,20 @@ export type Day = {
   points: RoutePoint[]; // the route between them
   phone: PhoneUse[]; // when you used your phone, and which app
   loadedAt: number; // when the server read it (the live clock starts from here)
+  finished: boolean; // the day's over (a few hours past its midnight): its routes can be saved
+  locked: LockedTrip[] | null; // its saved routes (034_locked_days.sql): drawn as they are
+};
+
+// A route saved with a finished day (see Trip in trips.ts, without the dots).
+export type LockedTrip = {
+  key: string;
+  start: number;
+  end: number;
+  fromId: string | null;
+  toId: string | null;
+  pace: number | null;
+  pieces: { path: { lat: number; lng: number }[]; missing: boolean }[];
+  waits: { at: { lat: number; lng: number }; start: number; end: number }[];
 };
 
 export const mbmTz = () => process.env.MBM_TIMEZONE || DEFAULT_TZ;
@@ -54,10 +68,16 @@ export async function getDay(dayKey: string): Promise<Day> {
   const tz = mbmTz();
   const { start, end } = dayRange(dayKey, tz);
   const client = await mbm();
-  // Rebuild the day from the dots first (stops, Commutes: see 014_rebuild_day.sql), so it's right
-  // every time you look. Falls back to the older repair if 014 isn't run yet.
-  const rebuilt = await client.rpc("rebuild_day", { p_from: start.toISOString(), p_to: end.toISOString() });
-  if (rebuilt.error) await client.rpc("repair_day", { p_from: start.toISOString(), p_to: end.toISOString() });
+  // A finished day whose routes are saved stays as it was (034_locked_days.sql).
+  const finished = end.getTime() < Date.now() - 3 * 3600_000;
+  const lockRow = finished ? await client.from("day_locks").select("trips").eq("day", dayKey).maybeSingle() : null;
+  const locked = (lockRow?.data as { trips?: LockedTrip[] } | null)?.trips ?? null;
+  // Otherwise: rebuild the day from the dots first (stops, Commutes: see 014_rebuild_day.sql), so
+  // it's right every time you look. Falls back to the older repair if 014 isn't run yet.
+  if (!locked) {
+    const rebuilt = await client.rpc("rebuild_day", { p_from: start.toISOString(), p_to: end.toISOString() });
+    if (rebuilt.error) await client.rpc("repair_day", { p_from: start.toISOString(), p_to: end.toISOString() });
+  }
   const [blocks, activities, running] = await Promise.all([
     client
       .from("blocks")
@@ -145,6 +165,8 @@ export async function getDay(dayKey: string): Promise<Day> {
     points,
     phone,
     loadedAt: Date.now(),
+    finished,
+    locked,
   };
 }
 
