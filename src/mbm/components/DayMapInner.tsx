@@ -285,7 +285,6 @@ export default function DayMapInner({
             <NameStop
               key={open.id}
               visit={open}
-              tz={tz}
               onDone={() => setOpen(null)}
               onMove={() => {
                 setMoving(open);
@@ -962,7 +961,7 @@ function WholeDay({ onClick }: { onClick: () => void }) {
 }
 
 // (Google's popup pads only its left side; the extra right padding below evens it out.)
-function NameStop({ visit, tz, onDone, onMove }: { visit: Visit; tz: string; onDone: () => void; onMove: () => void }) {
+function NameStop({ visit, onDone, onMove }: { visit: Visit; onDone: () => void; onMove: () => void }) {
   const [name, setName] = useState(visit.place ?? visit.auto_name ?? "");
   const confirm = useConfirm();
   const [message, setMessage] = useState<string | null>(null);
@@ -980,10 +979,7 @@ function NameStop({ visit, tz, onDone, onMove }: { visit: Visit; tz: string; onD
       }}
       className="flex w-60 flex-col gap-2 p-1 pr-4 font-sans"
     >
-      <p className="text-xs text-[#86705f]">
-        {clock(visit.arrived_at, tz)} – {visit.departed_at ? clock(visit.departed_at, tz) : "now"}
-        {!visit.place && visit.auto_name && " · name found by your phone"}
-      </p>
+      {!visit.place && visit.auto_name && <p className="text-xs text-[#86705f]">Name found by your phone</p>}
       <input
         value={name}
         onChange={(e) => setName(e.target.value)}
