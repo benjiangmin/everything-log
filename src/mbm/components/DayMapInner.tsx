@@ -161,7 +161,6 @@ export default function DayMapInner({
         defaultZoom={15}
         gestureHandling={gestures}
         disableDefaultUI
-        zoomControl
         clickableIcons={false}
         draggableCursor={moving ? "crosshair" : undefined}
         onClick={(e) => {

@@ -1,5 +1,5 @@
 import { Suspense } from "react";
-import { mbmUser } from "@/mbm/supabase";
+import { mbm, mbmUser } from "@/mbm/supabase";
 import { isEverythingLogOwner } from "@/mbm/owner";
 import MbmTopBar from "@/mbm/components/MbmTopBar";
 import MbmPanels from "@/mbm/components/MbmPanels";
@@ -25,5 +25,13 @@ export default function MbmLayout({ children }: LayoutProps<"/mbm">) {
 
 async function Bar() {
   const [user, owner] = await Promise.all([mbmUser(), isEverythingLogOwner()]);
-  return <MbmTopBar signedIn={Boolean(user)} email={user?.email ?? null} owner={owner} />;
+  // Your name and picture, for the profile button (040; before it's run, just your initial).
+  let me: { name: string | null; avatar: string | null } | null = null;
+  if (user) {
+    const client = await mbm();
+    const r = await client.from("profiles").select("name, avatar").maybeSingle();
+    const r2 = r.error ? await client.from("profiles").select("name").maybeSingle() : r;
+    me = { name: (r2.data as { name?: string | null } | null)?.name ?? null, avatar: (r2.data as { avatar?: string | null } | null)?.avatar ?? null };
+  }
+  return <MbmTopBar signedIn={Boolean(user)} email={user?.email ?? null} owner={owner} me={me} />;
 }

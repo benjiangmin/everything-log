@@ -634,3 +634,49 @@ export async function saveProfile(formData: FormData): Promise<Result> {
   revalidatePath("/mbm");
   return { ok: true };
 }
+
+// ---------- Your account (040_account.sql) ----------
+
+// A new profile picture: a small JPEG made in the browser (data: URL), or "" to take it off.
+export async function saveAvatar(dataUrl: string): Promise<Result> {
+  if (dataUrl && (!/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(dataUrl) || dataUrl.length > 120000)) return fail("That picture didn't work. Try a smaller one.");
+  const client = await mbm();
+  const { data: auth } = await client.auth.getUser();
+  if (!auth.user) return fail("Sign in again.");
+  const { error } = await client.from("profiles").upsert({ user_id: auth.user.id, avatar: dataUrl || null, updated_at: new Date().toISOString() });
+  if (error) return fail(/avatar/.test(error.message) ? "Run 040_account.sql first." : error.message);
+  revalidatePath("/mbm", "layout");
+  return { ok: true };
+}
+
+// A new email: Supabase sends a link to the new address (and, depending on its settings, the
+// old one too); it changes once that's clicked.
+export async function changeEmail(email: string): Promise<Result & { sent?: boolean }> {
+  const e = email.trim().slice(0, 200);
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e)) return fail("That doesn't look like an email address.");
+  const origin = (await headers()).get("origin") ?? "";
+  const { error } = await (await mbm()).auth.updateUser({ email: e }, { emailRedirectTo: origin ? `${origin}/mbm/account` : undefined });
+  if (error) return fail(error.message);
+  return { ok: true, sent: true };
+}
+
+export async function changePassword(password: string): Promise<Result> {
+  if (password.length < 8) return fail("Pick a password with at least 8 characters.");
+  const { error } = await (await mbm()).auth.updateUser({ password: password.slice(0, 200) });
+  if (error) return fail(error.message);
+  return { ok: true };
+}
+
+// Clear everything you've recorded (the account stays), or delete the account and all of it.
+export async function deleteMine(what: "data" | "account", typed: string): Promise<Result> {
+  if (typed.trim().toLowerCase() !== "delete") return fail('Type "delete" to confirm.');
+  const client = await mbm();
+  const { error } = await client.rpc(what === "account" ? "delete_my_account" : "delete_my_data");
+  if (error) return fail(/function .* does not exist|schema cache/i.test(error.message) ? "Run 040_account.sql first." : error.message);
+  if (what === "account") {
+    await client.auth.signOut();
+    redirect("/mbm/login");
+  }
+  revalidatePath("/mbm", "layout");
+  return { ok: true };
+}

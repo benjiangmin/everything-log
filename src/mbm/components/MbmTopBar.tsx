@@ -4,6 +4,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { signOut } from "@/app/mbm/actions";
 import TopSearch from "./TopSearch";
+import Avatar from "./Avatar";
+import { useEffect, useRef, useState } from "react";
 
 // Minute by Minute's top bar: its name, the three pages, and signing out. `owner`: you (signed in
 // to the everything-log on this browser) also get a link back to it; nobody else does.
@@ -14,7 +16,17 @@ const TABS = [
   { href: "/mbm/future", label: "Future" },
 ];
 
-export default function MbmTopBar({ signedIn, email, owner }: { signedIn: boolean; email: string | null; owner: boolean }) {
+export default function MbmTopBar({
+  signedIn,
+  email,
+  owner,
+  me = null,
+}: {
+  signedIn: boolean;
+  email: string | null;
+  owner: boolean;
+  me?: { name: string | null; avatar: string | null } | null;
+}) {
   const pathname = usePathname();
   const active = (href: string) => (href === "/mbm" ? pathname === "/mbm" : pathname.startsWith(href));
   return (
@@ -58,19 +70,66 @@ export default function MbmTopBar({ signedIn, email, owner }: { signedIn: boolea
               <span className="sr-only sm:hidden">everything-log</span>
             </Link>
           )}
-          {signedIn && (
-            <form action={signOut}>
-              <button
-                type="submit"
-                title={email ? `Signed in as ${email}` : undefined}
-                className="whitespace-nowrap rounded-control px-3 py-2 text-sm text-muted transition-colors hover:bg-surface hover:text-ink"
-              >
-                Sign out
-              </button>
-            </form>
-          )}
+          {signedIn && <ProfileMenu email={email} me={me} />}
         </div>
       </div>
     </header>
+  );
+}
+
+// You: your picture (or initial). Click for your account, About you, and signing out.
+function ProfileMenu({ email, me }: { email: string | null; me: { name: string | null; avatar: string | null } | null }) {
+  const [open, setOpen] = useState(false);
+  const box = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const away = (e: PointerEvent) => box.current && !box.current.contains(e.target as Node) && setOpen(false);
+    const esc = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
+    document.addEventListener("pointerdown", away);
+    document.addEventListener("keydown", esc);
+    return () => {
+      document.removeEventListener("pointerdown", away);
+      document.removeEventListener("keydown", esc);
+    };
+  }, [open]);
+  const item = "block w-full rounded-control px-3 py-2 text-left text-sm hover:bg-surface";
+  return (
+    <div ref={box} className="relative ml-1">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        aria-label="Your account"
+        className="grid place-items-center rounded-full p-0.5 ring-offset-2 ring-offset-paper transition-shadow hover:ring-2 hover:ring-line"
+      >
+        <Avatar src={me?.avatar} name={me?.name} email={email} size={34} />
+      </button>
+      {open && (
+        <div role="menu" className="absolute right-0 top-full z-[60] mt-2 w-64 rounded-card border border-line bg-paper p-2 shadow-xl shadow-ink/15">
+          <div className="flex items-center gap-3 px-3 pb-3 pt-2">
+            <Avatar src={me?.avatar} name={me?.name} email={email} size={40} />
+            <div className="min-w-0">
+              <p className="truncate font-semibold">{me?.name || "You"}</p>
+              <p className="truncate text-xs text-muted">{email}</p>
+            </div>
+          </div>
+          <div className="h-px bg-line" />
+          <div className="py-1">
+            <Link href="/mbm/account" onClick={() => setOpen(false)} className={item} role="menuitem">
+              Your account
+            </Link>
+            <Link href="/mbm/account#about" onClick={() => setOpen(false)} className={item} role="menuitem">
+              About you
+            </Link>
+          </div>
+          <div className="h-px bg-line" />
+          <form action={signOut} className="pt-1">
+            <button type="submit" className={`${item} text-muted`} role="menuitem">
+              Sign out
+            </button>
+          </form>
+        </div>
+      )}
+    </div>
   );
 }
