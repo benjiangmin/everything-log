@@ -113,12 +113,12 @@ export function aheadItems(avg: { days: number; perDay: Record<string, number>; 
       : { key: "Commute", label: "Commuting", perDay: ((27.2 * 2 * 250) / 365) * 60, mine: false, source: "U.S. average (Census ACS, 2024)", color: colors.Commute ?? "#c9b8a6" },
   );
   if (enough && avg!.screenPerDay > 60) out.push({ key: "screen", label: "On your phone", perDay: avg!.screenPerDay, mine: true, source: days, color: "#6d7f99" });
-  // Then your biggest other things (2 h a week or more).
+  // Then everything else you track (10 min a week or more), biggest first. (The page shows sleep
+  // and phone by default; these only when you add them: most won't last 10 years.)
   if (enough) {
     for (const [name, secs] of Object.entries(avg!.perDay).sort((a, b) => b[1] - a[1])) {
-      if (name === "Sleep" || name === "Commute" || secs < (2 * 3600) / 7) continue;
+      if (name === "Sleep" || name === "Commute" || secs < 600 / 7) continue;
       out.push({ key: name, label: name, perDay: secs, mine: true, source: days, color: colors[name] ?? "#d4a373" });
-      if (out.length >= 7) break;
     }
   }
   return out;

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { aheadItems, ageAt, RACE_LABEL, yearsLeft, type Profile } from "@/mbm/life";
 import AboutYouForm from "./AboutYouForm";
 import AboutYouSteps from "./AboutYouSteps";
@@ -27,6 +27,21 @@ export default function AheadView({
 }) {
   const [editing, setEditing] = useState(false);
   const [hover, setHover] = useState<string | null>(null);
+  // Shown: sleep and phone, plus whatever you've added (this browser remembers).
+  const [extra, setExtra] = useState<string[]>([]);
+  const [adding, setAdding] = useState(false);
+  useEffect(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem("mbm-future-extra") ?? "[]");
+      if (Array.isArray(saved)) queueMicrotask(() => setExtra(saved.filter((x) => typeof x === "string")));
+    } catch {}
+  }, []);
+  const keep = (next: string[]) => {
+    setExtra(next);
+    try {
+      localStorage.setItem("mbm-future-extra", JSON.stringify(next));
+    } catch {}
+  };
 
   if (!profile?.birthday || editing) {
     return (
@@ -49,7 +64,10 @@ export default function AheadView({
   const left = yearsLeft(age, profile.sex, profile.race, profile.state);
   const total = age + left;
   const livedPct = (age / total) * 100;
-  const items = aheadItems(averages, colors).map((it) => ({ ...it, years: (left * YEAR_DAYS * it.perDay) / 86400 / YEAR_DAYS }));
+  const all = aheadItems(averages, colors).map((it) => ({ ...it, years: (left * it.perDay) / 86400 }));
+  const DEFAULT = ["Sleep", "screen"];
+  const items = all.filter((it) => DEFAULT.includes(it.key) || extra.includes(it.key));
+  const addable = all.filter((it) => !items.includes(it));
   const taken = items.reduce((n, it) => n + it.years, 0);
   const shown = hover === "all" ? taken : (items.find((it) => it.key === hover)?.years ?? 0);
   const shownColor = items.find((it) => it.key === hover)?.color ?? "#3e281b";
@@ -117,7 +135,7 @@ export default function AheadView({
       {/* Where it goes. */}
       <div className="mt-6 rounded-card border border-line bg-paper p-6">
         <h2 className="font-display text-xl font-semibold">Where the rest is likely to go</h2>
-        <p className="mt-1 text-sm text-muted">At the rate you live now. Hover one to see its share of the bar.</p>
+        <p className="mt-1 text-sm text-muted">The things that last a lifetime, at the rate you live now. Hover one to see its share of the bar.</p>
         <ul className="mt-5 divide-y divide-line">
           {items.map((it) => (
             <li
@@ -140,9 +158,50 @@ export default function AheadView({
                 <p className="num font-semibold">{yrs(it.years)} years</p>
                 <p className="num text-xs text-muted">{Math.round((it.years / left) * 100)}% of what&apos;s left</p>
               </div>
+              {!DEFAULT.includes(it.key) && (
+                <button
+                  type="button"
+                  onClick={() => keep(extra.filter((x) => x !== it.key))}
+                  aria-label={`Remove ${it.label}`}
+                  className="-mr-1 grid size-8 place-items-center rounded-control text-muted hover:bg-paper hover:text-ink"
+                >
+                  ×
+                </button>
+              )}
             </li>
           ))}
         </ul>
+        {/* Anything else: only when you ask for it. */}
+        {addable.length > 0 && (
+          <div className="mt-3">
+            {adding ? (
+              <div className="flex flex-wrap gap-2">
+                {addable.map((it) => (
+                  <button
+                    key={it.key}
+                    type="button"
+                    onClick={() => {
+                      keep([...extra, it.key]);
+                      setAdding(false);
+                    }}
+                    className="flex items-center gap-2 rounded-full border border-line px-3 py-1.5 text-sm font-semibold hover:border-ink/40 hover:bg-surface"
+                  >
+                    <span className="size-2.5 rounded-full" style={{ background: it.color }} aria-hidden="true" />
+                    {it.label}
+                    <span className="font-normal text-muted">{perDay(it.perDay)}/day</span>
+                  </button>
+                ))}
+                <button type="button" onClick={() => setAdding(false)} className="rounded-full px-3 py-1.5 text-sm text-muted hover:bg-surface hover:text-ink">
+                  Cancel
+                </button>
+              </div>
+            ) : (
+              <button type="button" onClick={() => setAdding(true)} className="rounded-control px-3 py-2 text-sm font-semibold text-muted hover:bg-surface hover:text-ink">
+                + Add something else
+              </button>
+            )}
+          </div>
+        )}
         {(averages?.days ?? 0) < 7 && (
           <p className="mt-4 rounded-control bg-surface px-4 py-3 text-sm text-muted">
             These use U.S. averages until there&apos;s a week of your own days to go on ({averages?.days ?? 0} so far). Then they switch to yours.
