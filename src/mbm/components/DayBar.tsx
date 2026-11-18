@@ -456,7 +456,7 @@ export default function DayBar({
           lines.map((t) => (
             <div key={t} aria-hidden="true" className="pointer-events-none absolute inset-y-0 z-10 w-px bg-paper/25 mix-blend-overlay" style={{ left: `${at(t)}%` }} />
           ))}
-        {/* What you're pointing at on the map. */}
+        {/* What you're pointing at on the map (each a hair apart, so things back to back get their own outline). */}
         {marks?.map((m, i) => {
           const left = Math.max(0, at(Math.max(m.start, from)));
           const right = Math.min(100, at(Math.min(m.end, to)));
@@ -466,7 +466,7 @@ export default function DayBar({
               key={i}
               aria-hidden="true"
               className="pointer-events-none absolute inset-y-0 z-10 rounded-[9px] bg-ink/10 ring-2 ring-inset ring-ink"
-              style={{ left: `${left}%`, width: `max(${right - left}%, 3px)` }}
+              style={{ left: `calc(${left}% + 1px)`, width: `max(calc(${right - left}% - 2px), 3px)` }}
             />
           );
         })}

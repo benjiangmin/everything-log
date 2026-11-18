@@ -116,11 +116,11 @@ export default function DayMapInner({
     setPointed(p);
     if (!onPointer) return;
     if (!p) return onPointer(null);
-    const at = p.stops.length ? placeTime(visits.filter((v) => p.stops.includes(v.id)), blocks, activities, day, visits) : null;
+    const at = p.stops.length ? placeTime(visits.filter((v) => p.stops.includes(v.id)), blocks, activities, day) : null;
     const spans = [
       ...trips.filter((t) => p.trips.includes(t.key)).map((t) => ({ start: t.start, end: t.end })),
-      // A place: just the stretches you tracked something there (all of it, if nothing was).
-      ...(at ? (at.tracked.length ? at.tracked.flatMap((t) => t.spans) : at.untracked) : []),
+      // A place: each thing you tracked there, and each untracked stretch, outlined on its own.
+      ...(at ? [...at.tracked.flatMap((t) => t.spans), ...at.untracked.filter((u) => u.end - u.start >= 60_000)] : []),
     ];
     onPointer(spans);
   };
@@ -397,7 +397,7 @@ export default function DayMapInner({
           heading={!pointed.stops.length && pointed.trips.length > 1 ? `${pointed.trips.length} trips here` : undefined}
           rows={[
             ...trips.filter((t) => pointed.trips.includes(t.key)).map((t) => tripRow(t, blocks, activities, tz)),
-            ...(pointed.stops.length ? stopRows(visits.filter((v) => pointed.stops.includes(v.id)), blocks, activities, day, visits) : []),
+            ...(pointed.stops.length ? stopRows(visits.filter((v) => pointed.stops.includes(v.id)), blocks, activities, day) : []),
           ]}
         />
       )}
@@ -444,7 +444,7 @@ const total = (spans: Span[]) => spans.reduce((n, sp) => n + sp.end - sp.start, 
 
 // Your time at a place today, split the way the day bar shows it: each thing you tracked there
 // (longest first), and "Untracked" for the rest. Only within this day, and never past now.
-function placeTime(group: Visit[], blocks: Block[], activities: Activity[], day: Span | null, all: Visit[] = group) {
+function placeTime(group: Visit[], blocks: Block[], activities: Activity[], day: Span | null) {
   const lo = day?.start ?? -Infinity;
   const hi = Math.min(day?.end ?? Infinity, Date.now());
   const there = union(
@@ -452,32 +452,7 @@ function placeTime(group: Visit[], blocks: Block[], activities: Activity[], day:
       .map((v) => ({ start: Math.max(lo, +new Date(v.arrived_at)), end: Math.min(hi, v.departed_at ? +new Date(v.departed_at) : Date.now()) }))
       .filter((sp) => sp.end > sp.start),
   );
-  // A short gap between two stops at the same place (under 30 min) is the phone losing you
-  // inside, not you leaving: count it as there.
-  for (let k = there.length - 1; k > 0; k--) {
-    if (there[k].start - there[k - 1].end < 30 * 60_000) {
-      there[k - 1].end = there[k].end;
-      there.splice(k, 1);
-    }
-  }
   const byId = new globalThis.Map(activities.map((a) => [a.id, a]));
-  // Something you started here (or just after the phone thought you left) keeps you here until it
-  // ends, unless you show up at another stop first: the phone often loses you indoors (overnight
-  // it can think you wandered off), but you don't leave home in the middle of Sleep.
-  const elsewhere = all.filter((a) => !group.some((g) => g.id === a.id)).map((a) => +new Date(a.arrived_at));
-  const entries = blocks
-    .filter((b) => b.source !== "location" && b.activity_id && byId.get(b.activity_id) && byId.get(b.activity_id)!.name !== "Commute")
-    .map((b) => ({ start: +new Date(b.started_at), end: b.ended_at ? +new Date(b.ended_at) : Date.now() }))
-    .sort((a, b) => a.start - b.start);
-  for (const e of entries) {
-    if (!there.some((sp) => e.start >= sp.start - 60_000 && e.start <= sp.end + 30 * 60_000)) continue;
-    const stop = Math.min(e.end, hi, ...elsewhere.filter((t) => t > e.start));
-    const start = Math.max(lo, Math.min(e.start, ...there.filter((sp) => sp.end >= e.start - 30 * 60_000 && sp.start <= e.start).map((sp) => sp.end)));
-    if (stop > start) {
-      const merged = union([...there, { start, end: stop }]);
-      there.splice(0, there.length, ...merged);
-    }
-  }
   const each = new globalThis.Map<string, Span[]>();
   for (const b of blocks) {
     if (b.source === "location" || !b.activity_id) continue;
@@ -511,8 +486,8 @@ function placeTime(group: Visit[], blocks: Block[], activities: Activity[], day:
   return { tracked, untracked, untrackedMs: total(untracked) };
 }
 
-function stopRows(group: Visit[], blocks: Block[], activities: Activity[], day: Span | null, all: Visit[] = group): Row[] {
-  const { tracked, untrackedMs } = placeTime(group, blocks, activities, day, all);
+function stopRows(group: Visit[], blocks: Block[], activities: Activity[], day: Span | null): Row[] {
+  const { tracked, untrackedMs } = placeTime(group, blocks, activities, day);
   const rows: Row[] = tracked.map((t) => ({ key: t.activity.id, color: t.activity.color, title: t.activity.name, detail: span(t.ms) }));
   if (untrackedMs >= 60_000) rows.push({ key: "untracked", color: "#d6cbbd", title: "Untracked", detail: span(untrackedMs) });
   return rows;
