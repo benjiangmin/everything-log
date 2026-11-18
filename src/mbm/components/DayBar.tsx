@@ -138,7 +138,7 @@ export default function DayBar({
   };
 
   // ---------- Dragging an entry's edge to change its time ----------
-  // linked: the entry right next to it, sharing that edge (both move together).
+  // linked: (no longer used: only the entry you grab moves.)
   type Edge = { id: string; side: "start" | "end"; linked: { id: string; side: "start" | "end" } | null; min: number; max: number; at: number; orig: number };
   const [edge, setEdge] = useState<Edge | null>(null);
   // Saved changes, shown until the page's data catches up (was: the entry's times before).
@@ -163,25 +163,11 @@ export default function DayBar({
     if (e.button !== 0) return;
     e.stopPropagation(); // (not a pan)
     e.preventDefault();
-    const others = placed.filter((q) => q.lane === 0 && q.block.id !== p.block.id);
-    let linked: Edge["linked"] = null;
-    let min: number;
-    let max: number;
-    if (side === "end") {
-      const next = others.filter((q) => q.start >= p.end - MIN).sort((a, b) => a.start - b.start)[0];
-      min = p.start + MIN;
-      if (next && Math.abs(next.start - p.end) < MIN) {
-        linked = { id: next.block.id, side: "start" };
-        max = next.end - MIN;
-      } else max = Math.min(next ? next.start : Infinity, now, dayEnd);
-    } else {
-      const prev = others.filter((q) => q.end <= p.start + MIN).sort((a, b) => b.end - a.end)[0];
-      max = p.end - MIN;
-      if (prev && Math.abs(prev.end - p.start) < MIN) {
-        linked = { id: prev.block.id, side: "end" };
-        min = prev.start + MIN;
-      } else min = Math.max(prev ? prev.end : -Infinity, dayStart);
-    }
+    // Only the entry you grab moves: the one next to it stays where it is (they can overlap;
+    // the bar stacks overlapping entries).
+    const linked: Edge["linked"] = null;
+    const min = side === "end" ? p.start + MIN : dayStart;
+    const max = side === "end" ? Math.min(now, dayEnd) : p.end - MIN;
     (e.currentTarget as Element).setPointerCapture(e.pointerId);
     setHover(null);
     setEdgeError(null);
@@ -265,8 +251,10 @@ export default function DayBar({
     const a = nameOf(p.block);
     // Grab either end to change its time (not an end that's off this day, or "now" while running).
     const wide = at(p.end) - at(p.start) > 1.2;
-    const startOk = handles && wide && +new Date(p.block.started_at) >= dayStart;
-    const endOk = handles && wide && p.block.ended_at !== null && +new Date(p.block.ended_at) <= dayEnd;
+    // (Commutes come from your location, so they stay put: no handles.)
+    const fixed = a?.name === "Commute" || p.block.source === "location";
+    const startOk = handles && !fixed && wide && +new Date(p.block.started_at) >= dayStart;
+    const endOk = handles && !fixed && wide && p.block.ended_at !== null && +new Date(p.block.ended_at) <= dayEnd;
     const grip = (side: "start" | "end") => (
       <span
         aria-hidden="true"
