@@ -452,6 +452,14 @@ function placeTime(group: Visit[], blocks: Block[], activities: Activity[], day:
       .map((v) => ({ start: Math.max(lo, +new Date(v.arrived_at)), end: Math.min(hi, v.departed_at ? +new Date(v.departed_at) : Date.now()) }))
       .filter((sp) => sp.end > sp.start),
   );
+  // A short gap between two stops at the same place (under 30 min) is the phone losing you
+  // inside, not you leaving: count it as there.
+  for (let k = there.length - 1; k > 0; k--) {
+    if (there[k].start - there[k - 1].end < 30 * 60_000) {
+      there[k - 1].end = there[k].end;
+      there.splice(k, 1);
+    }
+  }
   const byId = new globalThis.Map(activities.map((a) => [a.id, a]));
   const each = new globalThis.Map<string, Span[]>();
   for (const b of blocks) {
@@ -493,12 +501,19 @@ function stopRows(group: Visit[], blocks: Block[], activities: Activity[], day: 
   return rows;
 }
 
-// Every stop today at the same place as this one (by its saved place; unnamed ones by name and
-// being right next to each other), so hovering one shows all your time there.
+// Every stop today at the same place as this one, so hovering one shows all your time there:
+// the same saved place, or (when one of them isn't matched to a place yet, like the stop you're
+// at right now) inside the same building, right next to it, or the same name close by.
 function samePlace(visits: Visit[], v: Visit): Visit[] {
   const name = v.place ?? v.auto_name;
-  const near = (a: Visit) => Math.hypot((a.lat - v.lat) * 111_000, (a.lng - v.lng) * 111_000 * Math.cos((v.lat * Math.PI) / 180)) < 80;
-  return visits.filter((a) => a.id === v.id || (v.placeId ? a.placeId === v.placeId : name != null && (a.place ?? a.auto_name) === name && near(a)));
+  const dist = (a: Visit) => Math.hypot((a.lat - v.lat) * 111_000, (a.lng - v.lng) * 111_000 * Math.cos((v.lat * Math.PI) / 180));
+  return visits.filter((a) => {
+    if (a.id === v.id) return true;
+    if (v.placeId && a.placeId) return a.placeId === v.placeId;
+    if (nearOutline(v.outline, a.lat, a.lng) || nearOutline(a.outline, v.lat, v.lng)) return true;
+    if (dist(a) < 40) return true;
+    return name != null && (a.place ?? a.auto_name) === name && dist(a) < 80;
+  });
 }
 
 // The little speech bubble by the pointer: everything under it (overlapping paths all listed).
