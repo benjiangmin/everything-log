@@ -75,7 +75,7 @@ export default function DayMapInner({
   }, [dayKey, tz]);
   const built = useMemo(() => (locked ? [] : fitToEntries(buildTrips(visits, points), blocks)), [visits, points, blocks, locked]);
   const filled = useFilledTrips(built, points);
-  const trips: Trip[] = useMemo(() => (locked ? (locked as unknown as Trip[]) : filled.trips), [locked, filled.trips]);
+  const trips: Trip[] = useMemo(() => (locked ? reattach(locked as unknown as Trip[], visits) : filled.trips), [locked, filled.trips, visits]);
   // A finished day, all drawn: save its routes, so it's never redrawn differently later.
   const saved = useRef(false);
   useEffect(() => {
@@ -932,4 +932,30 @@ function NameStop({ visit, tz, onDone, onMove }: { visit: Visit; tz: string; onD
       {message && <p className="text-xs text-[#a3473a]">{message}</p>}
     </form>
   );
+}
+
+// A saved day's routes, joined to where its stops are now. (A stop's place can be moved after the
+// day was saved, e.g. Theory's pin nudged to where you usually are inside. Moving a place moves
+// it on every day, so each route's ends follow it rather than stopping at the old spot.)
+function reattach(trips: Trip[], visits: Visit[]): Trip[] {
+  const at = new globalThis.Map(visits.map((v) => [v.id, { lat: v.lat, lng: v.lng }]));
+  const near = (a: Spot, b: Spot) => Math.hypot((a.lat - b.lat) * 111_000, (a.lng - b.lng) * 111_000 * Math.cos((a.lat * Math.PI) / 180));
+  // The end was the old stop spot (close by): move it. Otherwise (it ended on a road): add the stop.
+  const fix = (path: Spot[], stop: Spot | undefined, end: "start" | "end"): Spot[] => {
+    if (!stop || !path.length) return path;
+    const i = end === "start" ? 0 : path.length - 1;
+    const d = near(path[i], stop);
+    if (d < 1) return path;
+    if (d <= 150) return path.map((p, j) => (j === i ? stop : p));
+    return end === "start" ? [stop, ...path] : [...path, stop];
+  };
+  return trips.map((t) => {
+    const pieces = t.pieces.map((p, i) => {
+      let path = p.path;
+      if (i === 0 && t.fromId) path = fix(path, at.get(t.fromId), "start");
+      if (i === t.pieces.length - 1 && t.toId) path = fix(path, at.get(t.toId), "end");
+      return path === p.path ? p : { ...p, path };
+    });
+    return { ...t, pieces };
+  });
 }
