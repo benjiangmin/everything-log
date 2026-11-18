@@ -155,11 +155,11 @@ export default function AheadView({
       {/* (The wrapper's paper fills the gap under the top bar, so nothing peeks through above it.) */}
       {/* The slot (full height, see above). The strip of paper above the card covers the gap
           under the top bar; below the card it's see-through, so its rounded corners stay round. */}
-      <div className="pointer-events-none sticky top-16 z-30" style={slot ? { height: slot + 20 } : undefined}>
+      <div className="pointer-events-none sticky top-16 z-30 pt-5" style={slot ? { height: slot + 20 } : undefined}>
       <div aria-hidden="true" className="absolute inset-x-0 top-0 h-10 bg-paper" />
       <div
         ref={card}
-        className={`pointer-events-auto relative mt-5 rounded-card border bg-paper transition-[padding,box-shadow,border-color] duration-300 ease-out ${
+        className={`pointer-events-auto relative rounded-card border bg-paper transition-[padding,box-shadow,border-color] duration-300 ease-out ${
           stuck ? "border-line/60 px-5 py-3 shadow-xl shadow-ink/10" : "border-line p-6"
         }`}
       >
