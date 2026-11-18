@@ -234,8 +234,8 @@ export default function DayMapInner({
           }),
         )}
         {here && liveColor && (
-          <HtmlMarker position={here.at} zIndex={here.when ? 4 : 0}>
-            <span className="relative grid size-4 place-items-center" title={here.when ? `Last seen here · ${clock(here.when, tz)}` : "You're here"}>
+          <HtmlMarker position={here.at} zIndex={here.when ? 4 : 0} passive>
+            <span className="pointer-events-none relative grid size-4 place-items-center">
               <span className="absolute inline-flex size-4 animate-ping rounded-full opacity-50" style={{ background: liveColor }} />
               {here.when && <span className="relative size-3.5 rounded-full border-2 border-[#faf6f0] shadow" style={{ background: liveColor }} />}
             </span>

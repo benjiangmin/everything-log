@@ -29,20 +29,23 @@ const CALM: google.maps.MapTypeStyle[] = [
 ];
 export const stylesFor = (zoom: number) => (zoom < 16 ? QUIET : zoom < 18 ? CALM : []);
 
-// A bit of the page pinned to a spot on the map (its bottom-middle sits on the spot).
-export function HtmlMarker({ position, zIndex, children }: { position: Spot; zIndex: number; children: ReactNode }) {
+// A bit of the page pinned to a spot on the map (its bottom-middle sits on the spot). `passive`:
+// just a picture (like the you-are-here dot): the pointer goes straight through to the map, so
+// it never gets in the way of hovering, clicking, dragging or scrolling.
+export function HtmlMarker({ position, zIndex, children, passive = false }: { position: Spot; zIndex: number; children: ReactNode; passive?: boolean }) {
   const map = useMap();
   const maps = useMapsLibrary("maps");
   const [el] = useState(() => {
     const d = document.createElement("div");
     d.style.position = "absolute";
+    if (passive) d.style.pointerEvents = "none";
     return d;
   });
   const { lat, lng } = position;
   useEffect(() => {
     if (!map || !maps) return;
     const o = new maps.OverlayView();
-    o.onAdd = () => o.getPanes()?.overlayMouseTarget.appendChild(el);
+    o.onAdd = () => (passive ? o.getPanes()?.overlayLayer : o.getPanes()?.overlayMouseTarget)?.appendChild(el);
     o.draw = () => {
       const p = o.getProjection()?.fromLatLngToDivPixel({ lat, lng });
       if (!p) return;
@@ -50,10 +53,10 @@ export function HtmlMarker({ position, zIndex, children }: { position: Spot; zIn
       el.style.top = `${p.y}px`;
     };
     o.onRemove = () => el.remove();
-    maps.OverlayView.preventMapHitsAndGesturesFrom(el);
+    if (!passive) maps.OverlayView.preventMapHitsAndGesturesFrom(el);
     o.setMap(map);
     return () => o.setMap(null);
-  }, [map, maps, el, lat, lng]);
+  }, [map, maps, el, lat, lng, passive]);
   // (el has no z-index of its own, so this one stacks the markers against each other.)
   return createPortal(<div style={{ position: "relative", zIndex, transform: "translate(-50%, -100%)" }}>{children}</div>, el);
 }
