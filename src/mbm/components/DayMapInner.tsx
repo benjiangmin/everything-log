@@ -116,7 +116,7 @@ export default function DayMapInner({
     setPointed(p);
     if (!onPointer) return;
     if (!p) return onPointer(null);
-    const at = p.stops.length ? placeTime(visits.filter((v) => p.stops.includes(v.id)), blocks, activities, day) : null;
+    const at = p.stops.length ? placeTime(visits.filter((v) => p.stops.includes(v.id)), blocks, activities, day, { visits, points, trips }) : null;
     const spans = [
       ...trips.filter((t) => p.trips.includes(t.key)).map((t) => ({ start: t.start, end: t.end })),
       // A place: each thing you tracked there, and each untracked stretch, outlined on its own.
@@ -397,7 +397,7 @@ export default function DayMapInner({
           heading={!pointed.stops.length && pointed.trips.length > 1 ? `${pointed.trips.length} trips here` : undefined}
           rows={[
             ...trips.filter((t) => pointed.trips.includes(t.key)).map((t) => tripRow(t, blocks, activities, tz)),
-            ...(pointed.stops.length ? stopRows(visits.filter((v) => pointed.stops.includes(v.id)), blocks, activities, day) : []),
+            ...(pointed.stops.length ? stopRows(visits.filter((v) => pointed.stops.includes(v.id)), blocks, activities, day, { visits, points, trips }) : []),
           ]}
         />
       )}
@@ -444,12 +444,33 @@ const total = (spans: Span[]) => spans.reduce((n, sp) => n + sp.end - sp.start, 
 
 // Your time at a place today, split the way the day bar shows it: each thing you tracked there
 // (longest first), and "Untracked" for the rest. Only within this day, and never past now.
-function placeTime(group: Visit[], blocks: Block[], activities: Activity[], day: Span | null) {
+type Around = { visits: Visit[]; points: RoutePoint[]; trips: Trip[] };
+
+function placeTime(group: Visit[], blocks: Block[], activities: Activity[], day: Span | null, around?: Around) {
   const lo = day?.start ?? -Infinity;
   const hi = Math.min(day?.end ?? Infinity, Date.now());
+  const ids = new Set(group.map((v) => v.id));
   const there = union(
     group
-      .map((v) => ({ start: Math.max(lo, +new Date(v.arrived_at)), end: Math.min(hi, v.departed_at ? +new Date(v.departed_at) : Date.now()) }))
+      .map((v) => {
+        const start = Math.max(lo, +new Date(v.arrived_at));
+        let end = Math.min(hi, v.departed_at ? +new Date(v.departed_at) : Date.now());
+        // A stop the phone ended because it stopped recording (the app was off, no dots at all
+        // after it): you were still there until you're next seen moving or somewhere else.
+        if (around && v.departed_at) {
+          const next = Math.min(
+            hi,
+            ...around.visits.filter((o) => !ids.has(o.id) && +new Date(o.arrived_at) >= end).map((o) => +new Date(o.arrived_at)),
+            ...around.trips.filter((t) => t.start >= end - 60_000).map((t) => t.start),
+          );
+          const dotsBetween = around.points.some((pt) => {
+            const t = +new Date(pt.at);
+            return t > end + 60_000 && t < next && metres(pt, v) > 100;
+          });
+          if (!dotsBetween && next > end && next - end < 3 * 3600_000) end = next;
+        }
+        return { start, end };
+      })
       .filter((sp) => sp.end > sp.start),
   );
   const byId = new globalThis.Map(activities.map((a) => [a.id, a]));
@@ -486,8 +507,8 @@ function placeTime(group: Visit[], blocks: Block[], activities: Activity[], day:
   return { tracked, untracked, untrackedMs: total(untracked) };
 }
 
-function stopRows(group: Visit[], blocks: Block[], activities: Activity[], day: Span | null): Row[] {
-  const { tracked, untrackedMs } = placeTime(group, blocks, activities, day);
+function stopRows(group: Visit[], blocks: Block[], activities: Activity[], day: Span | null, around?: Around): Row[] {
+  const { tracked, untrackedMs } = placeTime(group, blocks, activities, day, around);
   const rows: Row[] = tracked.map((t) => ({ key: t.activity.id, color: t.activity.color, title: t.activity.name, detail: span(t.ms) }));
   if (untrackedMs >= 60_000) rows.push({ key: "untracked", color: "#d6cbbd", title: "Untracked", detail: span(untrackedMs) });
   return rows;
