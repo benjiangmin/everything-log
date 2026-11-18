@@ -9,7 +9,7 @@ import { lockDay, lookupPlaceOutline, moveStop, namePlace, rememberedRoute, remo
 const PATH_ENGINE = "legs+trails+match-v1 (2026-11-10)";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
 import type { Activity, Block, LockedTrip, RoutePoint, Visit } from "@/mbm/data";
-import { clock, span } from "@/mbm/time";
+import { clock, dayRange, span } from "@/mbm/time";
 import { HtmlMarker, KEY, stylesFor } from "./mapBits";
 import { fitToEntries, buildTrips, decodePolyline, metres, type Piece, type Spot, type Trip } from "@/mbm/trips";
 import { snapLeg } from "@/mbm/snap";
@@ -68,6 +68,11 @@ export default function DayMapInner({
   // What the pointer is on: trips under it (several, where paths overlap) or a stop.
   const [pointed, setPointed] = useState<{ trips: string[]; stops: string[]; x: number; y: number } | null>(null);
   const box = useRef<HTMLDivElement>(null);
+  const day = useMemo(() => {
+    if (!dayKey) return null;
+    const r = dayRange(dayKey, tz);
+    return { start: +r.start, end: +r.end };
+  }, [dayKey, tz]);
   const built = useMemo(() => (locked ? [] : fitToEntries(buildTrips(visits, points), blocks)), [visits, points, blocks, locked]);
   const filled = useFilledTrips(built, points);
   const trips: Trip[] = useMemo(() => (locked ? (locked as unknown as Trip[]) : filled.trips), [locked, filled.trips]);
@@ -111,11 +116,11 @@ export default function DayMapInner({
     setPointed(p);
     if (!onPointer) return;
     if (!p) return onPointer(null);
+    const at = p.stops.length ? placeTime(visits.filter((v) => p.stops.includes(v.id)), blocks, activities, day) : null;
     const spans = [
       ...trips.filter((t) => p.trips.includes(t.key)).map((t) => ({ start: t.start, end: t.end })),
-      ...visits
-        .filter((v) => p.stops.includes(v.id))
-        .map((v) => ({ start: +new Date(v.arrived_at), end: v.departed_at ? +new Date(v.departed_at) : Date.now() })),
+      // A place: just the stretches you tracked something there (all of it, if nothing was).
+      ...(at ? (at.tracked.length ? at.tracked.flatMap((t) => t.spans) : at.untracked) : []),
     ];
     onPointer(spans);
   };
@@ -389,9 +394,10 @@ export default function DayMapInner({
         <Tip
           x={pointed.x}
           y={pointed.y}
+          heading={!pointed.stops.length && pointed.trips.length > 1 ? `${pointed.trips.length} trips here` : undefined}
           rows={[
             ...trips.filter((t) => pointed.trips.includes(t.key)).map((t) => tripRow(t, blocks, activities, tz)),
-            ...(pointed.stops.length ? [stopRow(visits.filter((v) => pointed.stops.includes(v.id)), blocks, activities, tz)] : []),
+            ...(pointed.stops.length ? stopRows(visits.filter((v) => pointed.stops.includes(v.id)), blocks, activities, day) : []),
           ]}
         />
       )}
@@ -422,34 +428,69 @@ function tripRow(t: Trip, blocks: Block[], activities: Activity[], tz: string): 
 }
 
 // Hovering a stop: what you were doing there (its name is already on the map), and when.
-function stopRow(group: Visit[], blocks: Block[], activities: Activity[], tz: string): Row {
+type Span = { start: number; end: number };
+
+// Overlapping stretches joined into one (so two entries for the same time don't count twice).
+function union(spans: Span[]): Span[] {
+  const out: Span[] = [];
+  for (const sp of [...spans].sort((a, b) => a.start - b.start)) {
+    const last = out[out.length - 1];
+    if (last && sp.start <= last.end) last.end = Math.max(last.end, sp.end);
+    else out.push({ ...sp });
+  }
+  return out;
+}
+const total = (spans: Span[]) => spans.reduce((n, sp) => n + sp.end - sp.start, 0);
+
+// Your time at a place today, split the way the day bar shows it: each thing you tracked there
+// (longest first), and "Untracked" for the rest. Only within this day, and never past now.
+function placeTime(group: Visit[], blocks: Block[], activities: Activity[], day: Span | null) {
+  const lo = day?.start ?? -Infinity;
+  const hi = Math.min(day?.end ?? Infinity, Date.now());
+  const there = union(
+    group
+      .map((v) => ({ start: Math.max(lo, +new Date(v.arrived_at)), end: Math.min(hi, v.departed_at ? +new Date(v.departed_at) : Date.now()) }))
+      .filter((sp) => sp.end > sp.start),
+  );
   const byId = new globalThis.Map(activities.map((a) => [a.id, a]));
-  const spans = group.map((v) => ({ start: +new Date(v.arrived_at), end: v.departed_at ? +new Date(v.departed_at) : Date.now() }));
-  // Your entries during any of your times there today (not Commutes), longest first.
-  const doing = new globalThis.Map<string, number>();
+  const each = new globalThis.Map<string, Span[]>();
   for (const b of blocks) {
     if (b.source === "location" || !b.activity_id) continue;
     const a = byId.get(b.activity_id);
     if (!a || a.name === "Commute") continue;
     const bs = +new Date(b.started_at);
     const be = b.ended_at ? +new Date(b.ended_at) : Date.now();
-    for (const sp of spans) {
-      const overlap = Math.min(sp.end, be) - Math.max(sp.start, bs);
-      if (overlap > 60_000) doing.set(a.id, (doing.get(a.id) ?? 0) + overlap);
+    for (const sp of there) {
+      const start = Math.max(sp.start, bs);
+      const end = Math.min(sp.end, be);
+      if (end > start) each.set(a.id, [...(each.get(a.id) ?? []), { start, end }]);
     }
   }
-  const top = [...doing.entries()].sort((x, y) => y[1] - x[1]).map(([id]) => byId.get(id)!);
-  const total = spans.reduce((n, sp) => n + sp.end - sp.start, 0);
-  const v = group[0];
-  return {
-    key: group.map((g) => g.id).join(","),
-    color: top[0]?.color ?? "#faf6f0",
-    title: top.length ? top.slice(0, 3).map((a) => a.name).join(" · ") + (top.length > 3 ? ` +${top.length - 3}` : "") : "Nothing tracked here today",
-    detail:
-      group.length === 1
-        ? `${clock(v.arrived_at, tz)} – ${v.departed_at ? clock(v.departed_at, tz) : "now"} · ${span(total)}`
-        : `${group.length} times today · ${span(total)} in all`,
-  };
+  const tracked = [...each.entries()]
+    .map(([id, spans]) => ({ activity: byId.get(id)!, spans: union(spans) }))
+    .map((t) => ({ ...t, ms: total(t.spans) }))
+    .filter((t) => t.ms >= 60_000)
+    .sort((a, b) => b.ms - a.ms);
+  // Untracked: your time there minus everything tracked.
+  const covered = union(tracked.flatMap((t) => t.spans));
+  const untracked: Span[] = [];
+  for (const sp of there) {
+    let at = sp.start;
+    for (const c of covered) {
+      if (c.end <= at || c.start >= sp.end) continue;
+      if (c.start > at) untracked.push({ start: at, end: c.start });
+      at = Math.max(at, c.end);
+    }
+    if (at < sp.end) untracked.push({ start: at, end: sp.end });
+  }
+  return { tracked, untracked, untrackedMs: total(untracked) };
+}
+
+function stopRows(group: Visit[], blocks: Block[], activities: Activity[], day: Span | null): Row[] {
+  const { tracked, untrackedMs } = placeTime(group, blocks, activities, day);
+  const rows: Row[] = tracked.map((t) => ({ key: t.activity.id, color: t.activity.color, title: t.activity.name, detail: span(t.ms) }));
+  if (untrackedMs >= 60_000) rows.push({ key: "untracked", color: "#d6cbbd", title: "Untracked", detail: span(untrackedMs) });
+  return rows;
 }
 
 // Every stop today at the same place as this one (by its saved place; unnamed ones by name and
@@ -461,7 +502,7 @@ function samePlace(visits: Visit[], v: Visit): Visit[] {
 }
 
 // The little speech bubble by the pointer: everything under it (overlapping paths all listed).
-function Tip({ x, y, rows }: { x: number; y: number; rows: Row[] }) {
+function Tip({ x, y, rows, heading }: { x: number; y: number; rows: Row[]; heading?: string }) {
   if (!rows.length) return null;
   const below = y < 40 + rows.length * 40; // near the top of the map: show it under the pointer instead
   return (
@@ -470,7 +511,7 @@ function Tip({ x, y, rows }: { x: number; y: number; rows: Row[] }) {
       className={`pointer-events-none absolute z-30 w-max max-w-64 -translate-x-1/2 rounded-card bg-ink px-3 py-2 text-paper shadow-lg ${below ? "" : "-translate-y-full"}`}
       style={{ left: x, top: below ? y + 18 : y - 14 }}
     >
-      {rows.length > 1 && <p className="mb-1 text-[11px] text-paper/60">{rows.length} trips here</p>}
+      {heading && <p className="mb-1 text-[11px] text-paper/60">{heading}</p>}
       <ul className="flex flex-col gap-1">
         {rows.map((r) => (
           <li key={r.key} className="leading-tight">
