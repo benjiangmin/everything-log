@@ -27,33 +27,17 @@ const CALM: google.maps.MapTypeStyle[] = [
   { featureType: "transit", elementType: "labels", stylers: [{ visibility: "off" }] },
   { featureType: "road", elementType: "labels.icon", stylers: [{ visibility: "off" }] },
 ];
-// The warm look, at every zoom: cream land, pale tan roads (light enough that your mocha routes
-// stand out on them), soft blue water, sage parks, warm grey text. Labels per zoom on top.
-const WARM: google.maps.MapTypeStyle[] = [
-  { elementType: "geometry", stylers: [{ color: "#f6efe4" }] },
-  { elementType: "labels.text.fill", stylers: [{ color: "#7d6957" }] },
-  { elementType: "labels.text.stroke", stylers: [{ color: "#faf6f0" }] },
-  { featureType: "landscape.man_made", elementType: "geometry", stylers: [{ color: "#f1e7d8" }] },
-  { featureType: "landscape.man_made", elementType: "geometry.stroke", stylers: [{ color: "#e4d6c2" }] },
-  { featureType: "landscape.natural", elementType: "geometry", stylers: [{ color: "#f3ead9" }] },
-  { featureType: "poi", elementType: "geometry", stylers: [{ color: "#efe5d4" }] },
-  { featureType: "poi.park", elementType: "geometry", stylers: [{ color: "#dfe6cc" }] },
-  { featureType: "poi.park", elementType: "labels.text.fill", stylers: [{ color: "#6c8757" }] },
-  { featureType: "poi.school", elementType: "geometry", stylers: [{ color: "#efe3cf" }] },
-  { featureType: "road", elementType: "geometry.fill", stylers: [{ color: "#fffaf2" }] },
-  { featureType: "road", elementType: "geometry.stroke", stylers: [{ color: "#e3d3bd" }] },
-  { featureType: "road.arterial", elementType: "geometry.fill", stylers: [{ color: "#fbf2e4" }] },
-  { featureType: "road.highway", elementType: "geometry.fill", stylers: [{ color: "#f2dfc4" }] },
-  { featureType: "road.highway", elementType: "geometry.stroke", stylers: [{ color: "#dcc4a3" }] },
-  { featureType: "road", elementType: "labels.text.fill", stylers: [{ color: "#8f7a66" }] },
-  { featureType: "transit.line", elementType: "geometry", stylers: [{ color: "#e6d8c4" }] },
-  { featureType: "water", elementType: "geometry", stylers: [{ color: "#bcd5dc" }] },
-  { featureType: "water", elementType: "labels.text.fill", stylers: [{ color: "#6f8f99" }] },
-  { featureType: "administrative", elementType: "geometry.stroke", stylers: [{ color: "#d9c8b1" }] },
+// Google's own colours; just less text. Zoomed out: streets only (no places, no small streets);
+// in closer: street names, but places stay unlabelled until you're right in.
+const NEAR: google.maps.MapTypeStyle[] = [
+  { featureType: "poi.business", stylers: [{ visibility: "off" }] },
+  { featureType: "poi", elementType: "labels.icon", stylers: [{ visibility: "off" }] },
+  { featureType: "transit", stylers: [{ visibility: "off" }] },
+  { featureType: "road", elementType: "labels.icon", stylers: [{ visibility: "off" }] },
 ];
-const FAR = [...WARM, ...QUIET];
-const MID = [...WARM, ...CALM];
-export const stylesFor = (zoom: number) => (zoom < 16 ? FAR : zoom < 18 ? MID : WARM); // (the same arrays each time, so the map isn't restyled on every render)
+const MID = [...CALM, { featureType: "poi", elementType: "labels", stylers: [{ visibility: "off" }] }, { featureType: "transit", stylers: [{ visibility: "off" }] }];
+const FAR = [...QUIET, { featureType: "road.arterial", elementType: "labels", stylers: [{ visibility: "off" }] }];
+export const stylesFor = (zoom: number) => (zoom < 16 ? FAR : zoom < 18 ? MID : NEAR); // (the same arrays each time, so the map isn't restyled on every render)
 
 // A bit of the page pinned to a spot on the map (its bottom-middle sits on the spot). `passive`:
 // just a picture (like the you-are-here dot): the pointer goes straight through to the map, so
