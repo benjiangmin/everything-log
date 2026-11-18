@@ -258,8 +258,19 @@ body {
 .panel-slide-left {
   animation: panel-slide-left 320ms cubic-bezier(0.22, 1, 0.36, 1);
 }
+/* One question at a time (Future page setup): the next slides in. */
+@keyframes step-in-fwd {
+  from { transform: translateX(48px); opacity: 0; }
+  to   { transform: none; opacity: 1; }
+}
+@keyframes step-in-back {
+  from { transform: translateX(-48px); opacity: 0; }
+  to   { transform: none; opacity: 1; }
+}
+.step-in-fwd { animation: step-in-fwd 380ms cubic-bezier(0.22, 1, 0.36, 1); }
+.step-in-back { animation: step-in-back 380ms cubic-bezier(0.22, 1, 0.36, 1); }
 @media (prefers-reduced-motion: reduce) {
-  .panel-slide, .panel-slide-left { animation: none; }
+  .panel-slide, .panel-slide-left, .step-in-fwd, .step-in-back { animation: none; }
 }
 
 /* ---------- Letters to self: breaking the seal ---------- */

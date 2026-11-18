@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { aheadItems, ageAt, RACE_LABEL, yearsLeft, type Profile } from "@/mbm/life";
 import AboutYouForm from "./AboutYouForm";
+import AboutYouSteps from "./AboutYouSteps";
 
 const YEAR_DAYS = 365.2425;
 const yrs = (n: number) => (n >= 10 ? n.toFixed(0) : n.toFixed(1));
@@ -36,8 +37,9 @@ export default function AheadView({
           Tell us a little about you and we&apos;ll show how much of a typical life for someone like you you&apos;ve lived, how much is likely left, and where the rest of it
           tends to go.
         </p>
-        <div className="mt-8 rounded-card border border-line bg-paper p-6">
-          <AboutYouForm profile={profile} onDone={profile?.birthday ? () => setEditing(false) : undefined} />
+        <div className="mt-8 rounded-card border border-line bg-paper p-6 sm:p-8">
+          {/* First time: one question at a time. After that: everything at once. */}
+          {profile?.birthday ? <AboutYouForm profile={profile} onDone={() => setEditing(false)} /> : <AboutYouSteps />}
         </div>
       </section>
     );
