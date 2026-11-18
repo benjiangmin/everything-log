@@ -5,8 +5,9 @@ import { redirect } from "next/navigation";
 import { mbmTz } from "@/mbm/data";
 import { mbmReady, mbmUser } from "@/mbm/supabase";
 import { isDayKey } from "@/mbm/time";
-import { RANGES, getPins, getStats, isRange, periodOf, todayKey, type Range } from "@/mbm/stats";
+import { getPins, getStats, isRange, periodOf, todayKey, type Range } from "@/mbm/stats";
 import StatsView from "@/mbm/components/StatsView";
+import RangeRail, { RANGE_COLOR } from "@/mbm/components/RangeRail";
 
 export const metadata = { title: "Stats" };
 
@@ -14,7 +15,7 @@ export const metadata = { title: "Stats" };
 // day in it; default: now).
 export default function MbmStatsPage(props: PageProps<"/mbm/stats">) {
   return (
-    <main className="mx-auto w-full max-w-5xl px-4 pb-24 pt-6 sm:pt-8">
+    <main className="mx-auto w-full max-w-6xl px-4 pb-24 pt-6 sm:pt-8">
       <Suspense fallback={<div aria-busy="true" className="h-96 animate-pulse rounded-card bg-line" />}>
         {props.searchParams.then((sp) => (
           <StatsFor
@@ -45,23 +46,17 @@ async function StatsFor({ range, day: asked, q }: { range: Range; day?: string; 
   const arrow = "grid size-10 place-items-center rounded-control transition-colors hover:bg-surface";
 
   return (
-    <>
+    <div className="grid gap-6 lg:grid-cols-[13.5rem_minmax(0,1fr)] lg:gap-10">
+      {/* Day / Week / Month / Year, down the side (keeps the day you're on). */}
+      <aside>
+        <RangeRail range={range} hrefFor={(r) => href(r, asked)} />
+      </aside>
+      <div className="min-w-0">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        {/* Day / Week / Month / Year (keeps the day you're on). */}
-        <nav aria-label="Range" className="flex rounded-control bg-surface p-1">
-          {RANGES.map((r) => (
-            <Link
-              key={r}
-              href={href(r, asked)}
-              aria-current={r === range ? "page" : undefined}
-              className={`rounded-control px-4 py-1.5 text-sm font-semibold capitalize transition-colors ${
-                r === range ? "bg-paper text-ink shadow-sm" : "text-muted hover:text-ink"
-              }`}
-            >
-              {r}
-            </Link>
-          ))}
-        </nav>
+        <p className="flex items-center gap-2 text-sm font-semibold capitalize" style={{ color: RANGE_COLOR[range] }}>
+          <span aria-hidden="true" className="size-2.5 rounded-full" style={{ background: RANGE_COLOR[range] }} />
+          {range}
+        </p>
         <div className="flex items-center gap-1">
           <Link href={href(range, period.prev)} aria-label={`The ${range} before`} className={arrow}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -85,12 +80,13 @@ async function StatsFor({ range, day: asked, q }: { range: Range; day?: string; 
           </Link>
         </div>
       </div>
-      <h1 className="mt-5 font-display text-3xl font-semibold tracking-tight sm:text-4xl">{period.title}</h1>
+      <h1 className="mt-2 font-display text-3xl font-semibold tracking-tight sm:text-4xl">{period.title}</h1>
       {stats instanceof Error ? (
         <p className="mt-6 rounded-card bg-surface px-5 py-4 text-sm text-danger">{stats.message}</p>
       ) : (
         <StatsView key={`${period.first}-${range}-${q}`} stats={stats} range={range} tz={tz} dayKey={period.first} isNow={isNow} query={q} pins={pins} />
       )}
-    </>
+      </div>
+    </div>
   );
 }
