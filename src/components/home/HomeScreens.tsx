@@ -2,19 +2,125 @@
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
-// The home page is two screens you snap between: Home (Minute by Minute and your todos) and
-// Documents (your categories). Scrolling settles on one or the other; a grey arrow in the corner
-// says the other one is there (and takes you to it).
+// The home page is two screens: Home (Minute by Minute and your todos) and Documents (your
+// categories). Scrolling between them glides all the way to one or the other; a grey arrow in
+// the corner says the other one is there (and takes you to it).
 export default function HomeScreens({ home, documents }: { home: ReactNode; documents: ReactNode }) {
   const homeRef = useRef<HTMLElement>(null);
   const docsRef = useRef<HTMLElement>(null);
   const [onDocs, setOnDocs] = useState(false);
 
-  // Snap scrolling, on this page only.
+  // Moving between the two screens, however you scroll (wheel, trackpad, swipe, keys): one smooth
+  // glide, the same as the arrows, instead of the browser's quick snap. Inside the Documents
+  // screen (below its top) you scroll normally, and so does anything that scrolls by itself
+  // (a long todo list).
   useEffect(() => {
-    const root = document.documentElement;
-    root.classList.add("home-snap");
-    return () => root.classList.remove("home-snap");
+    const docs = docsRef.current;
+    if (!docs) return;
+    const docsTop = () => docs.getBoundingClientRect().top + window.scrollY;
+    let moving = false;
+    let quietUntil = 0; // (after a glide, the trackpad's leftover momentum is swallowed)
+    let settle: ReturnType<typeof setTimeout> | undefined;
+    let lastY = window.scrollY;
+    let reachedTopAt = 0; // (when scrolling up through Documents got to its top)
+
+    const glide = (top: number) => {
+      moving = true;
+      window.scrollTo({ top, behavior: "smooth" });
+      const done = () => {
+        if (!moving) return;
+        moving = false;
+        quietUntil = Date.now() + 500;
+        window.removeEventListener("scrollend", done);
+      };
+      window.addEventListener("scrollend", done);
+      setTimeout(done, 1000); // (browsers without scrollend)
+    };
+    // Which way a gesture should go from where you are: to Documents, to Home, or let it scroll.
+    const decide = (down: boolean): "docs" | "home" | null => {
+      const y = window.scrollY;
+      const top = docsTop();
+      if (y < top - 2) return down ? "docs" : y > 0 ? "home" : null; // on Home (or between)
+      if (y <= top + 2 && !down) return "home"; // at the top of Documents, going up
+      return null;
+    };
+    // Something under the pointer that can scroll that way itself.
+    const scrollsItself = (el: EventTarget | null, down: boolean) => {
+      for (let n = el as HTMLElement | null; n && n !== document.body; n = n.parentElement) {
+        const o = getComputedStyle(n).overflowY;
+        if ((o === "auto" || o === "scroll") && n.scrollHeight > n.clientHeight + 1) {
+          if (down ? n.scrollTop + n.clientHeight < n.scrollHeight - 1 : n.scrollTop > 0) return true;
+        }
+      }
+      return false;
+    };
+
+    const onWheel = (e: WheelEvent) => {
+      if (e.ctrlKey || Math.abs(e.deltaX) > Math.abs(e.deltaY)) return; // (zooming, sideways)
+      const down = e.deltaY > 0;
+      if (moving || Date.now() < quietUntil) {
+        if (decide(down) || moving) e.preventDefault();
+        return;
+      }
+      if (scrollsItself(e.target, down)) return;
+      const to = decide(down);
+      if (!to) return;
+      e.preventDefault();
+      if (Math.abs(e.deltaY) < 3) return; // (the tail end of a gesture)
+      // Scrolled up to the top of Documents just now: stop there. It takes a fresh scroll up to
+      // go on to Home (so a flick through your categories doesn't fly past their top).
+      if (to === "home" && window.scrollY >= docsTop() - 2 && Date.now() - reachedTopAt < 450) {
+        reachedTopAt = Date.now();
+        return;
+      }
+      glide(to === "docs" ? docsTop() : 0);
+    };
+
+    let startY = 0;
+    let startTarget: EventTarget | null = null;
+    const onTouchStart = (e: TouchEvent) => {
+      startY = e.touches[0].clientY;
+      startTarget = e.target;
+    };
+    const onTouchMove = (e: TouchEvent) => {
+      const down = e.touches[0].clientY < startY; // (finger up: page goes down)
+      if (moving || (!scrollsItself(startTarget, down) && decide(down))) e.preventDefault();
+    };
+    const onTouchEnd = (e: TouchEvent) => {
+      const dy = startY - e.changedTouches[0].clientY;
+      if (moving || Math.abs(dy) < 40 || scrollsItself(startTarget, dy > 0)) return;
+      const to = decide(dy > 0);
+      if (to) glide(to === "docs" ? docsTop() : 0);
+    };
+
+    // Keys (Page Down, space, arrows) or a scrollbar drag that stops between the two screens:
+    // glide on to the nearer one.
+    const onScroll = () => {
+      const y0 = window.scrollY;
+      if (!moving && y0 <= docsTop() + 2 && lastY > docsTop() + 2) reachedTopAt = Date.now();
+      lastY = y0;
+      clearTimeout(settle);
+      settle = setTimeout(() => {
+        if (moving) return;
+        const y = window.scrollY;
+        const top = docsTop();
+        if (y > 2 && y < top - 2) glide(y > top / 2 ? top : 0);
+      }, 140);
+    };
+
+    window.addEventListener("wheel", onWheel, { passive: false });
+    window.addEventListener("touchstart", onTouchStart, { passive: true });
+    window.addEventListener("touchmove", onTouchMove, { passive: false });
+    window.addEventListener("touchend", onTouchEnd);
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      clearTimeout(settle);
+      window.removeEventListener("wheel", onWheel);
+      window.removeEventListener("touchstart", onTouchStart);
+      window.removeEventListener("touchmove", onTouchMove);
+      window.removeEventListener("touchend", onTouchEnd);
+      window.removeEventListener("scroll", onScroll);
+    };
   }, []);
 
   // Which screen you're on (for the arrows).
@@ -49,12 +155,12 @@ export default function HomeScreens({ home, documents }: { home: ReactNode; docu
 
   return (
     <>
-      <section ref={homeRef} aria-label="Home" className="relative flex min-h-[100svh] snap-start flex-col pb-20 pt-8 sm:pt-14">
+      <section ref={homeRef} aria-label="Home" className="relative flex min-h-[100svh] flex-col pb-20 pt-8 sm:pt-14">
         {home}
         {/* Bottom-left: Documents are below. */}
         {arrow(false, `absolute bottom-5 -left-2 ${onDocs ? "opacity-0" : ""}`)}
       </section>
-      <section ref={docsRef} aria-label="Documents" className="relative min-h-[100svh] snap-start pb-24 pt-2">
+      <section ref={docsRef} aria-label="Documents" className="relative min-h-[100svh] pb-24 pt-2">
         {/* Top-left: Home is above. */}
         {arrow(true, "-ml-2 mb-1")}
         {documents}
