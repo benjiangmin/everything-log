@@ -7,6 +7,7 @@ import { mbm, mbmReady, mbmUser } from "@/mbm/supabase";
 import { dayKeyOf, dayTitle, isDayKey } from "@/mbm/time";
 import MbmHome from "@/mbm/components/MbmHome";
 import GoogleCard from "@/mbm/components/GoogleCard";
+import PhoneNote from "@/mbm/components/PhoneNote";
 import { googleStatus } from "@/mbm/google";
 
 export const metadata = { title: "Minute by Minute" };
@@ -40,6 +41,7 @@ async function Home({ day: asked, google }: { day?: string; google?: string }) {
     <>
       <p className="text-sm font-semibold uppercase tracking-wider text-muted">{dayTitle(today)}</p>
       <h1 className="mt-1 font-display text-4xl font-semibold tracking-tight sm:text-5xl">Minute by Minute</h1>
+      <PhoneNote phone={await linkedPhone()} now={+new Date(day.loadedAt)} />
       <MbmHome day={day} renderedAt={day.loadedAt} />
       <GoogleCard status={await googleStatus(await mbm()).catch(() => null)} note={google} />
       <nav aria-label="More" className="mt-8 grid gap-3 sm:grid-cols-2">
@@ -54,4 +56,11 @@ async function Home({ day: asked, google }: { day?: string; google?: string }) {
       </nav>
     </>
   );
+}
+
+// The phone linked to this account (036_phones.sql), null if none, "unknown" if that's not run.
+async function linkedPhone() {
+  const { data, error } = await (await mbm()).from("phones").select("name, last_seen").maybeSingle();
+  if (error) return "unknown" as const;
+  return data as { name: string | null; last_seen: string } | null;
 }
