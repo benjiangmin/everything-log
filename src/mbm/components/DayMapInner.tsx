@@ -175,6 +175,7 @@ export default function DayMapInner({
           runMove(async () => {
             const res = await moveStop(v.id, at.lat, at.lng);
             setMoveNote(res.ok ? null : res.message);
+            if (res.ok && v.placeId) lookedUp.delete(v.placeId); // (its building is looked up again at the new spot)
           });
         }}
         className="size-full"
