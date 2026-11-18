@@ -9,6 +9,7 @@ import { dayKeyOf, dayTitle, isDayKey } from "@/mbm/time";
 import MbmHome from "@/mbm/components/MbmHome";
 import GoogleCard from "@/mbm/components/GoogleCard";
 import PhoneNote from "@/mbm/components/PhoneNote";
+import HomeSky from "@/mbm/components/HomeSky";
 import { googleStatus } from "@/mbm/google";
 
 export const metadata = { title: "Minute by Minute" };
@@ -40,8 +41,15 @@ async function Home({ day: asked, google }: { day?: string; google?: string }) {
 
   return (
     <>
-      <p className="text-sm font-semibold uppercase tracking-wider text-muted">{dayTitle(today)}</p>
-      <h1 className="mt-1 font-display text-4xl font-semibold tracking-tight sm:text-5xl">Minute by Minute</h1>
+      {/* The light outside, where you are (your latest stop; Madison until there is one). */}
+      <HomeSky
+        name={await firstName()}
+        tz={tz}
+        lat={day.visits.at(-1)?.lat ?? 43.073}
+        lng={day.visits.at(-1)?.lng ?? -89.401}
+        renderedAt={+new Date(day.loadedAt)}
+        dateLabel={dayTitle(today)}
+      />
       <PhoneNote phone={await linkedPhone()} now={+new Date(day.loadedAt)} />
       <MbmHome day={day} renderedAt={day.loadedAt} />
       <GoogleCard status={await googleStatus(await mbm()).catch(() => null)} note={google} />
@@ -71,4 +79,10 @@ async function FutureNote({ client }: { client: SupabaseClient }) {
       <span aria-hidden="true" className="text-muted">→</span>
     </Link>
   );
+}
+
+// Your name, from About you (038), for the greeting.
+async function firstName() {
+  const { data } = await (await mbm()).from("profiles").select("name").maybeSingle();
+  return (data?.name as string | null | undefined)?.split(" ")[0] ?? null;
 }

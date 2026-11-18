@@ -6,6 +6,11 @@ import AboutYouForm from "./AboutYouForm";
 import AboutYouSteps from "./AboutYouSteps";
 
 const YEAR_DAYS = 365.2425;
+// A fixed scatter of stars for the header (x, y in %, radius).
+const STARS: [number, number, number][] = [
+  [8, 18, 0.35], [15, 62, 0.25], [23, 30, 0.3], [31, 80, 0.2], [38, 12, 0.25], [46, 48, 0.3], [52, 22, 0.2], [58, 70, 0.35],
+  [64, 38, 0.25], [70, 14, 0.3], [76, 58, 0.2], [82, 28, 0.35], [88, 76, 0.25], [93, 44, 0.3], [97, 16, 0.2], [42, 88, 0.25],
+];
 const yrs = (n: number) => (n >= 10 ? n.toFixed(0) : n.toFixed(1));
 const perDay = (secs: number) => {
   const m = Math.round(secs / 60);
@@ -27,12 +32,22 @@ export default function AheadView({
 }) {
   const [editing, setEditing] = useState(false);
   const [hover, setHover] = useState<string | null>(null);
-  // Shown: sleep and phone, plus whatever you've added (this browser remembers).
-  const [extra, setExtra] = useState<string[]>([]);
+  // Shown: sleep and phone to start, then whatever you add or remove (this browser remembers).
+  const [shownKeys, setShownKeys] = useState<string[]>(["Sleep", "screen"]);
   const [query, setQuery] = useState("");
-  // Stuck at the top: the bar shrinks to just itself.
+  // Stuck at the top: the bar shrinks to just itself. Its slot keeps the full height (the card
+  // shrinks inside it), so the page below never moves; otherwise shrinking moved the page, which
+  // unstuck it, which grew it, which stuck it again: the jitter.
   const sentinel = useRef<HTMLDivElement>(null);
+  const card = useRef<HTMLDivElement>(null);
   const [stuck, setStuck] = useState(false);
+  const [slot, setSlot] = useState<number | null>(null);
+  useEffect(() => {
+    if (!stuck && card.current) {
+      const h = card.current.offsetHeight;
+      queueMicrotask(() => setSlot(h));
+    }
+  }, [stuck, editing]);
   useEffect(() => {
     const el = sentinel.current;
     if (!el) return;
@@ -42,14 +57,14 @@ export default function AheadView({
   }, [editing]);
   useEffect(() => {
     try {
-      const saved = JSON.parse(localStorage.getItem("mbm-future-extra") ?? "[]");
-      if (Array.isArray(saved)) queueMicrotask(() => setExtra(saved.filter((x) => typeof x === "string")));
+      const saved = JSON.parse(localStorage.getItem("mbm-future-shown") ?? "null");
+      if (Array.isArray(saved)) queueMicrotask(() => setShownKeys(saved.filter((x) => typeof x === "string")));
     } catch {}
   }, []);
   const keep = (next: string[]) => {
-    setExtra(next);
+    setShownKeys(next);
     try {
-      localStorage.setItem("mbm-future-extra", JSON.stringify(next));
+      localStorage.setItem("mbm-future-shown", JSON.stringify(next));
     } catch {}
   };
 
@@ -75,12 +90,11 @@ export default function AheadView({
   const total = age + left;
   const livedPct = (age / total) * 100;
   const all = aheadItems(averages, colors).map((it) => ({ ...it, years: (left * it.perDay) / 86400 }));
-  const DEFAULT = ["Sleep", "screen"];
-  const items = all.filter((it) => DEFAULT.includes(it.key) || extra.includes(it.key));
+  const items = all.filter((it) => shownKeys.includes(it.key));
   const addable = all.filter((it) => !items.includes(it));
   const matches = addable.filter((it) => it.label.toLowerCase().includes(query.trim().toLowerCase())).slice(0, 6);
   const add = (key: string) => {
-    keep([...extra, key]);
+    keep([...shownKeys, key]);
     setQuery("");
   };
   const ticks = Array.from({ length: Math.floor(total / 5) }, (_, k) => (k + 1) * 5);
@@ -91,23 +105,43 @@ export default function AheadView({
 
   return (
     <section>
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <p className="text-sm font-semibold uppercase tracking-wider text-muted">Looking ahead{profile.name ? ` · ${profile.name}` : ""}</p>
-          <h1 className="mt-1 font-display text-4xl font-semibold tracking-tight sm:text-5xl">{Math.round(livedPct)}% of the way through</h1>
+      {/* The page's one loud thing: a night sky, and how far through you are, set big. */}
+      <header className="relative overflow-hidden rounded-[28px] px-7 pb-8 pt-7 text-[#f6eee3] sm:px-10" style={{ background: "radial-gradient(120% 140% at 85% 0%, #5a3d2b 0%, #2b1d15 55%, #1f150f 100%)" }}>
+        {STARS.map(([x, y, r], k) => (
+          <span
+            key={k}
+            aria-hidden="true"
+            className="pointer-events-none absolute rounded-full bg-[#f6eee3]"
+            style={{ left: `${x}%`, top: `${y}%`, width: r * 8, height: r * 8, opacity: 0.25 + (k % 4) * 0.12 }}
+          />
+        ))}
+        <div className="relative flex items-start justify-between gap-4">
+          <p className="text-sm text-[#cbb9a4]">{profile.name ? `${profile.name}, looking ahead` : "Looking ahead"}</p>
+          <button type="button" onClick={() => setEditing(true)} className="-mr-2 -mt-1 rounded-control px-3 py-1.5 text-sm font-semibold text-[#cbb9a4] hover:bg-white/10 hover:text-[#f6eee3]">
+            Edit your details
+          </button>
         </div>
-        <button type="button" onClick={() => setEditing(true)} className="rounded-control px-3 py-2 text-sm font-semibold text-muted hover:bg-surface hover:text-ink">
-          Edit your details
-        </button>
-      </div>
+        <p className="relative mt-4 flex flex-wrap items-baseline gap-x-4">
+          <span className="num font-display text-[clamp(4.5rem,12vw,8.5rem)] font-semibold leading-[0.9] tracking-tighter">{Math.round(livedPct)}%</span>
+          <span className="font-display text-2xl font-semibold leading-tight sm:text-3xl">
+            of a typical life,
+            <br />
+            lived so far.
+          </span>
+        </p>
+      </header>
 
       {/* The bar: stays at the top while you scroll the list (shrinking to just the bar), so you
           can see it and what you're hovering at the same time. */}
-      <div ref={sentinel} aria-hidden="true" className="mt-6 h-px" />
+      <div ref={sentinel} aria-hidden="true" className="mt-4 h-px" />
       {/* (The wrapper's paper fills the gap under the top bar, so nothing peeks through above it.) */}
-      <div className="sticky top-16 z-30 -mx-2 bg-paper px-2 pt-2">
+      {/* The slot (full height, see above). The strip of paper above the card covers the gap
+          under the top bar; below the card it's see-through, so its rounded corners stay round. */}
+      <div className="pointer-events-none sticky top-16 z-30" style={slot ? { height: slot + 8 } : undefined}>
+      <div aria-hidden="true" className="absolute inset-x-0 top-0 h-6 bg-paper" />
       <div
-        className={`rounded-card border bg-paper transition-[padding,box-shadow,border-color] duration-300 ease-out ${
+        ref={card}
+        className={`pointer-events-auto relative mt-2 rounded-card border bg-paper transition-[padding,box-shadow,border-color] duration-300 ease-out ${
           stuck ? "border-line/60 px-5 py-3 shadow-xl shadow-ink/10" : "border-line p-6"
         }`}
       >
@@ -203,10 +237,10 @@ export default function AheadView({
                 <p className="num font-semibold">{yrs(it.years)} years</p>
                 <p className="num text-xs text-muted">{Math.round((it.years / left) * 100)}% of what&apos;s left</p>
               </div>
-              {!DEFAULT.includes(it.key) && (
+              {(
                 <button
                   type="button"
-                  onClick={() => keep(extra.filter((x) => x !== it.key))}
+                  onClick={() => keep(shownKeys.filter((x) => x !== it.key))}
                   aria-label={`Remove ${it.label}`}
                   className="-mr-1 grid size-8 place-items-center rounded-control text-muted hover:bg-paper hover:text-ink"
                 >
