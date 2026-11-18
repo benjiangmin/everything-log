@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { aheadItems, ageAt, RACE_LABEL, yearsLeft, type Profile } from "@/mbm/life";
 import AboutYouForm from "./AboutYouForm";
 import AboutYouSteps from "./AboutYouSteps";
@@ -29,7 +29,17 @@ export default function AheadView({
   const [hover, setHover] = useState<string | null>(null);
   // Shown: sleep and phone, plus whatever you've added (this browser remembers).
   const [extra, setExtra] = useState<string[]>([]);
-  const [adding, setAdding] = useState(false);
+  const [query, setQuery] = useState("");
+  // Stuck at the top: the bar shrinks to just itself.
+  const sentinel = useRef<HTMLDivElement>(null);
+  const [stuck, setStuck] = useState(false);
+  useEffect(() => {
+    const el = sentinel.current;
+    if (!el) return;
+    const io = new IntersectionObserver(([e]) => setStuck(!e.isIntersecting && e.boundingClientRect.top < 80), { rootMargin: "-72px 0px 0px 0px" });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [editing]);
   useEffect(() => {
     try {
       const saved = JSON.parse(localStorage.getItem("mbm-future-extra") ?? "[]");
@@ -68,6 +78,12 @@ export default function AheadView({
   const DEFAULT = ["Sleep", "screen"];
   const items = all.filter((it) => DEFAULT.includes(it.key) || extra.includes(it.key));
   const addable = all.filter((it) => !items.includes(it));
+  const matches = addable.filter((it) => it.label.toLowerCase().includes(query.trim().toLowerCase())).slice(0, 6);
+  const add = (key: string) => {
+    keep([...extra, key]);
+    setQuery("");
+  };
+  const ticks = Array.from({ length: Math.floor(total / 5) }, (_, k) => (k + 1) * 5);
   const taken = items.reduce((n, it) => n + it.years, 0);
   const shown = hover === "all" ? taken : (items.find((it) => it.key === hover)?.years ?? 0);
   const shownColor = items.find((it) => it.key === hover)?.color ?? "#3e281b";
@@ -85,16 +101,45 @@ export default function AheadView({
         </button>
       </div>
 
-      {/* The bar. */}
-      <div className="mt-8 rounded-card border border-line bg-paper p-6">
-        <div className="flex items-baseline justify-between text-sm">
-          <span className="text-muted">Born</span>
-          <span className="text-muted">
-            around <span className="num font-semibold text-ink">{total.toFixed(0)}</span>
+      {/* The bar: stays at the top while you scroll the list (shrinking to just the bar), so you
+          can see it and what you're hovering at the same time. */}
+      <div ref={sentinel} aria-hidden="true" className="mt-6 h-px" />
+      {/* (The wrapper's paper fills the gap under the top bar, so nothing peeks through above it.) */}
+      <div className="sticky top-16 z-30 -mx-2 bg-paper px-2 pt-2">
+      <div
+        className={`rounded-card border bg-paper transition-[padding,box-shadow,border-color] duration-300 ease-out ${
+          stuck ? "border-line/60 px-5 py-3 shadow-xl shadow-ink/10" : "border-line p-6"
+        }`}
+      >
+        <div className="relative h-5 text-sm">
+          <span className="absolute left-0 text-muted">Born</span>
+          {/* You, now: over the line where the dark part ends. */}
+          <span className="absolute -translate-x-1/2 whitespace-nowrap" style={{ left: `${Math.min(88, Math.max(12, livedPct))}%` }}>
+            <span className="num font-semibold">{age.toFixed(1)}</span> <span className="text-muted">you, now</span>
+          </span>
+          <span className="absolute right-0 text-muted">
+            {shown > 0 ? (
+              <span className="text-ink">
+                <span className="num font-semibold">−{yrs(shown)} years</span> {hover === "all" ? "all of these" : items.find((it) => it.key === hover)?.label.toLowerCase()}
+              </span>
+            ) : (
+              <>
+                around <span className="num font-semibold text-ink">{total.toFixed(0)}</span>
+              </>
+            )}
           </span>
         </div>
-        <div className="relative mt-2 h-14 overflow-hidden rounded-[14px] bg-surface ring-1 ring-inset ring-line">
+        <div className={`relative mt-2 overflow-hidden rounded-[14px] bg-surface ring-1 ring-inset ring-line transition-[height] duration-300 ease-out ${stuck ? "h-9" : "h-14"}`}>
           <div className="absolute inset-y-0 left-0 bg-accent" style={{ width: `${livedPct}%` }} />
+          {/* Every 5 years a faint line, every 10 a stronger one. */}
+          {ticks.map((y) => (
+            <div
+              key={y}
+              aria-hidden="true"
+              className={`absolute inset-y-0 w-px ${y < age ? "bg-paper" : "bg-ink"} ${y % 10 ? "opacity-[0.12]" : "opacity-25"}`}
+              style={{ left: `${(y / total) * 100}%` }}
+            />
+          ))}
           {/* Shaded off the end: what the hovered thing takes. */}
           <div
             aria-hidden="true"
@@ -108,28 +153,28 @@ export default function AheadView({
           {/* Now. */}
           <div className="absolute inset-y-0 w-0.5 bg-paper" style={{ left: `${livedPct}%` }} />
         </div>
-        <div className="relative mt-2 h-10 text-sm">
-          <div className="absolute -translate-x-1/2 text-center" style={{ left: `${Math.min(92, Math.max(8, livedPct))}%` }}>
-            <p className="num font-semibold">{age.toFixed(1)}</p>
-            <p className="text-xs text-muted">you, now</p>
-          </div>
-          {shown > 0 && (
-            <div className="absolute right-0 text-right">
-              <p className="num font-semibold">−{yrs(shown)} years</p>
-              <p className="text-xs text-muted">{hover === "all" ? "all of these" : items.find((it) => it.key === hover)?.label.toLowerCase()}</p>
-            </div>
-          )}
+        {/* The decades. */}
+        <div className="relative mt-1.5 h-4 text-[11px] text-muted">
+          {ticks
+            .filter((y) => y % 10 === 0 && y > 0 && (y / total) * 100 < 97)
+            .map((y) => (
+              <span key={y} className="num absolute -translate-x-1/2" style={{ left: `${(y / total) * 100}%` }}>
+                {y}
+              </span>
+            ))}
         </div>
-        <div className="mt-6 grid gap-3 sm:grid-cols-3">
-          {/* Your age the way people say it (20, not 20.5 rounded up), then the months. */}
-          <Stat
-            label="Lived"
-            value={`${Math.floor(age)} years`}
-            note={`${Math.floor((age % 1) * 12)} months on top · ${Math.floor(age * YEAR_DAYS).toLocaleString()} days`}
-          />
-          <Stat label="Likely left" value={`${yrs(left)} years`} note={`about ${Math.round(left * 52.18).toLocaleString()} weeks`} />
-          <Stat label="Left over" value={`${yrs(Math.max(0, left - taken))} years`} note="after everything below" onHover={(on) => setHover(on ? "all" : null)} />
-        </div>
+      </div>
+      </div>
+
+      <div className="mt-4 grid gap-3 sm:grid-cols-3">
+        {/* Your age the way people say it (20, not 20.5 rounded up), then the months. */}
+        <Stat
+          label="Lived"
+          value={`${Math.floor(age)} years`}
+          note={`${Math.floor((age % 1) * 12)} months on top · ${Math.floor(age * YEAR_DAYS).toLocaleString()} days`}
+        />
+        <Stat label="Likely left" value={`${yrs(left)} years`} note={`about ${Math.round(left * 52.18).toLocaleString()} weeks`} />
+        <Stat label="Left over" value={`${yrs(Math.max(0, left - taken))} years`} note="after everything below" onHover={(on) => setHover(on ? "all" : null)} />
       </div>
 
       {/* Where it goes. */}
@@ -173,32 +218,34 @@ export default function AheadView({
         </ul>
         {/* Anything else: only when you ask for it. */}
         {addable.length > 0 && (
-          <div className="mt-3">
-            {adding ? (
-              <div className="flex flex-wrap gap-2">
-                {addable.map((it) => (
-                  <button
-                    key={it.key}
-                    type="button"
-                    onClick={() => {
-                      keep([...extra, it.key]);
-                      setAdding(false);
-                    }}
-                    className="flex items-center gap-2 rounded-full border border-line px-3 py-1.5 text-sm font-semibold hover:border-ink/40 hover:bg-surface"
-                  >
-                    <span className="size-2.5 rounded-full" style={{ background: it.color }} aria-hidden="true" />
-                    {it.label}
-                    <span className="font-normal text-muted">{perDay(it.perDay)}/day</span>
-                  </button>
-                ))}
-                <button type="button" onClick={() => setAdding(false)} className="rounded-full px-3 py-1.5 text-sm text-muted hover:bg-surface hover:text-ink">
-                  Cancel
-                </button>
-              </div>
-            ) : (
-              <button type="button" onClick={() => setAdding(true)} className="rounded-control px-3 py-2 text-sm font-semibold text-muted hover:bg-surface hover:text-ink">
-                + Add something else
-              </button>
+          <div className="relative mt-3">
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && matches[0]) add(matches[0].key);
+                if (e.key === "Escape") setQuery("");
+              }}
+              placeholder="+ Add something else (search what you track)"
+              className="w-full rounded-control border border-line bg-paper px-3 py-2.5 text-sm placeholder:text-muted focus:border-ink"
+              style={{ outline: "none" }}
+            />
+            {query.trim() && (
+              <ul className="absolute inset-x-0 top-full z-20 mt-1 overflow-hidden rounded-control border border-line bg-paper shadow-xl shadow-ink/10">
+                {matches.length ? (
+                  matches.map((it) => (
+                    <li key={it.key}>
+                      <button type="button" onClick={() => add(it.key)} className="flex w-full items-center gap-3 px-3 py-2.5 text-left text-sm hover:bg-surface">
+                        <span className="size-2.5 rounded-full" style={{ background: it.color }} aria-hidden="true" />
+                        <span className="flex-1 font-semibold">{it.label}</span>
+                        <span className="text-muted">{perDay(it.perDay)} a day</span>
+                      </button>
+                    </li>
+                  ))
+                ) : (
+                  <li className="px-3 py-2.5 text-sm text-muted">Nothing tracked by that name.</li>
+                )}
+              </ul>
             )}
           </div>
         )}
