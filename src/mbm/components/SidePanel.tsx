@@ -2,8 +2,20 @@
 
 import { useEffect, type ReactNode } from "react";
 
-// A panel sliding in from the right, like the sidebar's other panels. Escape or the dimmed page closes it.
-export default function SidePanel({ title, subtitle, onClose, children }: { title: string; subtitle?: ReactNode; onClose: () => void; children: ReactNode }) {
+// A panel sliding in from the right (or the left), like the sidebar's other panels. Escape or the dimmed page closes it.
+export default function SidePanel({
+  title,
+  subtitle,
+  onClose,
+  side = "right",
+  children,
+}: {
+  title: string;
+  subtitle?: ReactNode;
+  onClose: () => void;
+  side?: "left" | "right";
+  children: ReactNode;
+}) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape" && !document.querySelector("dialog[open]")) onClose();
@@ -15,7 +27,7 @@ export default function SidePanel({ title, subtitle, onClose, children }: { titl
   return (
     <div className="fixed inset-0 z-[70]">
       <button type="button" aria-label="Close" onClick={onClose} className="absolute inset-0 cursor-default bg-ink/30" />
-      <aside aria-label={title} className="panel-slide absolute inset-y-0 right-0 flex w-full max-w-md flex-col bg-paper shadow-2xl shadow-ink/30">
+      <aside aria-label={title} className={`${side === "left" ? "panel-slide-left left-0" : "panel-slide right-0"} absolute inset-y-0 flex w-full max-w-md flex-col bg-paper shadow-2xl shadow-ink/30`}>
         <header className="flex items-start justify-between gap-3 border-b border-line px-5 py-4">
           <div className="min-w-0">
             <h2 className="font-display text-xl font-semibold">{title}</h2>

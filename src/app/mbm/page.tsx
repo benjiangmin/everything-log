@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { Suspense } from "react";
 import { connection } from "next/server";
 import { redirect } from "next/navigation";
@@ -44,16 +45,7 @@ async function Home({ day: asked, google }: { day?: string; google?: string }) {
       <PhoneNote phone={await linkedPhone()} now={+new Date(day.loadedAt)} />
       <MbmHome day={day} renderedAt={day.loadedAt} />
       <GoogleCard status={await googleStatus(await mbm()).catch(() => null)} note={google} />
-      <nav aria-label="More" className="mt-8 grid gap-3 sm:grid-cols-2">
-        <Link href="/mbm/day" className="rounded-card border border-line px-5 py-4 transition-colors hover:bg-surface">
-          <p className="font-semibold">Today&apos;s day →</p>
-          <p className="text-sm text-muted">The bar and the map, minute by minute</p>
-        </Link>
-        <Link href="/mbm/stats" className="rounded-card border border-line px-5 py-4 transition-colors hover:bg-surface">
-          <p className="font-semibold">Stats →</p>
-          <p className="text-sm text-muted">Your days, weeks, months and years</p>
-        </Link>
-      </nav>
+      <FutureNote client={await mbm()} />
     </>
   );
 }
@@ -63,4 +55,20 @@ async function linkedPhone() {
   const { data, error } = await (await mbm()).from("phones").select("name, last_seen").maybeSingle();
   if (error) return "unknown" as const;
   return data as { name: string | null; last_seen: string } | null;
+}
+
+// No birthday yet (skipped on the phone, or never asked): a nudge to the Future page.
+async function FutureNote({ client }: { client: SupabaseClient }) {
+  const { data, error } = await client.from("profiles").select("birthday").maybeSingle();
+  if (error || data?.birthday) return null; // (038 not run, or done)
+  return (
+    <Link href="/mbm/future" className="mt-5 flex items-center gap-4 rounded-card border border-line px-5 py-4 transition-colors hover:bg-surface">
+      <span aria-hidden="true" className="text-2xl">⏳</span>
+      <div className="min-w-0 flex-1">
+        <p className="font-semibold">See your life on one bar</p>
+        <p className="text-sm text-muted">Add your birthday and a few details to see how much is likely ahead, and where it goes.</p>
+      </div>
+      <span aria-hidden="true" className="text-muted">→</span>
+    </Link>
+  );
 }

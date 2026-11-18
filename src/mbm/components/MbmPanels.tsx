@@ -27,6 +27,7 @@ export default function MbmPanels() {
       key={`${panel.kind}-${dayKey}`}
       dayKey={dayKey}
       blockId={panel.kind === "edit" ? panel.blockId : undefined}
+      side={panel.kind === "edit" ? panel.side : undefined}
       span={panel.kind === "add" && panel.from && panel.to ? { from: panel.from, to: panel.to } : undefined}
       onClose={close}
     />

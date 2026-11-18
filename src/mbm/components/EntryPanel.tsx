@@ -13,11 +13,13 @@ export default function EntryPanel({
   dayKey,
   blockId,
   span,
+  side,
   onClose,
 }: {
   dayKey: string;
   blockId?: string;
   span?: { from: number; to: number }; // the untracked stretch to fill in
+  side?: "left" | "right"; // (from the corner bubble: slides in from the left, next to it)
   onClose: () => void;
 }) {
   const [day, setDay] = useState<Day | null>(null);
@@ -87,7 +89,7 @@ export default function EntryPanel({
 
   const subtitle = !day ? (error ? "" : "Loading…") : block ? `${byId.get(block.activity_id ?? "")?.name ?? "Entry"} · since ${clock(block.started_at, day.tz)}` : dayTitle(day.dayKey);
   return (
-    <SidePanel title={editing ? "Change entry" : "Add a missed entry"} subtitle={subtitle} onClose={onClose}>
+    <SidePanel title={editing ? "Change entry" : "Add a missed entry"} subtitle={subtitle} onClose={onClose} side={side}>
       {body}
       {error && <p className="text-sm text-danger">{error}</p>}
     </SidePanel>

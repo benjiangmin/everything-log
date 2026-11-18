@@ -251,8 +251,15 @@ body {
 .panel-slide {
   animation: panel-slide 320ms cubic-bezier(0.22, 1, 0.36, 1);
 }
+@keyframes panel-slide-left {
+  from { transform: translateX(-100%); }
+  to   { transform: none; }
+}
+.panel-slide-left {
+  animation: panel-slide-left 320ms cubic-bezier(0.22, 1, 0.36, 1);
+}
 @media (prefers-reduced-motion: reduce) {
-  .panel-slide { animation: none; }
+  .panel-slide, .panel-slide-left { animation: none; }
 }
 
 /* ---------- Letters to self: breaking the seal ---------- */

@@ -11,13 +11,14 @@ const TABS = [
   { href: "/mbm", label: "Home" },
   { href: "/mbm/day", label: "Day" },
   { href: "/mbm/stats", label: "Stats" },
+  { href: "/mbm/future", label: "Future" },
 ];
 
 export default function MbmTopBar({ signedIn, email, owner }: { signedIn: boolean; email: string | null; owner: boolean }) {
   const pathname = usePathname();
   const active = (href: string) => (href === "/mbm" ? pathname === "/mbm" : pathname.startsWith(href));
   return (
-    <header className="border-b border-line bg-paper">
+    <header className="sticky top-0 z-50 border-b border-line bg-paper/95 backdrop-blur">
       <div className="mx-auto flex h-16 w-full items-center gap-2 px-4 sm:w-[96%] sm:gap-4 sm:px-0">
         <Link href="/mbm" className="mr-2 flex items-center gap-2 font-display text-lg font-semibold tracking-tight text-ink sm:mr-6">
           <span aria-hidden="true" className="grid size-7 place-items-center rounded-full bg-accent text-accent-ink">

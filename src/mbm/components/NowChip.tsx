@@ -2,13 +2,14 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { Activity, Block } from "@/mbm/data";
-import { span } from "@/mbm/time";
+import { dayKeyOf, span } from "@/mbm/time";
 import NowStatus from "./NowStatus";
 import { openMbm } from "./open";
 import { useNow } from "./useNow";
 
 // What's running, kept small: a button in the bottom-left corner showing it (with its timer).
-// Hover (or click) it for the full box (Stop, + Start, Switch); nothing running: click to start.
+// Hover it for the full box (Stop, + Start, Switch); click it to change what's running (a panel
+// from the left); nothing running: click to start.
 export default function NowChip({ activities, running, tz, renderedAt }: { activities: Activity[]; running: Block[]; tz: string; renderedAt: number }) {
   const t = useNow(renderedAt);
   const [open, setOpen] = useState(false);
@@ -54,7 +55,12 @@ export default function NowChip({ activities, running, tz, renderedAt }: { activ
       </div>
       <button
         type="button"
-        onClick={() => (running.length ? setOpen(true) : openMbm({ kind: "now" }))}
+        // Clicking the bubble itself: what's running, to change, in a panel from the left.
+        onClick={() => {
+          if (!first) return openMbm({ kind: "now" });
+          setOpen(false);
+          openMbm({ kind: "edit", dayKey: dayKeyOf(new Date(first.started_at), tz), blockId: first.id, side: "left" });
+        }}
         aria-expanded={running.length ? open : undefined}
         className="flex max-w-[calc(100vw-2.5rem)] items-center gap-2.5 rounded-full bg-accent py-2.5 pl-3.5 pr-4 text-sm font-semibold text-accent-ink shadow-xl shadow-ink/25 transition-transform hover:scale-[1.02]"
       >

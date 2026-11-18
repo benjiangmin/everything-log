@@ -596,3 +596,33 @@ async function unlockDaysOf(client: Awaited<ReturnType<typeof mbm>>, visitId: st
   const to = dayKeyOf(new Date(v.departed_at ?? Date.now()), tz);
   await client.from("day_locks").delete().gte("day", from).lte("day", to);
 }
+
+// ---------- About you (038_about_you.sql) ----------
+// Saved from the Future page's form (or the phone's first-run setup). Everything's optional.
+export async function saveProfile(formData: FormData): Promise<Result> {
+  if (!mbmReady()) return fail("Not connected.");
+  const { RACES, STATES } = await import("@/mbm/life");
+  const text = (k: string, n: number) => String(formData.get(k) ?? "").trim().slice(0, n) || null;
+  const birthday = text("birthday", 10);
+  if (birthday && (!/^\d{4}-\d{2}-\d{2}$/.test(birthday) || +new Date(birthday) > Date.now() || birthday < "1900-01-02")) return fail("That birthday doesn't look right.");
+  const sex = text("sex", 6);
+  const race = text("race", 10);
+  const state = text("state", 40);
+  const row = {
+    name: text("name", 80),
+    birthday,
+    sex: sex === "female" || sex === "male" ? sex : null,
+    race: RACES.some((r) => r.id === race) ? race : null,
+    state: state && state in STATES ? state : null,
+    skipped: false,
+    updated_at: new Date().toISOString(),
+  };
+  const client = await mbm();
+  const { data: auth } = await client.auth.getUser();
+  if (!auth.user) return fail("Sign in again.");
+  const { error } = await client.from("profiles").upsert({ user_id: auth.user.id, ...row });
+  if (error) return fail(/relation .* does not exist|schema cache/i.test(error.message) ? "Run 038_about_you.sql first." : error.message);
+  revalidatePath("/mbm/future");
+  revalidatePath("/mbm");
+  return { ok: true };
+}
