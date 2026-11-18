@@ -245,7 +245,7 @@ export default function DayMapInner({
               <button
                 type="button"
                 onClick={() => setOpen(v)}
-                onMouseEnter={(e) => point({ trips: [], stops: [v.id], ...where(e) })}
+                onMouseEnter={(e) => point({ trips: [], stops: samePlace(visits, v).map((x) => x.id), ...where(e) })}
                 onMouseLeave={() => point(null)}
                 aria-label={name ?? "Unnamed stop"}
                 className={`flex cursor-pointer flex-col items-center transition-[opacity,transform] duration-150 ${dim ? "opacity-35" : ""} ${on ? "scale-125" : ""}`}
@@ -390,7 +390,7 @@ export default function DayMapInner({
           y={pointed.y}
           rows={[
             ...trips.filter((t) => pointed.trips.includes(t.key)).map((t) => tripRow(t, blocks, activities, tz)),
-            ...visits.filter((v) => pointed.stops.includes(v.id)).map((v) => stopRow(v, blocks, activities, tz)),
+            ...(pointed.stops.length ? [stopRow(visits.filter((v) => pointed.stops.includes(v.id)), blocks, activities, tz)] : []),
           ]}
         />
       )}
@@ -421,26 +421,42 @@ function tripRow(t: Trip, blocks: Block[], activities: Activity[], tz: string): 
 }
 
 // Hovering a stop: what you were doing there (its name is already on the map), and when.
-function stopRow(v: Visit, blocks: Block[], activities: Activity[], tz: string): Row {
-  const start = +new Date(v.arrived_at);
-  const end = v.departed_at ? +new Date(v.departed_at) : Date.now();
+function stopRow(group: Visit[], blocks: Block[], activities: Activity[], tz: string): Row {
   const byId = new globalThis.Map(activities.map((a) => [a.id, a]));
-  // Your entries during the stop (not Commutes), longest first.
+  const spans = group.map((v) => ({ start: +new Date(v.arrived_at), end: v.departed_at ? +new Date(v.departed_at) : Date.now() }));
+  // Your entries during any of your times there today (not Commutes), longest first.
   const doing = new globalThis.Map<string, number>();
   for (const b of blocks) {
     if (b.source === "location" || !b.activity_id) continue;
     const a = byId.get(b.activity_id);
     if (!a || a.name === "Commute") continue;
-    const overlap = Math.min(end, b.ended_at ? +new Date(b.ended_at) : Date.now()) - Math.max(start, +new Date(b.started_at));
-    if (overlap > 60_000) doing.set(a.id, (doing.get(a.id) ?? 0) + overlap);
+    const bs = +new Date(b.started_at);
+    const be = b.ended_at ? +new Date(b.ended_at) : Date.now();
+    for (const sp of spans) {
+      const overlap = Math.min(sp.end, be) - Math.max(sp.start, bs);
+      if (overlap > 60_000) doing.set(a.id, (doing.get(a.id) ?? 0) + overlap);
+    }
   }
   const top = [...doing.entries()].sort((x, y) => y[1] - x[1]).map(([id]) => byId.get(id)!);
+  const total = spans.reduce((n, sp) => n + sp.end - sp.start, 0);
+  const v = group[0];
   return {
-    key: v.id,
+    key: group.map((g) => g.id).join(","),
     color: top[0]?.color ?? "#faf6f0",
-    title: top.length ? top.slice(0, 3).map((a) => a.name).join(" · ") + (top.length > 3 ? ` +${top.length - 3}` : "") : "Nothing tracked here",
-    detail: `${clock(v.arrived_at, tz)} – ${v.departed_at ? clock(v.departed_at, tz) : "now"} · ${span(end - start)}`,
+    title: top.length ? top.slice(0, 3).map((a) => a.name).join(" · ") + (top.length > 3 ? ` +${top.length - 3}` : "") : "Nothing tracked here today",
+    detail:
+      group.length === 1
+        ? `${clock(v.arrived_at, tz)} – ${v.departed_at ? clock(v.departed_at, tz) : "now"} · ${span(total)}`
+        : `${group.length} times today · ${span(total)} in all`,
   };
+}
+
+// Every stop today at the same place as this one (by its saved place; unnamed ones by name and
+// being right next to each other), so hovering one shows all your time there.
+function samePlace(visits: Visit[], v: Visit): Visit[] {
+  const name = v.place ?? v.auto_name;
+  const near = (a: Visit) => Math.hypot((a.lat - v.lat) * 111_000, (a.lng - v.lng) * 111_000 * Math.cos((v.lat * Math.PI) / 180)) < 80;
+  return visits.filter((a) => a.id === v.id || (v.placeId ? a.placeId === v.placeId : name != null && (a.place ?? a.auto_name) === name && near(a)));
 }
 
 // The little speech bubble by the pointer: everything under it (overlapping paths all listed).
