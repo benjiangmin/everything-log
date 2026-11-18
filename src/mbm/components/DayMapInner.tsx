@@ -721,10 +721,25 @@ async function walkingRoute(a: Spot, b: Spot): Promise<Spot[] | null> {
   }
 }
 
-// A trip: solid mocha where the phone recorded the way, dashed where it missed a bit. Lit = the
-// hovered stretch (thicker, caramel); faded = the rest of the day while hovering.
+// A trip: solid mocha where the phone recorded the way, dashed only where the way is really a
+// guess. Lit = the hovered stretch (thicker, caramel); faded = the rest of the day while hovering.
 function TripLine({ pieces, lit, faded }: { pieces: Piece[]; lit: boolean; faded: boolean }) {
-  return pieces.map((p, i) => <Route key={i} path={p.path} dashed={p.missing} lit={lit} faded={faded} />);
+  return pieces.map((p, i) => <Route key={i} path={p.path} dashed={p.missing && !plainly(p.path)} lit={lit} faded={faded} />);
+}
+
+// A bit the phone missed, but where there's no real doubt which way you went (a wait at a bus
+// stop, a few blocks along one street): drawn solid like the rest. It counts as plain when it's
+// short (150 m or less), or when the way filled in for it is under a kilometre and barely longer
+// than a straight line (one obvious route, no turns to guess). Anything longer or twistier stays
+// dashed.
+function plainly(path: Spot[]): boolean {
+  if (path.length < 2) return true;
+  const straight = metres(path[0], path[path.length - 1]);
+  if (straight <= 150) return true;
+  if (path.length === 2) return false; // (a straight line drawn for want of anything better)
+  let along = 0;
+  for (let i = 1; i < path.length; i++) along += metres(path[i - 1], path[i]);
+  return along <= 1000 && along <= straight * 1.3 + 40;
 }
 
 function Route({ path, dashed, lit, faded }: { path: Spot[]; dashed: boolean; lit: boolean; faded: boolean }) {
