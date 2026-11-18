@@ -5,6 +5,7 @@ import { buildingAt } from "@/mbm/buildings";
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { headers } from "next/headers";
 import { mbm, mbmReady } from "@/mbm/supabase";
 import { getDay, getNowInfo, mbmTz, type Day, type LockedTrip, type NowInfo } from "@/mbm/data";
 import { PALETTE } from "@/mbm/colors";
@@ -24,7 +25,7 @@ function refresh() {
 
 // ---------- Signing in ----------
 
-export type SignInState = { message: string | null };
+export type SignInState = { message: string | null; sent?: boolean };
 
 export async function signIn(_prev: SignInState, formData: FormData): Promise<SignInState> {
   if (!mbmReady()) return { message: "Minute by Minute isn't connected yet (MBM_SUPABASE_URL / MBM_SUPABASE_PUBLISHABLE_KEY)." };
@@ -35,6 +36,21 @@ export async function signIn(_prev: SignInState, formData: FormData): Promise<Si
   if (error) return { message: error.message === "Invalid login credentials" ? "That email and password don't match." : error.message };
   const next = String(formData.get("next") ?? "");
   redirect(next.startsWith("/") && !next.startsWith("//") ? next : "/mbm");
+}
+
+// A new account. If the project asks people to confirm their email first, there's no session
+// yet: say so (the link in the email brings them back to sign in).
+export async function signUp(_prev: SignInState, formData: FormData): Promise<SignInState> {
+  if (!mbmReady()) return { message: "Minute by Minute isn't connected yet (MBM_SUPABASE_URL / MBM_SUPABASE_PUBLISHABLE_KEY)." };
+  const email = String(formData.get("email") ?? "").trim().slice(0, 200);
+  const password = String(formData.get("password") ?? "").slice(0, 200);
+  if (!email || !password) return { message: "Email and password, please." };
+  if (password.length < 8) return { message: "Pick a password with at least 8 characters." };
+  const origin = (await headers()).get("origin") ?? "";
+  const { data, error } = await (await mbm()).auth.signUp({ email, password, options: { emailRedirectTo: origin ? `${origin}/mbm/login` : undefined } });
+  if (error) return { message: /registered/i.test(error.message) ? "There's already an account with that email. Sign in instead." : error.message };
+  if (!data.session) return { message: null, sent: true };
+  redirect("/mbm");
 }
 
 export async function signOut() {

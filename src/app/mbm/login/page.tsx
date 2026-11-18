@@ -8,7 +8,7 @@ export default function MbmLoginPage(props: PageProps<"/mbm/login">) {
     <main className="grid min-h-dvh place-items-center px-4">
       <div className="w-full max-w-sm rounded-card bg-surface p-6 sm:p-8">
         <h1 className="font-display text-2xl font-semibold tracking-tight">Minute by Minute</h1>
-        <p className="mt-1 text-sm text-muted">Sign in to see your days.</p>
+        <p className="mt-1 text-sm text-muted">Your days, minute by minute. One account for the website and the phone app.</p>
         <Suspense fallback={<div className="mt-6 h-48" />}>
           {props.searchParams.then((p) => (
             <LoginForm next={typeof p.next === "string" ? p.next : "/mbm"} />
