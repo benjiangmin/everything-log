@@ -32,8 +32,8 @@ export function PageHeader({
   title: string;
   sticky?: boolean; // stays at the top while you scroll (the home page)
   back?: { href: string; label: string };
-  editing: boolean;
-  onToggle: () => void;
+  editing?: boolean;
+  onToggle?: () => void; // (no Edit button without it)
   description?: string | null;
   onDescription?: (next: string) => void;
 }) {
@@ -70,6 +70,7 @@ export function PageHeader({
               description && <p className="mt-0.5 text-sm opacity-75">{description}</p>
             )}
           </div>
+          {onToggle && (
           <button
             type="button"
             onClick={onToggle}
@@ -81,6 +82,7 @@ export function PageHeader({
           >
             {editing ? "Done" : "Edit"}
           </button>
+          )}
         </header>
       </div>
     </>

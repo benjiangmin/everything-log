@@ -312,3 +312,9 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .env-shake, .env-in, .seal-pop, .flap-open, .paper-rise, .env-away, .letter-reveal, .letter-glow { animation: none; }
 }
+
+/* The home page's two screens (Home, Documents): scrolling snaps to one or the other. Inside a
+   long Documents screen you still scroll freely. */
+html.home-snap {
+  scroll-snap-type: y mandatory;
+}

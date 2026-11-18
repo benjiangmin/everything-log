@@ -94,7 +94,7 @@ export default function CategoryGrid({
     <>
       <PageHeader
         sticky
-        title="Home"
+        title="Documents"
         editing={editing}
         onToggle={() => setEditing((e) => !e)}
         description={description}
@@ -110,7 +110,7 @@ export default function CategoryGrid({
           <Empty>No categories yet. Press Edit to add one.</Empty>
         ) : (
           <SectionBoard
-            stickyTop="calc(var(--home-bar-h, 0px) + var(--home-todo-h, 0px))"
+            stickyTop="var(--home-bar-h, 0px)"
             dndId="home-categories"
             groups={groups}
             editing={editing}

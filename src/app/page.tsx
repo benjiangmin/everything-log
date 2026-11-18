@@ -1,37 +1,47 @@
-import { Suspense, type ReactNode } from "react";
+import { Suspense } from "react";
 import { connection } from "next/server";
 import { getCategories, getHomeLayout } from "@/lib/home";
 import { getAlertCategoryIds, getAlertHrefs } from "@/lib/alerts";
 import CategoryGrid from "@/components/home/CategoryGrid";
 import HomeGreeting from "@/components/home/HomeGreeting";
+import HomeScreens from "@/components/home/HomeScreens";
+import { PageHeader } from "@/components/home/bits";
 import HomeMbm from "@/mbm/components/HomeMbm";
 import TodoBox from "@/components/home/TodoBox";
 import { getTodos } from "@/lib/todos";
 
-// Home: a greeting and the clock, the Home bar (sticks to the top), Minute by Minute, your todo
-// list (sticks under the Home bar), then your categories. The layout lives in Supabase (supabase/home.sql), and you change it
-// from the page itself with the Edit button.
+// Home: two screens you snap between.
+//   Home: a greeting and the clock, the Home bar, Minute by Minute, your todo list.
+//   Documents: the Documents bar (Edit lives here; it sticks to the top) and your categories.
+// The layout lives in Supabase (supabase/home.sql); change it from the page with Edit.
 export default function Home() {
   return (
-    <main className="mx-auto w-full max-w-4xl px-4 pb-24 pt-8 sm:pt-14">
-      <HomeGreeting />
-      <Suspense fallback={<Skeleton />}>
-        <Categories>
-          {/* Minute by Minute (its own app, see src/mbm): what you're doing now + today's bar. */}
-          <Suspense fallback={<div className="mt-6 h-40 animate-pulse rounded-card border-2 border-ink/15" />}>
-            <HomeMbm />
+    <main className="mx-auto w-full max-w-4xl px-4">
+      <HomeScreens
+        home={
+          <>
+            <HomeGreeting />
+            <PageHeader title="Home" />
+            {/* Minute by Minute (its own app, see src/mbm): what you're doing now + today's bar. */}
+            <Suspense fallback={<div className="mt-6 h-40 animate-pulse rounded-card border-2 border-ink/15" />}>
+              <HomeMbm />
+            </Suspense>
+            <Suspense fallback={<div className="mt-6 h-28 animate-pulse rounded-card border-2 border-ink/15" />}>
+              <Todos />
+            </Suspense>
+          </>
+        }
+        documents={
+          <Suspense fallback={<Skeleton />}>
+            <Categories />
           </Suspense>
-          {/* The todo list: sticks under the Home bar. */}
-          <Suspense fallback={<div className="mt-6 h-28 animate-pulse rounded-card border-2 border-ink/15" />}>
-            <Todos />
-          </Suspense>
-        </Categories>
-      </Suspense>
+        }
+      />
     </main>
   );
 }
 
-async function Categories({ children }: { children: ReactNode }) {
+async function Categories() {
   await connection(); // always fresh, never a cached copy
   const [categories, layout, alerts] = await Promise.all([
     getCategories(),
@@ -39,9 +49,7 @@ async function Categories({ children }: { children: ReactNode }) {
     getAlertHrefs().then(getAlertCategoryIds).catch(() => []),
   ]);
   return (
-    <CategoryGrid categories={categories} sections={layout.sections} description={layout.description} alerts={alerts}>
-      {children}
-    </CategoryGrid>
+    <CategoryGrid categories={categories} sections={layout.sections} description={layout.description} alerts={alerts} />
   );
 }
 

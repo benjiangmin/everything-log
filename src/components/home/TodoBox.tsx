@@ -2,7 +2,6 @@
 
 import { useEffect, useLayoutEffect, useRef, useState, useTransition } from "react";
 import { addTodo, deleteTodo, editTodo, setTodoDone } from "@/app/todo-actions";
-import { useUnderBarShadow } from "./sticky";
 
 // The home page's todo list, under Minute by Minute, like the iPhone's Reminders: round check
 // circles, hairlines between, "+ New todo" at the bottom. Sticks under the Home bar as you scroll.
@@ -33,7 +32,6 @@ const isEmpty = (html: string) => !html.replace(/<br\s*\/?>/gi, "").replace(/<[^
 
 export default function TodoBox({ initial }: { initial: TodoItem[] | "missing" }) {
   const box = useRef<HTMLDivElement>(null);
-  const stuck = useUnderBarShadow(box);
   const [items, setItems] = useState<TodoItem[]>(initial === "missing" ? [] : sorted(initial));
   const [focusId, setFocusId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -57,20 +55,6 @@ export default function TodoBox({ initial }: { initial: TodoItem[] | "missing" }
   const [fade, setFade] = useState<string | null>(null);
   useEffect(() => setFade(edges(list.current)), [items]);
 
-  // How tall the box is, so the home page's subcategory titles stick right under it.
-  useEffect(() => {
-    const el = box.current;
-    if (!el) return;
-    const root = document.documentElement;
-    const measure = () => root.style.setProperty("--home-todo-h", `${el.offsetHeight}px`);
-    measure();
-    const ro = new ResizeObserver(measure);
-    ro.observe(el);
-    return () => {
-      ro.disconnect();
-      root.style.removeProperty("--home-todo-h");
-    };
-  }, []);
 
   // A new, empty todo after `after` (or at the end), ready to type in. It's only saved once it
   // has something in it.
@@ -113,13 +97,12 @@ export default function TodoBox({ initial }: { initial: TodoItem[] | "missing" }
   }
 
   return (
-    // The paper above it covers the gap under the Home bar while it's stuck.
-    <div ref={box} data-under-bar className="sticky z-30 -mx-3 mt-3 bg-paper px-3 pt-3" style={{ top: "var(--home-bar-h, 0px)" }}>
+    <div ref={box} className="mt-6">
       {/* A sheet of paper lifted off the page (the other boxes are outlined or oat), with a dark
           strip for its title, so it doesn't read as one more bar. */}
       <section
         aria-label="Todo"
-        className={`overflow-hidden rounded-card bg-paper ring-1 ring-ink/10 transition-shadow ${stuck ? "shadow-xl shadow-ink/25" : "shadow-md shadow-ink/10"}`}
+        className={`overflow-hidden rounded-card bg-paper ring-1 ring-ink/10 shadow-md shadow-ink/10`}
       >
         <div className="flex items-center gap-2.5 bg-surface px-4 py-2.5 text-ink sm:px-5">
           <svg width="17" height="17" viewBox="0 0 24 24" fill="none" aria-hidden="true">
