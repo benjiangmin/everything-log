@@ -229,22 +229,14 @@ export default function AheadView({
         <Stat label="Left over" value={`${yrs(Math.max(0, left - taken))} years`} note="after everything below" onHover={(on) => setHover(on ? "all" : null)} />
       </div>
 
-      {/* What the estimate is built from. */}
-      <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">
-        <span className="rounded-full bg-surface px-3 py-1 text-muted">
-          Life table: <span className="font-semibold text-ink">{who || "everyone in the U.S."}</span> · <span className="num">{yrs(base)}</span> years left
-        </span>
-        {adj.map((a) => (
-          <span key={a.label} className="rounded-full bg-surface px-3 py-1 text-muted">
-            {a.label} <span className={`num font-semibold ${a.years >= 0 ? "text-[#4f6b45]" : "text-danger"}`}>{a.years >= 0 ? "+" : "−"}{Math.abs(a.years).toFixed(1)}</span>
-          </span>
-        ))}
-        {missing.length > 0 && (
-          <button type="button" onClick={() => setEditing(true)} className="rounded-full border border-dashed border-line px-3 py-1 font-semibold text-muted hover:border-ink/40 hover:text-ink">
+      {/* Only when something's missing: a nudge to answer it. */}
+      {missing.length > 0 && (
+        <div className="mt-3">
+          <button type="button" onClick={() => setEditing(true)} className="rounded-full border border-dashed border-line px-3 py-1 text-sm font-semibold text-muted hover:border-ink/40 hover:text-ink">
             + Add your {missing.join(", ")} for a closer estimate
           </button>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* Where it goes. */}
       <div className="mt-6 rounded-card border border-line bg-paper p-6">

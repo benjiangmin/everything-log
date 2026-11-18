@@ -258,6 +258,26 @@ body {
 .panel-slide-left {
   animation: panel-slide-left 320ms cubic-bezier(0.22, 1, 0.36, 1);
 }
+/* The day's box (expanded and over the map): dark brown, with light text and controls. The
+   bar's own track keeps the normal colours (.keep-light), so the day still reads the same. */
+.on-brown {
+  --ink: #faf6f0;
+  --muted: #cdb9a5;
+  --surface: #54392a;
+  --line: #5e4433;
+  background: var(--accent);
+  color: var(--ink);
+  /* (The bar's hover bubbles: light here, so they stand out from the brown.) */
+  --bubble-bg: #faf6f0;
+  --bubble-ink: #2b1c14;
+}
+.on-brown .keep-light {
+  --ink: #2b1c14;
+  --muted: #86705f;
+  --surface: #f0e7db;
+  --line: #e2d5c4;
+}
+
 /* One question at a time (Future page setup): the next slides in. */
 @keyframes step-in-fwd {
   from { transform: translateX(48px); opacity: 0; }

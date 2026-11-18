@@ -11,7 +11,7 @@ import { retimeBlocks } from "@/app/mbm/actions";
 // Hover an entry for what it was; click it to change it; drag either end of it to change its
 // times (it snaps to round times, and to the entries next to it).
 // On the day page (not compact) you can zoom in: pinch or Ctrl+scroll over the bar, or the − / +
-// buttons. (The track is the dark brown, so the day reads as light blocks on it.) Drag (or scroll sideways) to move around. The time marks get finer as you zoom.
+// buttons. Drag (or scroll sideways) to move around. The time marks get finer as you zoom.
 export default function DayBar({
   placed,
   gaps,
@@ -346,7 +346,7 @@ export default function DayBar({
       {edge && (
         <div
           aria-live="polite"
-          className="num pointer-events-none absolute bottom-full z-40 mb-2 -translate-x-1/2 whitespace-nowrap rounded-control bg-accent px-2.5 py-1 text-xs font-semibold text-accent-ink shadow-lg"
+          className="num pointer-events-none absolute bottom-full z-40 mb-2 -translate-x-1/2 whitespace-nowrap rounded-control bg-[var(--bubble-bg,var(--accent))] px-2.5 py-1 text-xs font-semibold text-[var(--bubble-ink,var(--accent-ink))] shadow-lg"
           style={{ left: `${Math.min(95, Math.max(5, at(edge.at)))}%` }}
         >
           {edge.side === "start" ? "Starts" : "Ends"} {clock(new Date(edge.at), tz)}
@@ -358,7 +358,7 @@ export default function DayBar({
       {hover && !edge && (
         <div
           role="tooltip"
-          className={`pointer-events-none absolute z-30 w-max min-w-[11rem] max-w-[20rem] ${pos ? "" : below ? "top-full mt-7" : "bottom-full mb-7"} rounded-card bg-accent px-4 py-3 text-accent-ink shadow-xl shadow-ink/30`}
+          className={`pointer-events-none absolute z-30 w-max min-w-[11rem] max-w-[20rem] ${pos ? "" : below ? "top-full mt-7" : "bottom-full mb-7"} rounded-card bg-[var(--bubble-bg,var(--accent))] px-4 py-3 text-[var(--bubble-ink,var(--accent-ink))] shadow-xl shadow-black/30`}
           style={{ left: `${hoverMid}%`, transform: `translateX(-${slide}%)`, ...pos?.bubble }}
         >
           {hover.phone ? (
@@ -397,12 +397,12 @@ export default function DayBar({
         <>
           <span
             aria-hidden="true"
-            className={`pointer-events-none absolute z-30 w-[2px] -translate-x-1/2 bg-accent ${pos ? "" : below ? "top-full h-7" : "bottom-full h-7"}`}
+            className={`pointer-events-none absolute z-30 w-[2px] -translate-x-1/2 bg-[var(--bubble-bg,var(--accent))] ${pos ? "" : below ? "top-full h-7" : "bottom-full h-7"}`}
             style={{ left: `${hoverMid}%`, ...pos?.line }}
           />
           <span
             aria-hidden="true"
-            className={`pointer-events-none absolute z-30 size-2.5 -translate-x-1/2 rounded-full bg-accent ring-2 ring-paper ${pos ? "-translate-y-1/2" : below ? "top-full -translate-y-1/2" : "bottom-full translate-y-1/2"}`}
+            className={`pointer-events-none absolute z-30 size-2.5 -translate-x-1/2 rounded-full bg-[var(--bubble-bg,var(--accent))] ring-2 ring-paper ${pos ? "-translate-y-1/2" : below ? "top-full -translate-y-1/2" : "bottom-full translate-y-1/2"}`}
             style={{ left: `${hoverMid}%`, ...pos?.dot }}
           />
         </>
@@ -410,7 +410,7 @@ export default function DayBar({
 
       <div
         ref={barRef}
-        className={`relative overflow-hidden rounded-control bg-accent ring-1 ring-accent ${zoomed ? "cursor-grab touch-pan-y active:cursor-grabbing" : ""}`}
+        className={`keep-light relative overflow-hidden rounded-control bg-paper ring-1 ring-line ${zoomed ? "cursor-grab touch-pan-y active:cursor-grabbing" : ""}`}
         style={{ height, transition: "height 250ms cubic-bezier(0.22,1,0.36,1)" }}
         onMouseLeave={() => setHover(null)}
         onPointerDown={onPointerDown}
@@ -447,7 +447,7 @@ export default function DayBar({
             <div key={g.start} aria-hidden="true" onMouseEnter={() => setHover(g)} className={cls} style={style} />
           );
         })}
-        {now < dayEnd && <div className="absolute inset-y-0 right-0 bg-accent" style={{ left: `${Math.max(0, at(now))}%` }} />}
+        {now < dayEnd && <div className="absolute inset-y-0 right-0 bg-paper" style={{ left: `${Math.max(0, at(now))}%` }} />}
         {main.map((p) => entry(p, { ...pill(p.start, p.end), top: 0, bottom: 0 }, "rounded-[9px]", resizable))}
         {/* While dragging an edge: a line where it'll go. */}
         {edge && <div aria-hidden="true" className="pointer-events-none absolute inset-y-0 z-30 w-0.5 -translate-x-1/2 bg-ink" style={{ left: `${at(edge.at)}%` }} />}
@@ -470,7 +470,7 @@ export default function DayBar({
             />
           );
         })}
-        {showNow && <div aria-hidden="true" className="pointer-events-none absolute inset-y-0 z-20 w-0.5 -translate-x-1/2 bg-paper" style={{ left: `${at(now)}%` }} />}
+        {showNow && <div aria-hidden="true" className="pointer-events-none absolute inset-y-0 z-20 w-0.5 -translate-x-1/2 bg-ink" style={{ left: `${at(now)}%` }} />}
         </div>
       </div>
 

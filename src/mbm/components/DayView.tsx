@@ -82,7 +82,7 @@ export default function DayView({
       onClick={() => setMapMode((v) => !v)}
       aria-label={mapMode ? "Back to the day box" : "Make the map bigger"}
       title={mapMode ? "Smaller map" : "Bigger map"}
-      className={`grid size-8 shrink-0 place-items-center rounded-full bg-paper text-muted transition-colors hover:bg-surface hover:text-ink ${
+      className={`grid size-8 shrink-0 place-items-center rounded-full bg-surface text-muted transition-colors hover:text-ink ${
         onBorder ? "absolute -top-4 right-6 z-10 ring-[1.5px] ring-ink" : "ring-1 ring-line"
       }`}
     >
@@ -108,7 +108,7 @@ export default function DayView({
       )}
 
       {mapMode ? null : (
-        <section aria-label="The day" className="relative mb-4 shrink-0 rounded-card border-[1.5px] border-ink px-4 pb-4 pt-4 sm:px-6 sm:pb-5">
+        <section aria-label="The day" className="on-brown relative mb-4 shrink-0 rounded-card px-4 pb-4 pt-4 shadow-lg shadow-ink/15 sm:px-6 sm:pb-5">
           {toggle(true)}
           <h2 className="mb-4 font-display text-lg font-semibold">The day</h2>
           {bar}
@@ -130,7 +130,7 @@ export default function DayView({
           <div className="pointer-events-none absolute inset-x-3 top-3 z-20 sm:inset-x-5 sm:top-5">
             <section
               aria-label="The day"
-              className="pointer-events-auto rounded-card bg-paper/85 px-4 pb-3 pt-3 shadow-xl shadow-ink/15 ring-1 ring-ink/10 backdrop-blur-md sm:px-5"
+              className="on-brown pointer-events-auto rounded-card px-4 pb-3 pt-3 shadow-xl shadow-ink/25 sm:px-5"
             >
               <div className="mb-2.5 flex items-center gap-3">
                 <h1 className="min-w-0 flex-1 truncate font-display text-lg font-semibold tracking-tight">
