@@ -14,24 +14,26 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 export const googleReady = () => Boolean(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET);
 
-const SCOPES = ["openid", "email", "https://www.googleapis.com/auth/calendar.readonly"];
+const CALENDAR = "https://www.googleapis.com/auth/calendar.readonly";
+const SCOPES = ["openid", "email", CALENDAR];
 export const redirectUri = (origin: string) => `${origin}/mbm/google/callback`;
 
-export function consentUrl(origin: string, state: string) {
+// Connecting the calendar (signed in already), or signing in with Google (calendar optional:
+// `calendar` false asks for just who you are).
+export function consentUrl(origin: string, state: string, { calendar = true }: { calendar?: boolean } = {}) {
   const q = new URLSearchParams({
     client_id: process.env.GOOGLE_CLIENT_ID!,
     redirect_uri: redirectUri(origin),
     response_type: "code",
-    scope: SCOPES.join(" "),
-    access_type: "offline", // (a refresh token, so it keeps working)
-    prompt: "consent",
+    scope: (calendar ? SCOPES : ["openid", "email"]).join(" "),
+    ...(calendar ? { access_type: "offline", prompt: "consent" } : { prompt: "select_account" }), // (offline: a refresh token, so it keeps working)
     include_granted_scopes: "true",
     state,
   });
   return `https://accounts.google.com/o/oauth2/v2/auth?${q}`;
 }
 
-type TokenAnswer = { access_token?: string; refresh_token?: string; expires_in?: number; id_token?: string; error?: string; error_description?: string };
+type TokenAnswer = { access_token?: string; refresh_token?: string; expires_in?: number; id_token?: string; scope?: string; error?: string; error_description?: string };
 
 async function tokenRequest(body: Record<string, string>): Promise<TokenAnswer> {
   const res = await fetch("https://oauth2.googleapis.com/token", {
@@ -44,9 +46,18 @@ async function tokenRequest(body: Record<string, string>): Promise<TokenAnswer> 
   return (await res.json().catch(() => ({ error: `HTTP ${res.status}` }))) as TokenAnswer;
 }
 
+// After "Allow": the code swapped for tokens.
+export async function exchangeCode(origin: string, code: string) {
+  return tokenRequest({ code, grant_type: "authorization_code", redirect_uri: redirectUri(origin) });
+}
+export const grantedCalendar = (t: TokenAnswer & { scope?: string }) => (t.scope ?? "").split(" ").includes(CALENDAR);
+
 // After "Allow": swaps the code for tokens and saves them (yours only: row level security).
 export async function finishConnect(client: SupabaseClient, origin: string, code: string): Promise<string | null> {
-  const t = await tokenRequest({ code, grant_type: "authorization_code", redirect_uri: redirectUri(origin) });
+  return saveTokens(client, await exchangeCode(origin, code));
+}
+
+export async function saveTokens(client: SupabaseClient, t: TokenAnswer): Promise<string | null> {
   if (!t.access_token) return t.error_description ?? t.error ?? "Google didn't say yes.";
   let email: string | null = null;
   try {

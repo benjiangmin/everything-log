@@ -11,7 +11,7 @@ export default function MbmLoginPage(props: PageProps<"/mbm/login">) {
         <p className="mt-1 text-sm text-muted">Your days, minute by minute. One account for the website and the phone app.</p>
         <Suspense fallback={<div className="mt-6 h-48" />}>
           {props.searchParams.then((p) => (
-            <LoginForm next={typeof p.next === "string" ? p.next : "/mbm"} />
+            <LoginForm next={typeof p.next === "string" ? p.next : "/mbm"} google={typeof p.google === "string" ? p.google : null} />
           ))}
         </Suspense>
       </div>

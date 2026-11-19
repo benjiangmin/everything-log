@@ -9,7 +9,15 @@ import Avatar from "./Avatar";
 
 const field = "w-full rounded-control border border-line bg-paper px-3 py-2.5 text-ink focus:border-ink";
 
-export default function AccountView({ email, profile }: { email: string | null; profile: (Profile & { avatar?: string | null }) | null }) {
+export default function AccountView({
+  email,
+  profile,
+  connections,
+}: {
+  email: string | null;
+  profile: (Profile & { avatar?: string | null }) | null;
+  connections?: ReactNode;
+}) {
   const router = useRouter();
   return (
     <div>
@@ -17,6 +25,11 @@ export default function AccountView({ email, profile }: { email: string | null; 
       <Section id="about" title="About you" note="Used on the Future page, to pick the right life table. All optional.">
         <AboutYouForm profile={profile} />
       </Section>
+      {connections && (
+        <Section title="Connected">
+          <div className="-m-1 [&>*]:mt-0">{connections}</div>
+        </Section>
+      )}
       <Section title="Sign-in">
         <EmailForm email={email} />
         <div className="my-6 h-px bg-line" />

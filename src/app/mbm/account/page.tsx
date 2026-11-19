@@ -4,6 +4,8 @@ import { redirect } from "next/navigation";
 import { mbm, mbmReady, mbmUser } from "@/mbm/supabase";
 import type { Profile } from "@/mbm/life";
 import AccountView from "@/mbm/components/AccountView";
+import GoogleCard from "@/mbm/components/GoogleCard";
+import { googleStatus } from "@/mbm/google";
 
 export const metadata = { title: "Your account" };
 
@@ -28,5 +30,6 @@ async function Account() {
   let res = await client.from("profiles").select("name, birthday, sex, race, state, education, smoking, exercise, avatar, skipped").maybeSingle();
   if (res.error) res = await client.from("profiles").select("name, birthday, sex, race, state, skipped").maybeSingle();
   const profile = (res.data as (Profile & { avatar?: string | null }) | null) ?? null;
-  return <AccountView email={user.email} profile={profile} />;
+  const google = await googleStatus(client).catch(() => null);
+  return <AccountView email={user.email} profile={profile} connections={<GoogleCard status={google} />} />;
 }

@@ -52,7 +52,12 @@ async function Home({ day: asked, google }: { day?: string; google?: string }) {
       />
       <PhoneNote phone={await linkedPhone()} now={+new Date(day.loadedAt)} />
       <MbmHome day={day} renderedAt={day.loadedAt} />
-      <GoogleCard status={await googleStatus(await mbm()).catch(() => null)} note={google} />
+      {/* Connecting things lives on the home page until it's done (then: Your account). Just
+          connected: shown once more, so you see it worked. */}
+      {await (async () => {
+        const status = await googleStatus(await mbm()).catch(() => null);
+        return !status?.connected || google === "connected" ? <GoogleCard status={status} note={google} /> : null;
+      })()}
       <FutureNote client={await mbm()} />
     </>
   );

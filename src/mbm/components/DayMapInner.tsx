@@ -154,7 +154,7 @@ export default function DayMapInner({
 
   return (
     <div ref={box} className="relative size-full" onMouseLeave={() => pointed && point(null)}>
-    {all.length > 1 && <WholeDay onClick={() => setRefit((n) => n + 1)} />}
+    {all.length > 0 && <WholeDay onClick={() => setRefit((n) => n + 1)} />}
     <APIProvider apiKey={KEY}>
       <Map
         styles={stylesFor(zoom)}

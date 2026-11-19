@@ -3,11 +3,9 @@
 import { useState, useTransition, type ReactNode } from "react";
 import { setPinned } from "@/app/mbm/actions";
 import type { Range, Stats } from "@/mbm/stats";
-import { clock, dayKeyOf } from "@/mbm/time";
-import { openMbm } from "./open";
 
 // The numbers for a day / week / month / year: totals up top, then time per activity (with a
-// search: "time spent on …"), time per app, and the untracked stretches.
+// search: "time spent on …") and time per app.
 
 const hm = (seconds: number) => {
   const mins = Math.round(seconds / 60);
@@ -24,9 +22,6 @@ const LIST = 8; // shown before "Show all"
 
 export default function StatsView({
   stats,
-  range,
-  tz,
-  dayKey,
   isNow,
   query = "",
   pins = null,
@@ -60,8 +55,7 @@ export default function StatsView({
         <Apps apps={stats.apps} />
       </div>
 
-      {/* (Only for a day: over a week or more, the longest stretches weren't much use.) */}
-      {range === "day" && <Unmarked gaps={stats.gaps} range={range} tz={tz} dayKey={dayKey} />}
+      {/* (No list of unmarked stretches any more: the bar shows them, and the Day page fills them in.) */}
     </div>
   );
 }
@@ -371,39 +365,3 @@ function Apps({ apps }: { apps: Stats["apps"] }) {
   );
 }
 
-// Untracked stretches. A day: all of them, in order, each one clickable to fill in. Longer: the
-// longest few, with their dates.
-function Unmarked({ gaps, range, tz, dayKey }: { gaps: Stats["gaps"]; range: Range; tz: string; dayKey: string }) {
-  const len = (g: Stats["gaps"][number]) => +new Date(g.end) - +new Date(g.start);
-  const list = range === "day" ? gaps : [...gaps].sort((a, b) => len(b) - len(a)).slice(0, LIST);
-  const date = (at: string) => new Date(at).toLocaleDateString("en-US", { timeZone: tz, weekday: "short", month: "short", day: "numeric" });
-  return (
-    <Card title={range === "day" ? "Unmarked stretches" : "Longest unmarked stretches"} aside={<span className="text-xs text-muted">10 minutes or longer</span>}>
-      {list.length === 0 ? (
-        <p className="text-sm text-muted">Every minute is accounted for.</p>
-      ) : (
-        <ul className="divide-y divide-line">
-          {list.map((g) => (
-            <li key={g.start} className="flex items-center gap-3 py-2 text-sm">
-              {range !== "day" && <span className="w-28 shrink-0 text-muted">{date(g.start)}</span>}
-              <span className="num flex-1">
-                {clock(g.start, tz)} – {clock(g.end, tz)}
-                {range !== "day" && dayKeyOf(new Date(g.start), tz) !== dayKeyOf(new Date(g.end), tz) && <span className="text-muted"> (next day)</span>}
-              </span>
-              <span className="num font-semibold">{hm(len(g) / 1000)}</span>
-              {range === "day" && (
-                <button
-                  type="button"
-                  onClick={() => openMbm({ kind: "add", dayKey, from: +new Date(g.start), to: +new Date(g.end) })}
-                  className="rounded-control px-2 py-1 text-xs text-muted ring-1 ring-line transition-colors hover:bg-surface hover:text-ink"
-                >
-                  Fill in
-                </button>
-              )}
-            </li>
-          ))}
-        </ul>
-      )}
-    </Card>
-  );
-}
