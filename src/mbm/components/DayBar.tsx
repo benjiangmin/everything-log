@@ -33,10 +33,12 @@ export default function DayBar({
   compact = false,
   slim = false,
   plans = [],
+  onTuck,
   onSelectPlan,
   onHoverPlan,
 }: {
   plans?: DayPlan[];
+  onTuck?: (b: Block) => Promise<string | null>; // (a problem, or null) a sandwiched entry (Work, Coffee, Work): under one joined Work
   onSelectPlan?: (p: DayPlan) => void; // click: change it on the Plan tab
   onHoverPlan?: (p: DayPlan | null) => void; // hover: where it is, on the map
   placed: Placed[];
@@ -250,6 +252,19 @@ export default function DayBar({
   const shownPlans = plans.filter((p) => p.end > now && p.start < dayEnd && p.end > from && p.start < to);
   const main = shownPlaced.filter((p) => p.lane === 0);
   const side = shownPlaced.filter((p) => p.lane > 0);
+  // Sandwiched: the same job right before and after it (5 minutes apart or less), and it's
+  // neither that job nor a Commute. Hovering it shows a ↓ to put it under them, joined.
+  const GAP = 5 * 60_000;
+  const sandwich = new Map<string, Block>(); // middle's id → the entry before it
+  main.forEach((p, i) => {
+    const b = main[i - 1];
+    const a = main[i + 1];
+    if (!b || !a || !p.block.ended_at || p.block.source === "location") return;
+    const job = b.block.activity_id;
+    if (!job || job !== a.block.activity_id || job === p.block.activity_id) return;
+    if (p.start - b.end > GAP || a.start - p.end > GAP) return;
+    sandwich.set(p.block.id, b.block);
+  });
   const sideRows = Math.max(0, ...side.map((p) => p.lane));
   // Left / width of a pill, with a 1px gap each side. Something too short to see (a 2-minute
   // Commute on the whole day) becomes a small chip centred on its time, so it's still there.
@@ -396,6 +411,9 @@ export default function DayBar({
                 {span((hover.block.ended_at ? +new Date(hover.block.ended_at) : now) - +new Date(hover.block.started_at))}
               </p>
               {hover.block.note && <p className="mt-1 line-clamp-3 text-sm opacity-80">{hover.block.note}</p>}
+              {onTuck && sandwich.has(hover.block.id) && (
+                <p className="mt-1 text-xs opacity-70">↓ Put it under {nameOf(sandwich.get(hover.block.id)!)?.name}, as one {nameOf(sandwich.get(hover.block.id)!)?.name}</p>
+              )}
             </>
           ) : (
             <>
@@ -505,6 +523,33 @@ export default function DayBar({
           );
         })}
         {main.map((p) => entry(p, { ...pill(p.start, p.end), top: 0, bottom: 0 }, "rounded-[9px]", resizable))}
+        {/* The ↓ on a sandwiched entry you're pointing at: under the job either side of it. */}
+        {onTuck &&
+          !edge &&
+          main.map((p) => {
+            const around = hover?.block?.id === p.block.id ? sandwich.get(p.block.id) : undefined;
+            if (!around) return null;
+            const outer = nameOf(around)?.name ?? "the one around it";
+            return (
+              <button
+                key={`tuck-${p.block.id}`}
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setEdgeError(null);
+                  void onTuck(p.block).then((problem) => problem && setEdgeError(problem));
+                }}
+                aria-label={`Put ${nameOf(p.block)?.name ?? "this"} under ${outer}, and join the two ${outer} entries`}
+                title={`Put it under ${outer} (joins the two ${outer} entries)`}
+                className="absolute bottom-1 z-30 grid size-6 -translate-x-1/2 place-items-center rounded-full bg-paper text-ink shadow-md ring-1 ring-ink/20 transition-transform hover:scale-110"
+                style={{ left: `${at((p.start + p.end) / 2)}%` }}
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path d="M12 5v13M6 12l6 6 6-6" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </button>
+            );
+          })}
         {/* While dragging an edge: a line where it'll go. */}
         {edge && <div aria-hidden="true" className="pointer-events-none absolute inset-y-0 z-30 w-0.5 -translate-x-1/2 bg-ink" style={{ left: `${at(edge.at)}%` }} />}
         {/* Faint lines at the time marks. */}

@@ -748,19 +748,19 @@ export async function deletePlan(id: string): Promise<Result> {
 export type JobPrefs = {
   stop_on_commute: boolean | null;
   places: string[] | null; // null: its category's
-  auto_start: boolean | null;
+  start_mode: "always" | "calendar" | "never" | null; // arriving at its places (044)
   weekly_goal_min: number | null;
   hide_from_stats: boolean | null;
 };
-const NEEDS_043 = "Run 043_jobs_and_categories.sql in Supabase first.";
+const NEEDS_043 = "Run 043_jobs_and_categories.sql, then 044_clearer_jobs.sql, in Supabase first.";
 const cleanPrefs = (p: JobPrefs) => ({
   stop_on_commute: typeof p.stop_on_commute === "boolean" ? p.stop_on_commute : null,
   places: Array.isArray(p.places) ? p.places.filter(isUuid).slice(0, 30) : null,
-  auto_start: typeof p.auto_start === "boolean" ? p.auto_start : null,
+  start_mode: p.start_mode === "always" || p.start_mode === "calendar" || p.start_mode === "never" ? p.start_mode : null,
   weekly_goal_min: typeof p.weekly_goal_min === "number" && p.weekly_goal_min >= 1 ? Math.min(10080, Math.round(p.weekly_goal_min)) : null,
   hide_from_stats: typeof p.hide_from_stats === "boolean" ? p.hide_from_stats : null,
 });
-const missing043 = (msg: string) => /categor|stop_on_commute|auto_start|weekly_goal|hide_from_stats|own_color/i.test(msg);
+const missing043 = (msg: string) => /categor|stop_on_commute|start_mode|auto_start|weekly_goal|hide_from_stats|own_color|delete_job|tuck_between/i.test(msg);
 
 export async function saveJob(id: string, input: JobPrefs & { category_id: string | null }): Promise<Result> {
   if (!isUuid(id)) return fail("That job is gone.");
@@ -802,6 +802,32 @@ export async function answerPlan(id: string, start: boolean): Promise<Result> {
   if (typeof id !== "string" || id.length > 300) return fail("That plan is gone.");
   const { error } = await (await mbm()).rpc("answer_plan", { p_id: id, p_start: start });
   if (error) return fail(/answer_plan/.test(error.message) ? NEEDS_043 : error.message);
+  refresh();
+  return { ok: true };
+}
+
+// How many entries a job has (for the delete box).
+export async function jobEntryCount(id: string): Promise<number> {
+  if (!isUuid(id)) return 0;
+  const { count } = await (await mbm()).from("blocks").select("id", { count: "exact", head: true }).eq("activity_id", id);
+  return count ?? 0;
+}
+
+// Delete a job: its entries move to another job, or (moveTo null) go with it.
+export async function deleteJob(id: string, moveTo: string | null): Promise<Result> {
+  if (!isUuid(id) || (moveTo !== null && !isUuid(moveTo))) return fail("That job is gone.");
+  const { error } = await (await mbm()).rpc("delete_job", { p_id: id, p_move_to: moveTo });
+  if (error) return fail(missing043(error.message) ? NEEDS_043 : error.message);
+  refresh();
+  return { ok: true };
+}
+
+// Work, Coffee, Work back to back: one Work, with Coffee under it.
+export async function tuckBetween(blockId: string): Promise<Result> {
+  if (!isUuid(blockId)) return fail("That entry is gone.");
+  const { data, error } = await (await mbm()).rpc("tuck_between", { p_block: blockId });
+  if (error) return fail(missing043(error.message) ? NEEDS_043 : error.message);
+  if (!data) return fail("There isn't the same job right before and after it any more.");
   refresh();
   return { ok: true };
 }
