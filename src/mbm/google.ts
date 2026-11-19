@@ -15,7 +15,9 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 export const googleReady = () => Boolean(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET);
 
 const CALENDAR = "https://www.googleapis.com/auth/calendar.readonly";
-const SCOPES = ["openid", "email", CALENDAR];
+// (Adding, moving and deleting events from the Plan tab: 041_plan.sql.)
+export const WRITE = "https://www.googleapis.com/auth/calendar.events";
+const SCOPES = ["openid", "email", CALENDAR, WRITE];
 export const redirectUri = (origin: string) => `${origin}/mbm/google/callback`;
 
 // Connecting the calendar (signed in already), or signing in with Google (calendar optional:
@@ -73,6 +75,7 @@ export async function saveTokens(client: SupabaseClient, t: TokenAnswer): Promis
     email,
     connected_at: new Date().toISOString(),
     synced_at: null,
+    ...(t.scope ? { scope: t.scope } : {}),
   });
   if (error) return /google_accounts/.test(error.message) ? "Run supabase/minute-by-minute/030_suggestions.sql first." : error.message;
   await syncCalendar(client, { force: true });
@@ -122,7 +125,7 @@ export async function syncCalendar(client: SupabaseClient, { force = false } = {
   if (!token) return { ok: false, message: "Google sign-in ran out: connect again." };
   const auth = { Authorization: `Bearer ${token}` };
   const from = new Date(Date.now() - 7 * 86400_000);
-  const to = new Date(Date.now() + 2 * 86400_000);
+  const to = new Date(Date.now() + 21 * 86400_000); // (three weeks ahead, for planning)
   try {
     const list = (await (
       await fetch("https://www.googleapis.com/calendar/v3/users/me/calendarList?minAccessRole=reader&maxResults=50", { headers: auth, signal: AbortSignal.timeout(6000), cache: "no-store" })
@@ -152,4 +155,76 @@ export async function syncCalendar(client: SupabaseClient, { force = false } = {
   } catch (e) {
     return { ok: false, message: e instanceof Error ? e.message : "Couldn't reach Google." };
   }
+}
+
+// ---------- Writing to your calendar (the Plan tab) ----------
+
+// Can we add to your calendar? (You said yes to calendar.events when connecting.)
+export async function canWrite(client: SupabaseClient): Promise<boolean> {
+  const { data, error } = await client.from("google_accounts").select("scope").maybeSingle();
+  if (error || !data) return false;
+  return ((data as { scope?: string | null }).scope ?? "").split(" ").includes(WRITE);
+}
+
+async function writeAuth(client: SupabaseClient): Promise<{ token: string; primary: string } | string> {
+  const { data } = await client.from("google_accounts").select("refresh_token, access_token, access_expires, synced_at, email").maybeSingle();
+  if (!data) return "Google isn't connected.";
+  const token = await accessToken(client, data as Account);
+  if (!token) return "Google sign-in ran out: connect again.";
+  return { token, primary: (data as Account).email ?? "primary" };
+}
+
+type Times = { title: string; start: string; end: string; location: string | null };
+const body = (e: Times) => ({
+  summary: e.title,
+  location: e.location ?? undefined,
+  start: { dateTime: e.start },
+  end: { dateTime: e.end },
+});
+
+// A new event on your main calendar. Returns its id as calendar_events keeps it, or a problem.
+export async function createGoogleEvent(client: SupabaseClient, e: Times): Promise<{ id: string } | { problem: string }> {
+  const a = await writeAuth(client);
+  if (typeof a === "string") return { problem: a };
+  const res = await fetch("https://www.googleapis.com/calendar/v3/calendars/primary/events", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${a.token}`, "Content-Type": "application/json" },
+    body: JSON.stringify(body(e)),
+    signal: AbortSignal.timeout(8000),
+  });
+  const j = (await res.json().catch(() => ({}))) as { id?: string; error?: { message?: string } };
+  if (!res.ok || !j.id) return { problem: res.status === 403 ? "Google didn't allow adding events: reconnect Google from Your account." : (j.error?.message ?? `Google said ${res.status}.`) };
+  return { id: `${a.primary}:${j.id}` };
+}
+
+const split = (id: string) => {
+  const i = id.lastIndexOf(":");
+  return { calendar: id.slice(0, i), event: id.slice(i + 1) };
+};
+
+export async function updateGoogleEvent(client: SupabaseClient, id: string, e: Times): Promise<string | null> {
+  const a = await writeAuth(client);
+  if (typeof a === "string") return a;
+  const { calendar, event } = split(id);
+  const res = await fetch(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendar)}/events/${encodeURIComponent(event)}`, {
+    method: "PATCH",
+    headers: { Authorization: `Bearer ${a.token}`, "Content-Type": "application/json" },
+    body: JSON.stringify(body(e)),
+    signal: AbortSignal.timeout(8000),
+  });
+  if (res.ok) return null;
+  return res.status === 403 ? "This event's calendar can't be changed from here (or Google needs reconnecting)." : `Google said ${res.status}.`;
+}
+
+export async function deleteGoogleEvent(client: SupabaseClient, id: string): Promise<string | null> {
+  const a = await writeAuth(client);
+  if (typeof a === "string") return a;
+  const { calendar, event } = split(id);
+  const res = await fetch(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendar)}/events/${encodeURIComponent(event)}`, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${a.token}` },
+    signal: AbortSignal.timeout(8000),
+  });
+  if (res.ok || res.status === 404 || res.status === 410) return null;
+  return res.status === 403 ? "This event's calendar can't be changed from here (or Google needs reconnecting)." : `Google said ${res.status}.`;
 }

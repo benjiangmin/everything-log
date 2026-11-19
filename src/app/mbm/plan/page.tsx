@@ -1,0 +1,74 @@
+import { Suspense } from "react";
+import { connection } from "next/server";
+import { redirect } from "next/navigation";
+import { mbmTz } from "@/mbm/data";
+import { canWrite, googleStatus, syncCalendar } from "@/mbm/google";
+import { mbm, mbmReady, mbmUser } from "@/mbm/supabase";
+import { dayKeyOf, dayRange } from "@/mbm/time";
+import PlanView, { type PlanEvent } from "@/mbm/components/PlanView";
+
+export const metadata = { title: "Plan" };
+
+// Plan: a day ahead (or any day) on one big bar, your Google Calendar on it, and new plans added
+// by clicking the bar, like Google Calendar.
+export default function PlanPage(props: PageProps<"/mbm/plan">) {
+  return (
+    <main className="mx-auto w-full px-4 pb-24 pt-6 sm:w-[96%] sm:px-0 sm:pt-8">
+      <Suspense fallback={<div aria-busy="true" className="h-96 animate-pulse rounded-card bg-line" />}>
+        {props.searchParams.then((p) => (
+          <Plan day={typeof p.day === "string" ? p.day : undefined} open={typeof p.event === "string" ? p.event : undefined} />
+        ))}
+      </Suspense>
+    </main>
+  );
+}
+
+async function Plan({ day: asked, open }: { day?: string; open?: string }) {
+  await connection();
+  if (!mbmReady()) return <p className="rounded-card bg-surface px-5 py-4 text-sm">Minute by Minute isn&apos;t connected yet.</p>;
+  const user = await mbmUser();
+  if (!user) redirect("/mbm/login?next=/mbm/plan");
+  const tz = mbmTz();
+  const today = dayKeyOf(new Date(), tz);
+  const day = asked && /^\d{4}-\d{2}-\d{2}$/.test(asked) ? asked : today;
+  const { start, end } = dayRange(day, tz);
+  const client = await mbm();
+  await syncCalendar(client).catch(() => null); // (at most every 10 minutes)
+  const [events, places, google, write, acts, renderedAt] = await Promise.all([
+    eventsBetween(client, start, end),
+    client.from("places").select("id, name, lat, lng").not("name", "is", null).limit(300),
+    googleStatus(client).catch(() => null),
+    canWrite(client).catch(() => false),
+    client.from("activities").select("name, color"),
+    loadedAt(),
+  ]);
+  return (
+    <PlanView
+      day={day}
+      today={today}
+      tz={tz}
+      dayStart={+start}
+      dayEnd={+end}
+      events={events.filter((e) => !e.all_day)}
+      allDay={events.filter((e) => e.all_day)}
+      places={(places.data ?? []) as { id: string; name: string; lat: number; lng: number }[]}
+      google={google}
+      canWrite={write}
+      colors={Object.fromEntries(((acts.data ?? []) as { name: string; color: string }[]).map((a) => [a.name.toLowerCase(), a.color]))}
+      openId={open ?? null}
+      renderedAt={renderedAt}
+    />
+  );
+}
+
+// The day's events (041's place columns, if it's been run).
+async function eventsBetween(client: Awaited<ReturnType<typeof mbm>>, start: Date, end: Date): Promise<PlanEvent[]> {
+  const q = (cols: string) => client.from("calendar_events").select(cols).lt("starts_at", end.toISOString()).gt("ends_at", start.toISOString()).order("starts_at");
+  let r = await q("id, title, starts_at, ends_at, all_day, location, place_id, lat, lng");
+  if (r.error) r = await q("id, title, starts_at, ends_at, all_day, location");
+  return (r.data ?? []) as unknown as PlanEvent[];
+}
+
+async function loadedAt() {
+  return Date.now();
+}

@@ -12,6 +12,7 @@ import { useEffect, useRef, useState } from "react";
 const TABS = [
   { href: "/mbm", label: "Home" },
   { href: "/mbm/day", label: "Day" },
+  { href: "/mbm/plan", label: "Plan" },
   { href: "/mbm/stats", label: "Stats" },
 ];
 // (Future sits on its own at the right, next to the search.)

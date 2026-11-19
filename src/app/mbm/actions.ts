@@ -680,3 +680,64 @@ export async function deleteMine(what: "data" | "account", typed: string): Promi
   revalidatePath("/mbm", "layout");
   return { ok: true };
 }
+
+// ---------- The Plan tab (041_plan.sql) ----------
+export type PlanInput = {
+  id?: string; // (none: new)
+  title: string;
+  start: string; // ISO
+  end: string;
+  location: string | null;
+  placeId: string | null;
+  lat: number | null;
+  lng: number | null;
+  toGoogle?: boolean; // (new ones: also add it to Google Calendar)
+};
+
+// A new plan, or a change to one (yours, or a Google event: changed in Google too).
+export async function savePlan(p: PlanInput): Promise<Result & { id?: string }> {
+  const { createGoogleEvent, updateGoogleEvent } = await import("@/mbm/google");
+  const title = p.title.trim().slice(0, 300) || "Untitled";
+  const start = new Date(p.start);
+  const end = new Date(p.end);
+  if (!(+end > +start)) return fail("The end has to be after the start.");
+  if (+end - +start > 3 * 86400_000) return fail("That's longer than three days.");
+  const location = p.location?.trim().slice(0, 300) || null;
+  const row = { title, starts_at: start.toISOString(), ends_at: end.toISOString(), all_day: false, location, place_id: p.placeId, lat: p.lat, lng: p.lng, updated_at: new Date().toISOString() };
+  const times = { title, start: row.starts_at, end: row.ends_at, location };
+  const client = await mbm();
+  let id = p.id;
+  if (!id) {
+    if (p.toGoogle) {
+      const made = await createGoogleEvent(client, times);
+      if ("problem" in made) return fail(made.problem);
+      id = made.id;
+    } else {
+      id = `mbm:${crypto.randomUUID()}`;
+    }
+    const { error } = await client.from("calendar_events").insert({ id, ...row });
+    if (error) return fail(/place_id|lat|lng/.test(error.message) ? "Run 041_plan.sql first." : error.message);
+  } else {
+    if (!id.startsWith("mbm:")) {
+      const problem = await updateGoogleEvent(client, id, times);
+      if (problem) return fail(problem);
+    }
+    const { error } = await client.from("calendar_events").update(row).eq("id", id);
+    if (error) return fail(error.message);
+  }
+  revalidatePath("/mbm/plan");
+  return { ok: true, id };
+}
+
+export async function deletePlan(id: string): Promise<Result> {
+  const { deleteGoogleEvent } = await import("@/mbm/google");
+  const client = await mbm();
+  if (!id.startsWith("mbm:")) {
+    const problem = await deleteGoogleEvent(client, id);
+    if (problem) return fail(problem);
+  }
+  const { error } = await client.from("calendar_events").delete().eq("id", id);
+  if (error) return fail(error.message);
+  revalidatePath("/mbm/plan");
+  return { ok: true };
+}
