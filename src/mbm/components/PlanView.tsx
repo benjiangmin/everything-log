@@ -554,6 +554,7 @@ export default function PlanView({
                         )}
                       </span>
                       <span className="shrink-0 text-xs text-muted">
+                        {e.started_block ? "Started · " : e.skipped ? "Skipped · " : ""}
                         {e.id.startsWith("mbm:") ? "Plan" : "Google"}
                       </span>
                     </button>

@@ -741,3 +741,67 @@ export async function deletePlan(id: string): Promise<Result> {
   revalidatePath("/mbm/plan");
   return { ok: true };
 }
+
+// ---------- Jobs and categories (043_jobs_and_categories.sql) ----------
+
+// A setting: on, off, or (null) whatever its category says / the default.
+export type JobPrefs = {
+  stop_on_commute: boolean | null;
+  places: string[] | null; // null: its category's
+  auto_start: boolean | null;
+  weekly_goal_min: number | null;
+  hide_from_stats: boolean | null;
+};
+const NEEDS_043 = "Run 043_jobs_and_categories.sql in Supabase first.";
+const cleanPrefs = (p: JobPrefs) => ({
+  stop_on_commute: typeof p.stop_on_commute === "boolean" ? p.stop_on_commute : null,
+  places: Array.isArray(p.places) ? p.places.filter(isUuid).slice(0, 30) : null,
+  auto_start: typeof p.auto_start === "boolean" ? p.auto_start : null,
+  weekly_goal_min: typeof p.weekly_goal_min === "number" && p.weekly_goal_min >= 1 ? Math.min(10080, Math.round(p.weekly_goal_min)) : null,
+  hide_from_stats: typeof p.hide_from_stats === "boolean" ? p.hide_from_stats : null,
+});
+const missing043 = (msg: string) => /categor|stop_on_commute|auto_start|weekly_goal|hide_from_stats|own_color/i.test(msg);
+
+export async function saveJob(id: string, input: JobPrefs & { category_id: string | null }): Promise<Result> {
+  if (!isUuid(id)) return fail("That job is gone.");
+  const category_id = input.category_id && isUuid(input.category_id) ? input.category_id : null;
+  const { error } = await (await mbm()).from("activities").update({ ...cleanPrefs(input), category_id }).eq("id", id);
+  if (error) return fail(missing043(error.message) ? NEEDS_043 : error.message);
+  refresh();
+  return { ok: true };
+}
+
+export async function saveCategory(input: { id?: string; name: string; color: string } & JobPrefs): Promise<Result & { id?: string }> {
+  const name = input.name.trim().slice(0, 60);
+  if (!name) return fail("Give it a name.");
+  if (!/^#[0-9a-f]{6}$/i.test(input.color)) return fail("That isn't a color.");
+  const client = await mbm();
+  const row = { name, color: input.color.toLowerCase(), ...cleanPrefs(input) };
+  const res = input.id && isUuid(input.id) ? await client.from("categories").update(row).eq("id", input.id).select("id").single() : await client.from("categories").insert(row).select("id").single();
+  if (res.error) {
+    if (res.error.code === "23505") return fail(`You already have a category called ${name}.`);
+    return fail(missing043(res.error.message) ? NEEDS_043 : res.error.message);
+  }
+  refresh();
+  return { ok: true, id: (res.data as { id: string }).id };
+}
+
+// (Its jobs stay, back to their own colors.)
+export async function deleteCategory(id: string): Promise<Result> {
+  if (!isUuid(id)) return fail("That category is gone.");
+  const client = await mbm();
+  await client.from("activities").update({ category_id: null }).eq("category_id", id);
+  const { error } = await client.from("categories").delete().eq("id", id);
+  if (error) return fail(error.message);
+  refresh();
+  return { ok: true };
+}
+
+// A plan with no place, at its time: start it now, or skip it.
+export async function answerPlan(id: string, start: boolean): Promise<Result> {
+  if (typeof id !== "string" || id.length > 300) return fail("That plan is gone.");
+  const { error } = await (await mbm()).rpc("answer_plan", { p_id: id, p_start: start });
+  if (error) return fail(/answer_plan/.test(error.message) ? NEEDS_043 : error.message);
+  refresh();
+  return { ok: true };
+}

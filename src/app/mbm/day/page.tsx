@@ -38,6 +38,9 @@ async function MbmDay({ day: asked }: { day?: string }) {
   const dayKey = isDayKey(asked) && asked <= today ? asked : today;
   const isToday = dayKey === today;
 
+  // Today, first: anything due to start for you (plans you've got to, jobs at their places), so
+  // it's on the bar below. (043; before it's run, nothing.)
+  if (isToday) await (await mbm()).rpc("start_for_you").then(() => null, () => null);
   const [day, plans] = await Promise.all([getDay(dayKey).catch((e: Error) => e), isToday ? upcoming(new Date(), dayKey, tz) : Promise.resolve([])]);
   if (day instanceof Error) return <p className="rounded-card bg-surface px-5 py-4 text-sm text-danger">{day.message}</p>;
 
@@ -90,7 +93,8 @@ async function upcoming(now: Date, dayKey: string, tz: string): Promise<DayPlan[
     const [events, places] = await Promise.all([eventsBetween(client, now, end), client.from("places").select("name, lat, lng").not("name", "is", null).limit(300)]);
     const mine = (places.data ?? []) as { name: string; lat: number; lng: number }[];
     return events
-      .filter((e) => !e.all_day)
+      // (Started, or skipped: not a plan any more. The entry is what's on the bar.)
+      .filter((e) => !e.all_day && !e.started_block && !e.skipped)
       .map((e) => ({ id: e.id, title: e.title, start: +new Date(e.starts_at), end: +new Date(e.ends_at), location: e.location, at: placeFor(e, mine) }));
   } catch {
     return [];

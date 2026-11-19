@@ -2,7 +2,7 @@
 
 import { useState, useTransition, type ReactNode } from "react";
 import { setPinned } from "@/app/mbm/actions";
-import type { Range, Stats } from "@/mbm/stats";
+import type { JobMeta, Range, Stats } from "@/mbm/stats";
 
 // The numbers for a day / week / month / year: totals up top, then time per activity (with a
 // search: "time spent on …") and time per app.
@@ -25,7 +25,10 @@ export default function StatsView({
   isNow,
   query = "",
   pins = null,
+  range,
+  meta = { jobs: {}, categories: {} },
 }: {
+  meta?: JobMeta; // categories, goals, hidden jobs (043)
   pins?: string[] | null; // pinned activities (null: 023_pins.sql not run yet)
   stats: Stats;
   range: Range;
@@ -51,7 +54,7 @@ export default function StatsView({
       </section>
 
       <div className="grid gap-8 lg:grid-cols-2">
-        <TimeSpent activities={stats.activities} elapsed={elapsed} initial={query} savedPins={pins} />
+        <TimeSpent activities={stats.activities} elapsed={elapsed} initial={query} savedPins={pins} meta={meta} week={range === "week"} />
         <Apps apps={stats.apps} />
       </div>
 
@@ -189,7 +192,28 @@ const SORTS: { id: Sort; label: string }[] = [
 
 // Time per activity. Pinned ones always come first (even at 0m, even if there's no activity
 // called that yet), then the rest, sorted. Search to narrow it down, or to pin something new.
-function TimeSpent({ activities, elapsed, initial, savedPins }: { activities: Stats["activities"]; elapsed: number; initial: string; savedPins: string[] | null }) {
+function TimeSpent({
+  activities: everything,
+  elapsed,
+  initial,
+  savedPins,
+  meta,
+  week,
+}: {
+  activities: Stats["activities"];
+  elapsed: number;
+  initial: string;
+  savedPins: string[] | null;
+  meta: JobMeta;
+  week: boolean; // (weekly goals show on the week)
+}) {
+  const metaOf = (name: string) => meta.jobs[name.trim().toLowerCase()];
+  // Jobs set to "Hide from Stats" aren't listed (they're still on the bar).
+  const hidden = everything.filter((a) => metaOf(a.name)?.hidden);
+  const activities = everything.filter((a) => !metaOf(a.name)?.hidden);
+  const [openCats, setOpenCats] = useState<Set<string>>(new Set());
+  const goalNote = (seconds: number, goal: number | null | undefined) =>
+    week && goal ? `${Math.round((seconds / 60 / goal) * 100)}% of ${goal % 60 ? (goal / 60).toFixed(1) : goal / 60}h goal` : undefined;
   const [q, setQ] = useState(initial);
   const [all, setAll] = useState(false);
   const [sort, setSort] = useState<Sort>("most");
@@ -223,8 +247,29 @@ function TimeSpent({ activities, elapsed, initial, savedPins }: { activities: St
   const pinned = pins.map((p) => byKey.get(key(p)) ?? { name: p, color: "#cdbca9" as string | undefined, seconds: 0 }).filter((a) => matches(a.name)).sort(sorter);
   const rest = activities.filter((a) => !pinnedKeys.has(key(a.name)) && matches(a.name)).sort(sorter);
   const found = [...pinned, ...rest];
-  const shownRest = query || all ? rest : rest.slice(0, Math.max(0, LIST - pinned.length));
-  const max = Math.max(0, ...found.map((a) => a.seconds));
+  // Not searching: a category's jobs go under it (one row with their total; click for each).
+  type Item = { kind: "job"; a: (typeof rest)[number] } | { kind: "cat"; id: string; name: string; color: string; seconds: number; goal: number | null; jobs: typeof rest };
+  const items: Item[] = [];
+  if (query) rest.forEach((a) => items.push({ kind: "job", a }));
+  else {
+    const cats = new Map<string, Extract<Item, { kind: "cat" }>>();
+    for (const a of rest) {
+      const id = metaOf(a.name)?.category;
+      const c = id ? meta.categories[id] : undefined;
+      if (!id || !c) {
+        items.push({ kind: "job", a });
+        continue;
+      }
+      let g = cats.get(id);
+      if (!g) cats.set(id, (g = { kind: "cat", id, name: c.name, color: c.color, seconds: 0, goal: c.goal, jobs: [] }));
+      g.seconds += a.seconds;
+      g.jobs.push(a);
+    }
+    items.push(...cats.values());
+    items.sort((x, y) => sorter(x.kind === "job" ? x.a : x, y.kind === "job" ? y.a : y));
+  }
+  const shownRest = query || all ? items : items.slice(0, Math.max(0, LIST - pinned.length));
+  const max = Math.max(0, ...pinned.map((a) => a.seconds), ...items.map((i) => (i.kind === "job" ? i.a.seconds : i.seconds)));
   const total = found.reduce((s, a) => s + a.seconds, 0);
   const share = (s: number) => (elapsed > 0 ? ` · ${Math.round((s / elapsed) * 100)}% of the time` : "");
   const one = found.length === 1 ? found[0] : undefined;
@@ -323,20 +368,60 @@ function TimeSpent({ activities, elapsed, initial, savedPins }: { activities: St
             <Row key={`pin-${a.name}`} color={a.color} label={a.name} seconds={a.seconds} max={max} pin={pinFor(a.name)} />
           ))}
           {pinned.length > 0 && shownRest.length > 0 && <li aria-hidden="true" className="my-1.5 border-t border-dashed border-line" />}
-          {shownRest.map((a) => (
-            <Row key={a.name} color={a.color} label={a.name} seconds={a.seconds} max={max} pin={pinFor(a.name)} />
-          ))}
+          {shownRest.map((i) =>
+            i.kind === "job" ? (
+              <Row key={i.a.name} color={i.a.color} label={i.a.name} seconds={i.a.seconds} max={max} pin={pinFor(i.a.name)} note={goalNote(i.a.seconds, metaOf(i.a.name)?.goal)} />
+            ) : (
+              <li key={`cat-${i.id}`}>
+                <ul>
+                  <Row
+                    color={i.color}
+                    label={`${openCats.has(i.id) ? "▾" : "▸"} ${i.name}`}
+                    seconds={i.seconds}
+                    max={max}
+                    note={goalNote(i.seconds, i.goal) ?? `${i.jobs.length} job${i.jobs.length === 1 ? "" : "s"}`}
+                    onPick={() =>
+                      setOpenCats((set) => {
+                        const next = new Set(set);
+                        if (next.has(i.id)) next.delete(i.id);
+                        else next.add(i.id);
+                        return next;
+                      })
+                    }
+                  />
+                  {openCats.has(i.id) && (
+                    <li className="ml-4 border-l border-line pl-3">
+                      <ul>
+                        {[...i.jobs].sort(sorter).map((a) => (
+                          <Row key={a.name} color={a.color} label={a.name} seconds={a.seconds} max={i.seconds} pin={pinFor(a.name)} note={goalNote(a.seconds, metaOf(a.name)?.goal)} />
+                        ))}
+                      </ul>
+                    </li>
+                  )}
+                </ul>
+              </li>
+            ),
+          )}
         </ul>
       )}
-      {!query && !all && rest.length > shownRest.length && (
+      {!query && !all && items.length > shownRest.length && (
         <button type="button" onClick={() => setAll(true)} className="mt-2 text-sm text-muted underline-offset-4 hover:text-ink hover:underline">
           Show all {found.length}
         </button>
       )}
-      {!query && all && rest.length > LIST && (
+      {!query && all && items.length > LIST && (
         <button type="button" onClick={() => setAll(false)} className="mt-2 text-sm text-muted underline-offset-4 hover:text-ink hover:underline">
           Show fewer
         </button>
+      )}
+      {hidden.length > 0 && !query && (
+        <p className="mt-3 text-xs text-muted">
+          Not shown: {hidden.map((a) => a.name).join(", ")} (
+          <a href="/mbm/account/jobs" className="underline underline-offset-2 hover:text-ink">
+            settings
+          </a>
+          ).
+        </p>
       )}
     </Card>
   );

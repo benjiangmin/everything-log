@@ -119,6 +119,20 @@ export default function BlockEditor({
           trailing={
             <div className="flex items-center gap-1.5">
             {known && <ColorRow key={known.id} activity={known} />}
+            {known && (
+              <a
+                href={`/mbm/account/jobs#job-${known.id}`}
+                title={`${known.name}'s settings: when it stops, its places, goal`}
+                aria-label={`${known.name}'s settings`}
+                className="grid size-7 place-items-center rounded-full text-muted transition-colors hover:bg-surface hover:text-ink"
+              >
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path d="M4 7h10M18 7h2M4 17h4M12 17h8" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
+                  <circle cx="16" cy="7" r="2.2" stroke="currentColor" strokeWidth="2" />
+                  <circle cx="10" cy="17" r="2.2" stroke="currentColor" strokeWidth="2" />
+                </svg>
+              </a>
+            )}
             <button
               type="button"
               onClick={() => setShowNote((v) => !v)}

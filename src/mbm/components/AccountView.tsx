@@ -25,6 +25,11 @@ export default function AccountView({
       <Section id="about" title="About you" note="Used on the Future page, to pick the right life table. All optional.">
         <AboutYouForm profile={profile} />
       </Section>
+      <Section title="Jobs and categories" note="When each job stops, its places, weekly goals, and categories like Schooling that give their jobs one color.">
+        <a href="/mbm/account/jobs" className="inline-flex rounded-control px-4 py-2.5 text-sm font-semibold ring-1 ring-line hover:bg-surface">
+          Open jobs
+        </a>
+      </Section>
       {connections && (
         <Section title="Connected">
           <div className="-m-1 [&>*]:mt-0">{connections}</div>

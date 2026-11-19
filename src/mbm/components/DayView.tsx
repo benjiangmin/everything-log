@@ -7,6 +7,7 @@ import DayBar, { type DayPlan } from "./DayBar";
 import DayMap from "./DayMap";
 import type { Focus } from "./DayMapInner";
 import NowChip from "./NowChip";
+import PlanPrompt from "./PlanPrompt";
 import { openMbm } from "./open";
 import { layOut } from "./segments";
 import { isMoving } from "@/mbm/moving";
@@ -114,6 +115,8 @@ export default function DayView({
           {nav}
         </header>
       )}
+
+      {today && <PlanPrompt plans={plans} now={now} tz={day.tz} />}
 
       {mapMode ? null : (
         <section aria-label="The day" className="relative mb-4 shrink-0 rounded-card border-[1.5px] border-ink px-4 pb-4 pt-4 sm:px-6 sm:pb-5">

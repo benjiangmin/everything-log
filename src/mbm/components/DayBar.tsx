@@ -373,6 +373,9 @@ export default function DayBar({
                 Planned · {clock(new Date(hover.plan.start), tz)} – {clock(new Date(hover.plan.end), tz)}
               </p>
               {hover.plan.location && <p className="mt-1 line-clamp-2 text-sm opacity-80">{hover.plan.location}</p>}
+              {hover.plan.start < now && (
+                <p className="mt-1 text-xs opacity-80">{hover.plan.at ? "Starts by itself when you get there." : "Not started yet."}</p>
+              )}
               {onSelectPlan && <p className="mt-1 text-xs opacity-70">Click to change it on Plan</p>}
             </>
           ) : hover.phone ? (
@@ -462,27 +465,43 @@ export default function DayBar({
           );
         })}
         {now < dayEnd && <div className="absolute inset-y-0 right-0 bg-paper" style={{ left: `${Math.max(0, at(now))}%` }} />}
-        {/* Still planned (later today): dashed, in what's left of the day. */}
+        {/* Still planned: dashed, in what's left of the day. One whose time has come but hasn't
+            started (you're not there yet, or haven't said Start): the box covers what's left of it,
+            and a dashed line along the top goes back to when it was meant to start. */}
         {shownPlans.map((p) => {
-          // (At its own times, even once it's begun: it doesn't shrink as now moves through it.
-          // Under your entries, so what you actually did shows over the part that's happened.)
-          const w = ((at(p.end) - at(p.start)) / 100) * barWidth;
+          const late = p.start < now;
+          const from0 = late ? now : p.start;
+          const w = ((at(p.end) - at(from0)) / 100) * barWidth;
+          const on = hover?.plan?.id === p.id;
           return (
-            <button
-              key={p.id}
-              type="button"
-              aria-label={`Planned: ${p.title || "Untitled"}, ${clock(new Date(p.start), tz)} to ${clock(new Date(p.end), tz)}. Change it on Plan`}
-              onMouseEnter={() => hoverPlan(p)}
-              onFocus={() => hoverPlan(p)}
-              onBlur={() => setHover(null)}
-              onClick={() => onSelectPlan?.(p)}
-              className={`absolute inset-y-[3px] overflow-hidden rounded-[8px] border-2 border-dashed px-1.5 text-left transition-colors ${
-                hover?.plan?.id === p.id ? "border-ink bg-ink/10" : "border-ink/35 bg-transparent hover:border-ink/60"
-              }`}
-              style={pill(p.start, p.end)}
-            >
-              {w > 44 && !compact && <span className="pointer-events-none block truncate text-[11px] font-semibold leading-tight text-ink/70">{p.title || "Untitled"}</span>}
-            </button>
+            <span key={p.id} className="contents">
+              {late && (
+                <span
+                  aria-hidden="true"
+                  className={`pointer-events-none absolute top-0 z-[11] h-0 border-t-2 border-dashed ${on ? "border-ink" : "border-ink/35"}`}
+                  style={{ left: `${at(p.start)}%`, width: `${at(now) - at(p.start)}%` }}
+                />
+              )}
+              <button
+                type="button"
+                aria-label={`Planned: ${p.title || "Untitled"}, ${clock(new Date(p.start), tz)} to ${clock(new Date(p.end), tz)}. Change it on Plan`}
+                onMouseEnter={() => hoverPlan(p)}
+                onFocus={() => hoverPlan(p)}
+                onBlur={() => setHover(null)}
+                onClick={() => onSelectPlan?.(p)}
+                className={`absolute inset-y-0 overflow-hidden rounded-[8px] border-2 border-dashed px-1.5 text-left transition-colors ${
+                  on ? "border-ink bg-ink/10" : "border-ink/35 bg-paper hover:border-ink/60"
+                }`}
+                style={pill(from0, p.end)}
+              >
+                {w > 44 && !compact && (
+                  <span className="pointer-events-none block truncate text-[11px] font-semibold leading-tight text-ink/70">
+                    {p.title || "Untitled"}
+                    {late && <span className="block font-normal opacity-80">{p.at ? "when you get there" : "not started"}</span>}
+                  </span>
+                )}
+              </button>
+            </span>
           );
         })}
         {main.map((p) => entry(p, { ...pill(p.start, p.end), top: 0, bottom: 0 }, "rounded-[9px]", resizable))}

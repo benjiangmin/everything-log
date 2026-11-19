@@ -74,6 +74,28 @@ export async function getStats(period: Period, tz: string): Promise<Stats> {
   return data as Stats;
 }
 
+// Your jobs' categories, goals and hiding (043). Empty before it's run.
+export type JobMeta = {
+  jobs: Record<string, { category: string | null; hidden: boolean; goal: number | null }>; // by lower-cased name
+  categories: Record<string, { name: string; color: string; goal: number | null }>; // by id
+};
+export async function getJobMeta(): Promise<JobMeta> {
+  const client = await mbm();
+  const [a, c] = await Promise.all([
+    client.from("activities").select("name, category_id, hide_from_stats, weekly_goal_min"),
+    client.from("categories").select("id, name, color, hide_from_stats, weekly_goal_min"),
+  ]);
+  if (a.error || c.error) return { jobs: {}, categories: {} };
+  const cats = (c.data ?? []) as { id: string; name: string; color: string; hide_from_stats: boolean | null; weekly_goal_min: number | null }[];
+  const byId = new Map(cats.map((x) => [x.id, x]));
+  const jobs: JobMeta["jobs"] = {};
+  for (const j of (a.data ?? []) as { name: string; category_id: string | null; hide_from_stats: boolean | null; weekly_goal_min: number | null }[]) {
+    const cat = j.category_id ? byId.get(j.category_id) : undefined;
+    jobs[j.name.trim().toLowerCase()] = { category: cat?.id ?? null, hidden: j.hide_from_stats ?? cat?.hide_from_stats ?? false, goal: j.weekly_goal_min };
+  }
+  return { jobs, categories: Object.fromEntries(cats.map((x) => [x.id, { name: x.name, color: x.color, goal: x.weekly_goal_min }])) };
+}
+
 export const todayKey = (tz: string) => dayKeyOf(new Date(), tz);
 
 // Your pinned activities on "Time spent", oldest first (023_pins.sql; none if it isn't run yet).

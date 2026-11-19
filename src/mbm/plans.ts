@@ -11,6 +11,8 @@ export type PlanEvent = {
   place_id?: string | null;
   lat?: number | null;
   lng?: number | null;
+  started_block?: string | null; // (043) it's become an entry
+  skipped?: boolean; // (043) you said skip
 };
 
 type Client = Awaited<ReturnType<typeof mbm>>;
@@ -18,7 +20,8 @@ type Client = Awaited<ReturnType<typeof mbm>>;
 // Events overlapping start–end (041's place columns, if it's been run).
 export async function eventsBetween(client: Client, start: Date, end: Date): Promise<PlanEvent[]> {
   const q = (cols: string) => client.from("calendar_events").select(cols).lt("starts_at", end.toISOString()).gt("ends_at", start.toISOString()).order("starts_at");
-  let r = await q("id, title, starts_at, ends_at, all_day, location, place_id, lat, lng");
+  let r = await q("id, title, starts_at, ends_at, all_day, location, place_id, lat, lng, started_block, skipped");
+  if (r.error) r = await q("id, title, starts_at, ends_at, all_day, location, place_id, lat, lng");
   if (r.error) r = await q("id, title, starts_at, ends_at, all_day, location");
   return (r.data ?? []) as unknown as PlanEvent[];
 }
