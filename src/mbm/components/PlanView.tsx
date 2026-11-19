@@ -13,17 +13,8 @@ import { useNow } from "./useNow";
 // starts on the half hour), then name it, move it, or drag its ends. What's already happened is
 // greyed; what's still to come has a dashed edge.
 
-export type PlanEvent = {
-  id: string;
-  title: string;
-  starts_at: string;
-  ends_at: string;
-  all_day: boolean;
-  location: string | null;
-  place_id?: string | null;
-  lat?: number | null;
-  lng?: number | null;
-};
+import type { PlanEvent } from "@/mbm/plans";
+export type { PlanEvent };
 type Draft = {
   id?: string;
   title: string;

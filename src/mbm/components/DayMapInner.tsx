@@ -21,6 +21,8 @@ import { isMoving } from "@/mbm/moving";
 // The stretch you're hovering on the day bar. moving: light up the route (Commute); still: the
 // stop you were at (everything else); any: both (untracked time).
 export type Focus = { start: number; end: number; kind: "moving" | "still" | "any" };
+// A plan you're hovering on the day bar: where it'll be (at: null when it has no place).
+type Pin = { title: string; location: string | null; at: { lat: number; lng: number } | null };
 
 // The day on a map: each stop, and the trips between them (from the iPhone's dots). Stops are
 // labelled with their name (yours, or the one the phone found, like "Noland Hall"). Click a stop to rename it; later
@@ -30,6 +32,7 @@ export default function DayMapInner({
   points,
   tz,
   focus,
+  pin = null,
   showDots = false,
   liveColor = null,
   blocks = [],
@@ -53,6 +56,7 @@ export default function DayMapInner({
   onPointer?: (spans: { start: number; end: number }[] | null) => void; // what you're pointing at, for the day bar
   tz: string;
   focus: Focus | null;
+  pin?: Pin | null;
   showDots?: boolean; // every recorded dot, to see what the phone actually got
   liveColor?: string | null; // today: show where you are now, pulsing, in this color
 }) {
@@ -139,7 +143,7 @@ export default function DayMapInner({
     return last ? { at: { lat: last.lat, lng: last.lng }, when: last.at } : null;
   }, [liveColor, points, visits]);
   const nothingLit = !pointed && lit !== null && lit.stops.size === 0 && lit.trip.size === 0;
-  const dimming = lit !== null && !nothingLit;
+  const dimming = (lit !== null && !nothingLit) || !!pin?.at;
   if (!KEY) {
     return (
       <p className="grid size-full place-items-center px-6 text-center text-sm text-muted">
@@ -234,6 +238,20 @@ export default function DayMapInner({
             );
           }),
         )}
+        {pin?.at && (
+          <HtmlMarker position={pin.at} zIndex={6} passive>
+            <span className="pointer-events-none flex flex-col items-center" style={{ transform: "translateY(-50%)" }}>
+              <span className="mb-1 max-w-[14rem] truncate whitespace-nowrap rounded-full bg-[#3e281b] px-2.5 py-1 text-xs font-semibold text-[#faf6f0] shadow-md">
+                {pin.title || "Planned"}
+              </span>
+              <span className="relative grid size-6 place-items-center">
+                <span className="absolute inline-flex size-6 animate-ping rounded-full bg-[#d4a373] opacity-40" />
+                <span className="relative size-4 rounded-full border-2 border-dashed border-[#3e281b] bg-[#faf6f0] shadow" />
+              </span>
+            </span>
+          </HtmlMarker>
+        )}
+        {pin?.at && <ShowSpot at={pin.at} />}
         {here && liveColor && (
           <HtmlMarker position={here.at} zIndex={here.when ? 4 : 0} passive>
             <span className="pointer-events-none relative grid size-4 place-items-center">
@@ -303,7 +321,12 @@ export default function DayMapInner({
         </div>
       )}
       {moveNote && <p className="absolute inset-x-3 top-3 rounded-control bg-paper px-3 py-2 text-sm text-danger shadow">{moveNote}</p>}
-      {nothingLit && !moving && (
+      {pin && !pin.at && !moving && (
+        <p className="pointer-events-none absolute left-3 top-3 rounded-full bg-paper/95 px-3 py-1 text-xs text-muted shadow-sm ring-1 ring-line">
+          {pin.location ? `Not sure where “${pin.location.split(",")[0]}” is` : "No place set for this plan"}
+        </p>
+      )}
+      {nothingLit && !moving && !pin && (
         <p className="pointer-events-none absolute left-3 top-3 rounded-full bg-paper/95 px-3 py-1 text-xs text-muted shadow-sm ring-1 ring-line">
           {focus?.kind === "moving" ? "No route recorded then" : "No location recorded then"}
         </p>
@@ -940,6 +963,18 @@ function FitTo({ spots, top = 0, again = 0 }: { spots: Spot[]; top?: number; aga
     map.fitBounds(bounds, top ? { top: top + 32, right: 48, bottom: 48, left: 48 } : 48);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only for a new day (or a new cover)
   }, [map, core, key, top, again]);
+  return null;
+}
+
+// A planned spot off the edge of the map: moved into view (only when it's off screen, so the map
+// doesn't jump about while you hover along the bar).
+function ShowSpot({ at }: { at: Spot }) {
+  const map = useMap();
+  useEffect(() => {
+    if (!map) return;
+    const b = map.getBounds();
+    if (b && !b.contains(at)) map.panTo(at);
+  }, [map, at]);
   return null;
 }
 

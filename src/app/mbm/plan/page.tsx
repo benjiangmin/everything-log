@@ -5,7 +5,8 @@ import { mbmTz } from "@/mbm/data";
 import { canWrite, googleStatus, syncCalendar } from "@/mbm/google";
 import { mbm, mbmReady, mbmUser } from "@/mbm/supabase";
 import { dayKeyOf, dayRange } from "@/mbm/time";
-import PlanView, { type PlanEvent } from "@/mbm/components/PlanView";
+import PlanView from "@/mbm/components/PlanView";
+import { eventsBetween } from "@/mbm/plans";
 
 export const metadata = { title: "Plan" };
 
@@ -59,14 +60,6 @@ async function Plan({ day: asked, open }: { day?: string; open?: string }) {
       renderedAt={renderedAt}
     />
   );
-}
-
-// The day's events (041's place columns, if it's been run).
-async function eventsBetween(client: Awaited<ReturnType<typeof mbm>>, start: Date, end: Date): Promise<PlanEvent[]> {
-  const q = (cols: string) => client.from("calendar_events").select(cols).lt("starts_at", end.toISOString()).gt("ends_at", start.toISOString()).order("starts_at");
-  let r = await q("id, title, starts_at, ends_at, all_day, location, place_id, lat, lng");
-  if (r.error) r = await q("id, title, starts_at, ends_at, all_day, location");
-  return (r.data ?? []) as unknown as PlanEvent[];
 }
 
 async function loadedAt() {

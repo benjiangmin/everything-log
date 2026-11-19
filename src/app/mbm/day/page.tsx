@@ -3,8 +3,10 @@ import { Suspense } from "react";
 import { connection } from "next/server";
 import { redirect } from "next/navigation";
 import { getDay, mbmTz } from "@/mbm/data";
-import { mbmReady, mbmUser } from "@/mbm/supabase";
-import { dayKeyOf, dayTitle, isDayKey, shiftDay } from "@/mbm/time";
+import { mbm, mbmReady, mbmUser } from "@/mbm/supabase";
+import { eventsBetween, placeFor } from "@/mbm/plans";
+import type { DayPlan } from "@/mbm/components/DayBar";
+import { dayKeyOf, dayRange, dayTitle, isDayKey, shiftDay } from "@/mbm/time";
 import DayView from "@/mbm/components/DayView";
 
 export const metadata = { title: "Day" };
@@ -36,7 +38,7 @@ async function MbmDay({ day: asked }: { day?: string }) {
   const dayKey = isDayKey(asked) && asked <= today ? asked : today;
   const isToday = dayKey === today;
 
-  const day = await getDay(dayKey).catch((e: Error) => e);
+  const [day, plans] = await Promise.all([getDay(dayKey).catch((e: Error) => e), isToday ? upcoming(new Date(), dayKey, tz) : Promise.resolve([])]);
   if (day instanceof Error) return <p className="rounded-card bg-surface px-5 py-4 text-sm text-danger">{day.message}</p>;
 
   const arrow = "grid size-9 place-items-center rounded-control transition-colors hover:bg-surface";
@@ -45,6 +47,7 @@ async function MbmDay({ day: asked }: { day?: string }) {
       <DayView
         key={dayKey}
         day={day}
+        plans={plans}
         today={isToday}
         renderedAt={day.loadedAt}
         title={isToday ? "Today" : dayTitle(dayKey)}
@@ -76,6 +79,22 @@ async function MbmDay({ day: asked }: { day?: string }) {
       />
     </>
   );
+}
+
+// What's still planned for the rest of today (Google Calendar, and plans made on the Plan tab),
+// with where each is, when that's known. (Before 041 / Google is connected: just none.)
+async function upcoming(now: Date, dayKey: string, tz: string): Promise<DayPlan[]> {
+  try {
+    const client = await mbm();
+    const { end } = dayRange(dayKey, tz);
+    const [events, places] = await Promise.all([eventsBetween(client, now, end), client.from("places").select("name, lat, lng").not("name", "is", null).limit(300)]);
+    const mine = (places.data ?? []) as { name: string; lat: number; lng: number }[];
+    return events
+      .filter((e) => !e.all_day)
+      .map((e) => ({ id: e.id, title: e.title, start: +new Date(e.starts_at), end: +new Date(e.ends_at), location: e.location, at: placeFor(e, mine) }));
+  } catch {
+    return [];
+  }
 }
 
 function NotConnected() {

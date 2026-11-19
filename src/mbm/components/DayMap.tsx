@@ -5,6 +5,7 @@ import { useState, useTransition } from "react";
 import { unlockDay } from "@/app/mbm/actions";
 import type { Day } from "@/mbm/data";
 import type { Focus } from "./DayMapInner";
+import type { DayPlan } from "./DayBar";
 
 // The map only runs in the browser (it needs the page's window), so it loads after the page.
 const Inner = dynamic(() => import("./DayMapInner"), {
@@ -15,6 +16,7 @@ const Inner = dynamic(() => import("./DayMapInner"), {
 export default function DayMap({
   day,
   focus = null,
+  pin = null,
   liveColor = null,
   onPointer,
   gestures = "cooperative",
@@ -24,6 +26,7 @@ export default function DayMap({
   gestures?: "cooperative" | "greedy"; // greedy: scroll / pinch zooms the map (when it's the screen you're on)
   day: Day;
   focus?: Focus | null;
+  pin?: DayPlan | null;
   liveColor?: string | null;
   onPointer?: (spans: { start: number; end: number }[] | null) => void;
 }) {
@@ -100,6 +103,7 @@ export default function DayMap({
               activities={day.activities}
               tz={day.tz}
               focus={focus}
+              pin={pin}
               showDots={showDots}
               liveColor={liveColor}
               onPointer={onPointer}

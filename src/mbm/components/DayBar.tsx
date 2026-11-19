@@ -6,6 +6,10 @@ import { clock, span, zonedTime } from "@/mbm/time";
 import type { Placed } from "./segments";
 import { retimeBlocks } from "@/app/mbm/actions";
 
+// Something still planned for later today (Google Calendar, or the Plan tab): shown dashed in the
+// part of the day that hasn't happened yet. at: where it is, when known (lit up on the map).
+export type DayPlan = { id: string; title: string; start: number; end: number; location: string | null; at: { lat: number; lng: number } | null };
+
 // The whole day (midnight to midnight) as one bar: each entry in its activity's color, untracked
 // time striped, the rest of today plain, and a line at "now". Overlapping entries stack in rows.
 // Hover an entry for what it was; click it to change it; drag either end of it to change its
@@ -28,7 +32,13 @@ export default function DayBar({
   phone = [],
   compact = false,
   slim = false,
+  plans = [],
+  onSelectPlan,
+  onHoverPlan,
 }: {
+  plans?: DayPlan[];
+  onSelectPlan?: (p: DayPlan) => void; // click: change it on the Plan tab
+  onHoverPlan?: (p: DayPlan | null) => void; // hover: where it is, on the map
   placed: Placed[];
   lanes: number;
   gaps: { start: number; end: number }[]; // untracked: nothing at all going on
@@ -48,10 +58,16 @@ export default function DayBar({
   slim?: boolean; // the day page with the map opened up: a shorter bar, no zoom row
 }) {
   // What the bubble is about: an entry, or an untracked stretch.
-  const [hover, setHoverState] = useState<{ start: number; end: number; block?: Block; phone?: PhoneUse } | null>(null);
+  const [hover, setHoverState] = useState<{ start: number; end: number; block?: Block; phone?: PhoneUse; plan?: DayPlan } | null>(null);
   const setHover = (h: { start: number; end: number; block?: Block } | null) => {
+    if (hover?.plan) onHoverPlan?.(null);
     setHoverState(h);
     onHover?.(h && { start: h.start, end: h.end, block: h.block });
+  };
+  const hoverPlan = (p: DayPlan) => {
+    onHover?.(null);
+    setHoverState({ start: p.start, end: p.end, plan: p });
+    onHoverPlan?.(p);
   };
   const total = dayEnd - dayStart;
   const zoomable = !compact;
@@ -231,6 +247,7 @@ export default function DayBar({
   // alongside (+ Start) goes in a thin strip under the bar instead of squashing it.
   const height = compact ? 48 : slim ? 40 : 64;
   const shownPlaced = placed.map(withMoves);
+  const shownPlans = plans.filter((p) => p.end > now && p.start < dayEnd && p.end > from && p.start < to);
   const main = shownPlaced.filter((p) => p.lane === 0);
   const side = shownPlaced.filter((p) => p.lane > 0);
   const sideRows = Math.max(0, ...side.map((p) => p.lane));
@@ -349,7 +366,16 @@ export default function DayBar({
           className={`pointer-events-none absolute z-30 w-max min-w-[11rem] max-w-[20rem] ${pos ? "" : below ? "top-full mt-7" : "bottom-full mb-7"} rounded-card bg-accent px-4 py-3 text-accent-ink shadow-xl shadow-ink/30`}
           style={{ left: `${hoverMid}%`, transform: `translateX(-${slide}%)`, ...pos?.bubble }}
         >
-          {hover.phone ? (
+          {hover.plan ? (
+            <>
+              <p className="font-display text-base font-semibold">{hover.plan.title || "Untitled"}</p>
+              <p className="num mt-0.5 text-sm opacity-80">
+                Planned · {clock(new Date(hover.plan.start), tz)} – {clock(new Date(hover.plan.end), tz)}
+              </p>
+              {hover.plan.location && <p className="mt-1 line-clamp-2 text-sm opacity-80">{hover.plan.location}</p>}
+              {onSelectPlan && <p className="mt-1 text-xs opacity-70">Click to change it on Plan</p>}
+            </>
+          ) : hover.phone ? (
             <>
               <p className="font-display text-base font-semibold">{hover.phone.kind === "app" ? (hover.phone.app ?? "An app") : "On your phone"}</p>
               <p className="num mt-0.5 text-sm opacity-80">
@@ -437,6 +463,28 @@ export default function DayBar({
         })}
         {now < dayEnd && <div className="absolute inset-y-0 right-0 bg-paper" style={{ left: `${Math.max(0, at(now))}%` }} />}
         {main.map((p) => entry(p, { ...pill(p.start, p.end), top: 0, bottom: 0 }, "rounded-[9px]", resizable))}
+        {/* Still planned (later today): dashed, in what's left of the day. */}
+        {shownPlans.map((p) => {
+          const s0 = Math.max(p.start, now);
+          const w = ((at(p.end) - at(s0)) / 100) * barWidth;
+          return (
+            <button
+              key={p.id}
+              type="button"
+              aria-label={`Planned: ${p.title || "Untitled"}, ${clock(new Date(p.start), tz)} to ${clock(new Date(p.end), tz)}. Change it on Plan`}
+              onMouseEnter={() => hoverPlan(p)}
+              onFocus={() => hoverPlan(p)}
+              onBlur={() => setHover(null)}
+              onClick={() => onSelectPlan?.(p)}
+              className={`absolute inset-y-[3px] overflow-hidden rounded-[8px] border-2 border-dashed px-1.5 text-left transition-colors ${
+                hover?.plan?.id === p.id ? "border-ink bg-ink/10" : "border-ink/35 bg-paper hover:border-ink/60"
+              }`}
+              style={pill(s0, p.end)}
+            >
+              {w > 44 && !compact && <span className="pointer-events-none block truncate text-[11px] font-semibold leading-tight text-ink/70">{p.title || "Untitled"}</span>}
+            </button>
+          );
+        })}
         {/* While dragging an edge: a line where it'll go. */}
         {edge && <div aria-hidden="true" className="pointer-events-none absolute inset-y-0 z-30 w-0.5 -translate-x-1/2 bg-ink" style={{ left: `${at(edge.at)}%` }} />}
         {/* Faint lines at the time marks. */}

@@ -2,7 +2,8 @@
 
 import { useEffect, useState, useSyncExternalStore, type ReactNode } from "react";
 import type { Day } from "@/mbm/data";
-import DayBar from "./DayBar";
+import { useRouter } from "next/navigation";
+import DayBar, { type DayPlan } from "./DayBar";
 import DayMap from "./DayMap";
 import type { Focus } from "./DayMapInner";
 import NowChip from "./NowChip";
@@ -20,6 +21,7 @@ import { useNow } from "./useNow";
 // title / subtitle / nav (the day before / after) come from the page.
 export default function DayView({
   day,
+  plans = [],
   today,
   renderedAt,
   title,
@@ -27,6 +29,7 @@ export default function DayView({
   nav,
 }: {
   day: Day;
+  plans?: DayPlan[]; // still planned for later today
   today: boolean;
   renderedAt: number;
   title: string;
@@ -39,6 +42,8 @@ export default function DayView({
   const byId = new Map(day.activities.map((a) => [a.id, a]));
   const { placed, lanes, gaps } = layOut(day.blocks, dayStart, dayEnd, now);
   const [focus, setFocus] = useState<Focus | null>(null); // hovering the bar → lit up on the map
+  const [pin, setPin] = useState<DayPlan | null>(null); // hovering a plan on the bar → where it is, on the map
+  const router = useRouter();
   const [marks, setMarks] = useState<{ start: number; end: number }[] | null>(null); // hovering the map → outlined on the bar
   // Remembered (per browser), so it stays when going to another day.
   const mapMode = useSyncExternalStore(subscribe, readMapMode, () => false);
@@ -59,6 +64,9 @@ export default function DayView({
       byId={byId}
       onSelect={(b) => openMbm({ kind: "edit", dayKey: day.dayKey, blockId: b.id })}
       marks={marks}
+      plans={plans}
+      onHoverPlan={setPin}
+      onSelectPlan={(p) => router.push(`/mbm/plan?event=${encodeURIComponent(p.id)}`)}
       phone={day.phone}
       slim={mapMode}
       onHover={(h) =>
@@ -119,6 +127,7 @@ export default function DayView({
         <DayMap
           day={day}
           focus={focus}
+          pin={pin}
           onPointer={setMarks}
           gestures="greedy"
           bare={mapMode}
