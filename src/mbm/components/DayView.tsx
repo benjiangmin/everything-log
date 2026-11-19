@@ -76,16 +76,24 @@ export default function DayView({
       onSelectPlan={(p) => router.push(`/mbm/plan?event=${encodeURIComponent(p.id)}`)}
       phone={day.phone}
       slim={mapMode}
-      onHover={(h) =>
-        setFocus(
-          h && {
-            start: h.start,
-            end: h.end,
-            // Commute → the route; anything else → where you were; untracked → either.
-            kind: !h.block ? "any" : isMoving(h.block.activity_id ? byId.get(h.block.activity_id)?.name : null) ? "moving" : "still",
-          },
-        )
-      }
+      onHover={(h) => {
+        if (!h) {
+          setFocus(null);
+          setMarks(null);
+          return;
+        }
+        // Commute → the route; anything else → where you were; untracked → either.
+        const kind: Focus["kind"] = !h.block ? "any" : isMoving(h.block.activity_id ? byId.get(h.block.activity_id)?.name : null) ? "moving" : "still";
+        // An entry that covers more than one stop (Work at Russell Labs, then Ag Hall): just the
+        // part under the pointer, outlined on the bar, and only that place (or trip) on the map.
+        const part = kind === "still" && h.at !== undefined ? partAt(day.visits, h.at, h.start, h.end, now) : null;
+        const next = part ?? { start: h.start, end: h.end, kind };
+        setFocus((f) => (f && f.start === next.start && f.end === next.end && f.kind === next.kind ? f : next));
+        setMarks((m) => {
+          if (!part || (part.start <= h.start + 60_000 && part.end >= h.end - 60_000)) return m === null ? m : null;
+          return m && m.length === 1 && m[0].start === part.start && m[0].end === part.end ? m : [{ start: part.start, end: part.end }];
+        });
+      }}
       // Untracked up to right now: you're asked what you're doing (it starts from when it began).
       // Earlier untracked time: fill it in.
       onSelectGap={(g) => (g.end >= now - 60_000 ? openMbm({ kind: "now" }) : openMbm({ kind: "add", dayKey: day.dayKey, from: g.start, to: g.end }))}
@@ -206,4 +214,19 @@ function useNoPageZoom() {
       document.removeEventListener("gesturechange", noGesture);
     };
   }, []);
+}
+
+// The stop you were at, at time t (inside an entry from..to): its stretch within the entry; or,
+// between stops, the trip. Null when the entry only covers one of them (nothing to narrow down).
+function partAt(visits: Day["visits"], t: number, from: number, to: number, now: number): Focus | null {
+  const spans = visits
+    .map((v) => ({ start: Math.max(from, +new Date(v.arrived_at)), end: Math.min(to, v.departed_at ? +new Date(v.departed_at) : now) }))
+    .filter((s) => s.end > s.start)
+    .sort((a, b) => a.start - b.start);
+  if (spans.length < 2) return null;
+  const hit = spans.find((s) => s.start <= t && t < s.end);
+  if (hit) return { ...hit, kind: "still" };
+  const before = [...spans].reverse().find((s) => s.end <= t);
+  const after = spans.find((s) => s.start > t);
+  return { start: before?.end ?? from, end: after?.start ?? to, kind: "moving" };
 }

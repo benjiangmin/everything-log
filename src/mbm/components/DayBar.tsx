@@ -53,7 +53,7 @@ export default function DayBar({
   byId: Map<string, Activity>;
   onSelect?: (b: Block) => void;
   onSelectGap?: (gap: { start: number; end: number }) => void; // click untracked time to fill it in
-  onHover?: (span: { start: number; end: number; block?: Block } | null) => void;
+  onHover?: (span: { start: number; end: number; block?: Block; at?: number } | null) => void; // at: the time under the pointer
   marks?: { start: number; end: number }[] | null; // outlined (what you're hovering on the map) // what's hovered (the map lights it up)
   phone?: PhoneUse[]; // apps you used (a thin line under the bar)
   compact?: boolean; // the home page's smaller version
@@ -253,15 +253,17 @@ export default function DayBar({
   const main = shownPlaced.filter((p) => p.lane === 0);
   const side = shownPlaced.filter((p) => p.lane > 0);
   // Sandwiched: the same job right before and after it (5 minutes apart or less), and it's
-  // neither that job nor a Commute. Hovering it shows a ↓ to put it under them, joined.
+  // not that job. Hovering it shows a ↓ to put it under them, joined.
   const GAP = 5 * 60_000;
   const sandwich = new Map<string, Block>(); // middle's id → the entry before it
   main.forEach((p, i) => {
     const b = main[i - 1];
     const a = main[i + 1];
-    if (!b || !a || !p.block.ended_at || p.block.source === "location") return;
+    if (!b || !a || !p.block.ended_at) return;
     const job = b.block.activity_id;
     if (!job || job !== a.block.activity_id || job === p.block.activity_id) return;
+    // (Never under a Commute: Work, Commute, Work tucks the Commute; Commute, Work, Commute doesn't tuck Work.)
+    if (b.block.source === "location" || byId.get(job)?.name === "Commute") return;
     if (p.start - b.end > GAP || a.start - p.end > GAP) return;
     sandwich.set(p.block.id, b.block);
   });
@@ -277,6 +279,14 @@ export default function DayBar({
   };
 
   const nameOf = (b: Block) => (b.activity_id ? byId.get(b.activity_id) : undefined);
+  // The time under the pointer, as it moves along an entry (one entry can cover two places: the
+  // map lights up the one you were at then).
+  const pointAt = (x: number, p: Placed) => {
+    const el = barRef.current;
+    if (!onHover || !el || edge) return;
+    const r = el.getBoundingClientRect();
+    onHover({ start: p.start, end: p.end, block: p.block, at: from + ((x - r.left) / r.width) * shown });
+  };
   // One entry: hover for what it was, click to change it.
   // (A plain function, not a component, so the pills aren't re-made on every hover.)
   const entry = (p: Placed, style: CSSProperties, round: string, handles = false) => {
@@ -312,6 +322,7 @@ export default function DayBar({
         type="button"
         aria-label={label}
         onMouseEnter={() => setHover(p)}
+        onMouseMove={(e) => pointAt(e.clientX, p)}
         onFocus={() => setHover(p)}
         onBlur={() => setHover(null)}
         onClick={() => onSelect(p.block)}
