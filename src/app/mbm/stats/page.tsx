@@ -8,6 +8,7 @@ import { isDayKey } from "@/mbm/time";
 import { getPins, getStats, isRange, periodOf, todayKey, type Range } from "@/mbm/stats";
 import StatsView from "@/mbm/components/StatsView";
 import RangeRail, { RANGE_COLOR } from "@/mbm/components/RangeRail";
+import JumpTo from "@/mbm/components/JumpTo";
 
 export const metadata = { title: "Stats" };
 
@@ -60,6 +61,7 @@ async function StatsFor({ range, day: asked, q }: { range: Range; day?: string; 
           {range}
         </p>
         <div className="flex items-center gap-1">
+          <JumpTo range={range} current={dayKey} today={today} color={RANGE_COLOR[range]} />
           <Link href={href(range, period.prev)} aria-label={`The ${range} before`} className={arrow}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
               <path d="M15 5l-7 7 7 7" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />

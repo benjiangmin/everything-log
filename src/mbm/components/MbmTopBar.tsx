@@ -13,8 +13,9 @@ const TABS = [
   { href: "/mbm", label: "Home" },
   { href: "/mbm/day", label: "Day" },
   { href: "/mbm/stats", label: "Stats" },
-  { href: "/mbm/future", label: "Future" },
 ];
+// (Future sits on its own at the right, next to the search.)
+const FUTURE = { href: "/mbm/future", label: "Future" };
 
 export default function MbmTopBar({
   signedIn,
@@ -58,8 +59,19 @@ export default function MbmTopBar({
           </nav>
         )}
         {signedIn && (
-          <div className="ml-auto hidden min-w-0 flex-1 justify-end md:flex">
-            <TopSearch />
+          <div className="ml-auto flex min-w-0 flex-1 items-center justify-end gap-3">
+            <Link
+              href={FUTURE.href}
+              aria-current={active(FUTURE.href) ? "page" : undefined}
+              className={`shrink-0 rounded-control px-3 py-2 text-sm font-semibold transition-colors ${
+                active(FUTURE.href) ? "bg-accent text-accent-ink" : "text-muted hover:bg-surface hover:text-ink"
+              }`}
+            >
+              {FUTURE.label}
+            </Link>
+            <div className="hidden min-w-0 flex-1 justify-end md:flex md:max-w-md">
+              <TopSearch />
+            </div>
           </div>
         )}
         <div className={`flex items-center gap-1 ${signedIn ? "md:ml-2" : ""} ml-auto`}>

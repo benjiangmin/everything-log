@@ -47,7 +47,7 @@ export default function AboutYouForm({ profile, onDone }: { profile: Profile | n
       </fieldset>
       <label className="grid gap-1.5 text-sm font-semibold">
         Race or ethnicity
-        <select name="race" defaultValue={profile?.race ?? ""} className={field} style={{ outline: "none" }}>
+        <select name="race" defaultValue={profile?.race ?? ""} className={`${field} select-field`} style={{ outline: "none" }}>
           <option value="">Choose…</option>
           {RACES.map((r) => (
             <option key={r.id} value={r.id}>
@@ -58,7 +58,7 @@ export default function AboutYouForm({ profile, onDone }: { profile: Profile | n
       </label>
       <label className="grid gap-1.5 text-sm font-semibold sm:col-span-2">
         State you live in
-        <select name="state" defaultValue={profile?.state ?? ""} className={field} style={{ outline: "none" }}>
+        <select name="state" defaultValue={profile?.state ?? ""} className={`${field} select-field`} style={{ outline: "none" }}>
           <option value="">Choose…</option>
           {Object.keys(STATES).map((s) => (
             <option key={s} value={s}>
@@ -76,7 +76,7 @@ export default function AboutYouForm({ profile, onDone }: { profile: Profile | n
       ).map(([key, label, options, value]) => (
         <label key={key} className={`grid gap-1.5 text-sm font-semibold ${key === "exercise" ? "sm:col-span-2" : ""}`}>
           {label}
-          <select name={key} defaultValue={value ?? ""} className={field} style={{ outline: "none" }}>
+          <select name={key} defaultValue={value ?? ""} className={`${field} select-field`} style={{ outline: "none" }}>
             <option value="">Choose…</option>
             {options.map((o) => (
               <option key={o.id} value={o.id}>
