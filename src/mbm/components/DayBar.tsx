@@ -368,6 +368,8 @@ export default function DayBar({
       onMouseOver={(e) => {
         const w = wrapRef.current;
         if (!w) return;
+        // (The ↓ on a sandwiched entry isn't something to point the bubble at: it stays put.)
+        if ((e.target as HTMLElement).closest("[data-tuck]")) return;
         const r = (e.target as HTMLElement).getBoundingClientRect();
         const box = w.getBoundingClientRect();
         setAnchor({ top: r.top - box.top, bottom: r.bottom - box.top, h: box.height });
@@ -551,7 +553,7 @@ export default function DayBar({
                   void onTuck(p.block).then((problem) => problem && setEdgeError(problem));
                 }}
                 aria-label={`Put ${nameOf(p.block)?.name ?? "this"} under ${outer}, and join the two ${outer} entries`}
-                title={`Put it under ${outer} (joins the two ${outer} entries)`}
+                data-tuck
                 className="absolute bottom-1 z-30 grid size-6 -translate-x-1/2 place-items-center rounded-full bg-paper text-ink shadow-md ring-1 ring-ink/20 transition-transform hover:scale-110"
                 style={{ left: `${at((p.start + p.end) / 2)}%` }}
               >
