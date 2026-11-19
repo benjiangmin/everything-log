@@ -212,7 +212,7 @@ export default function DayMapInner({
               <span
                 title={label}
                 aria-label={label}
-                className={`block size-3 cursor-help rounded-full border-2 border-[#faf6f0] bg-[#7f5539] shadow transition-opacity ${
+                className={`block size-3 cursor-default rounded-full border-2 border-[#faf6f0] bg-[#7f5539] shadow transition-opacity ${
                   dimming && !lit?.trip.has(t.key) ? "opacity-35" : ""
                 }`}
               />
@@ -228,7 +228,7 @@ export default function DayMapInner({
                 <span
                   title={label}
                   aria-label={label}
-                  className={`grid size-[18px] cursor-help place-items-center rounded-[6px] border-2 border-[#faf6f0] bg-[#3e281b] shadow transition-opacity ${
+                  className={`grid size-[18px] cursor-default place-items-center rounded-[6px] border-2 border-[#faf6f0] bg-[#3e281b] shadow transition-opacity ${
                     dimming && !lit?.trip.has(t.key) ? "opacity-35" : ""
                   }`}
                 >

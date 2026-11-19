@@ -462,11 +462,11 @@ export default function DayBar({
           );
         })}
         {now < dayEnd && <div className="absolute inset-y-0 right-0 bg-paper" style={{ left: `${Math.max(0, at(now))}%` }} />}
-        {main.map((p) => entry(p, { ...pill(p.start, p.end), top: 0, bottom: 0 }, "rounded-[9px]", resizable))}
         {/* Still planned (later today): dashed, in what's left of the day. */}
         {shownPlans.map((p) => {
-          const s0 = Math.max(p.start, now);
-          const w = ((at(p.end) - at(s0)) / 100) * barWidth;
+          // (At its own times, even once it's begun: it doesn't shrink as now moves through it.
+          // Under your entries, so what you actually did shows over the part that's happened.)
+          const w = ((at(p.end) - at(p.start)) / 100) * barWidth;
           return (
             <button
               key={p.id}
@@ -477,14 +477,15 @@ export default function DayBar({
               onBlur={() => setHover(null)}
               onClick={() => onSelectPlan?.(p)}
               className={`absolute inset-y-[3px] overflow-hidden rounded-[8px] border-2 border-dashed px-1.5 text-left transition-colors ${
-                hover?.plan?.id === p.id ? "border-ink bg-ink/10" : "border-ink/35 bg-paper hover:border-ink/60"
+                hover?.plan?.id === p.id ? "border-ink bg-ink/10" : "border-ink/35 bg-transparent hover:border-ink/60"
               }`}
-              style={pill(s0, p.end)}
+              style={pill(p.start, p.end)}
             >
               {w > 44 && !compact && <span className="pointer-events-none block truncate text-[11px] font-semibold leading-tight text-ink/70">{p.title || "Untitled"}</span>}
             </button>
           );
         })}
+        {main.map((p) => entry(p, { ...pill(p.start, p.end), top: 0, bottom: 0 }, "rounded-[9px]", resizable))}
         {/* While dragging an edge: a line where it'll go. */}
         {edge && <div aria-hidden="true" className="pointer-events-none absolute inset-y-0 z-30 w-0.5 -translate-x-1/2 bg-ink" style={{ left: `${at(edge.at)}%` }} />}
         {/* Faint lines at the time marks. */}
