@@ -663,6 +663,7 @@ function PointerTrack({ trips, onHit }: { trips: Trip[]; onHit: (keys: string[],
 function useFilledTrips(trips: Trip[], points: RoutePoint[]): { trips: Trip[]; settled: boolean } {
   const [better, setBetter] = useState<Record<string, Spot[]>>({});
   const [doneKeys, setDoneKeys] = useState<Set<string>>(() => new Set()); // (pieces worked out, drawn better or not)
+  const [guessed, setGuessed] = useState<Set<string>>(() => new Set()); // (recorded pieces with too few dots: filled in, so a guess)
   const asked = useRef(new Set<string>());
   // Your trails around the day (trails.ts), learned from your walks before it. Fetched once per
   // day; the pieces wait for them (a few hundred ms) so they're drawn the learned way first time.
@@ -704,11 +705,11 @@ function useFilledTrips(trips: Trip[], points: RoutePoint[]): { trips: Trip[]; s
           // wait is just where you stood, so a bus stop never turns into a detour.
           // (The path is [the stop, the door you left by] + your dots + [the next stop].)
           const head = p.path.slice(0, Math.max(0, p.path.length - (p.dots?.length ?? 0) - (p.ends?.to ? 1 : 0)));
-          // Walks are first pulled onto your usual line (your trails). Then: on paths you walk all
-          // the time (most of it on a well-worn trail), or when the dots are dense and sure of
-          // themselves, your dots are the route (smoothed a little), not the map's: the map had
-          // put you down the middle of streets and round the Library Mall circle. Otherwise
-          // (new places, thin or wobbly dots) they're matched to the map's paths as before.
+          // Walks are first pulled onto your usual line (your trails), then matched to real paths
+          // and sidewalks (snap.ts): GPS beside buildings drifts 15-30 m into them, and a route
+          // never goes through a building. Your dots still win where they're far from any path
+          // (a real shortcut the map doesn't know). Unmatched (the server can't say): your dots,
+          // smoothed when they're good ones.
           const legs = (p.dots ? splitLegs(p.dots) : []).map((l) =>
             center && l.mode === "walk" ? { ...l, dots: center.center(l.dots), known: center.known(l.dots) } : { ...l, known: 0 },
           );
@@ -716,12 +717,25 @@ function useFilledTrips(trips: Trip[], points: RoutePoint[]): { trips: Trip[]; s
             legs.map(async (l) => {
               if (l.mode === "wait") return [waitSpot(l)];
               const asDots = () => l.dots.map((d) => ({ lat: d.lat, lng: d.lng }));
-              if (l.mode === "walk" && (l.known >= 0.6 || trustworthy(l.dots))) return smooth(asDots());
-              return (await snapLeg(l.dots, l.mode)) ?? asDots();
+              const matched = await snapLeg(l.dots, l.mode);
+              if (matched) return matched;
+              return l.mode === "walk" && (l.known >= 0.6 || trustworthy(l.dots)) ? smooth(asDots()) : asDots();
             }),
           );
           const body = despike(drawn.flat());
-          if (legs.length && body.length >= 2) path = [...head, ...body, ...(p.ends?.to ? [b] : [])]; // (joined back to where it really starts and ends)
+          // Hardly any dots for a real distance (one or two: the phone barely saw the trip): that's
+          // a gap, not a straight line through whatever's between. Filled in like one, below.
+          const thin = (p.dots?.length ?? 0) < 3 && metres(a, b) >= 120;
+          if (!thin && legs.length && body.length >= 2) path = [...head, ...body, ...(p.ends?.to ? [b] : [])]; // (joined back to where it really starts and ends)
+          if (thin) {
+            const whole = t.pieces.length === 1 && t.fromId && t.toId;
+            const remembered = whole ? await rememberedRoute(t.fromId!, t.toId!).catch(() => null) : null;
+            const found = remembered ?? (await walkingRoute(a, b));
+            if (found) {
+              setGuessed((g) => new Set(g).add(key));
+              path = [a, ...found, b];
+            }
+          }
         } else if (metres(a, b) >= 120) {
           const whole = t.pieces.length === 1 && t.fromId && t.toId;
           const remembered = whole ? await rememberedRoute(t.fromId!, t.toId!).catch(() => null) : null;
@@ -740,7 +754,11 @@ function useFilledTrips(trips: Trip[], points: RoutePoint[]): { trips: Trip[]; s
   const filled = useMemo(
     () =>
       trips.map((t) => {
-        const pieces = t.pieces.map((p, i) => (better[pieceKey(t, i)] ? { ...p, path: better[pieceKey(t, i)] } : p));
+        const pieces = t.pieces.map((p, i) => {
+          const k = pieceKey(t, i);
+          if (!better[k]) return (p.dots?.length ?? 0) < 3 && !p.missing && p.path.length >= 2 && metres(p.path[0], p.path[p.path.length - 1]) >= 120 ? { ...p, missing: true } : p;
+          return { ...p, path: better[k], ...(guessed.has(k) ? { missing: true } : {}) };
+        });
         // A missed bit runs from where the piece before it is drawn to end, to where the next one
         // is drawn to start (those were snapped or pulled onto your path, so they're not quite at
         // the raw dots any more): no little gaps where they meet.
@@ -757,7 +775,7 @@ function useFilledTrips(trips: Trip[], points: RoutePoint[]): { trips: Trip[]; s
           }),
         };
       }),
-    [trips, better],
+    [trips, better, guessed],
   );
   // Every piece worked out (for saving a finished day's routes).
   const settled = ready && trips.every((t) => t.pieces.every((_, i) => doneKeys.has(pieceKey(t, i))));
