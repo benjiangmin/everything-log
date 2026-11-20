@@ -28,7 +28,7 @@ type Pin = { title: string; location: string | null; at: { lat: number; lng: num
 // labelled with their name (yours, or the one the phone found, like "Noland Hall"). Click a stop to rename it; later
 // visits there get the name by themselves. Hovering the day bar highlights where you were then.
 export default function DayMapInner({
-  visits,
+  visits: phoneVisits,
   points,
   tz,
   focus,
@@ -73,6 +73,9 @@ export default function DayMapInner({
   // What the pointer is on: trips under it (several, where paths overlap) or a stop.
   const [pointed, setPointed] = useState<{ trips: string[]; stops: string[]; x: number; y: number } | null>(null);
   const box = useRef<HTMLDivElement>(null);
+  // A stop whose building is known but whose spot is out on the street (GPS wanders indoors): it's
+  // drawn in the middle of the building, and its routes go there.
+  const visits = useMemo(() => phoneVisits.map((v) => (v.outline && !nearOutline(v.outline, v.lat, v.lng, 0) ? { ...v, ...middleOf(v.outline) } : v)), [phoneVisits]);
   const day = useMemo(() => {
     if (!dayKey) return null;
     const r = dayRange(dayKey, tz);
@@ -1095,4 +1098,10 @@ function trustworthy(dots: Dot[]): boolean {
   const gaps = dots.slice(1).map((d, i) => d.t - dots[i].t).sort((a, b) => a - b);
   const accs = dots.map((d) => d.acc ?? 30).sort((a, b) => a - b);
   return gaps[Math.floor(gaps.length / 2)] <= 12_000 && accs[Math.floor(accs.length * 0.7)] <= 15;
+}
+
+// The middle of a building's outline (the average of its corners: fine for a building).
+function middleOf(outline: [number, number][]) {
+  const n = outline.length || 1;
+  return { lat: outline.reduce((t, [lat]) => t + lat, 0) / n, lng: outline.reduce((t, [, lng]) => t + lng, 0) / n };
 }
