@@ -105,8 +105,9 @@ export default function DayBar({
   const [view, setView] = useState<[number, number]>([dayStart, dayEnd]);
   // "Now": zoomed in on the last 2 hours and the next one, moving along as the time does. Any
   // zooming or dragging of your own stops it following.
-  const [follow, setFollow] = useState(false);
+  // (Today opens zoomed in on now; another day, on the whole day.)
   const live = now > dayStart && now < dayEnd;
+  const [follow, setFollow] = useState(live);
   const followed: [number, number] = (() => {
     const len = Math.min(dayEnd - dayStart, 3 * 3600_000);
     const start = Math.min(dayEnd - len, Math.max(dayStart, now - 2 * 3600_000));
@@ -124,8 +125,33 @@ export default function DayBar({
     const start = Math.min(dayEnd - len, Math.max(dayStart, a));
     return [start, start + len];
   };
+  // The zoom icons glide from one view to the other (pinching and dragging don't: they follow
+  // your hand). Instant with reduced motion.
+  const glide = useRef(0);
+  const glideTo = (target: [number, number], then?: () => void) => {
+    cancelAnimationFrame(glide.current);
+    const start: [number, number] = [from, to];
+    setFollow(false);
+    setView(start);
+    const still = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (still) {
+      setView(target);
+      then?.();
+      return;
+    }
+    const t0 = performance.now();
+    const ease = (x: number) => (x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2);
+    const step = (t: number) => {
+      const k = ease(Math.min(1, (t - t0) / 380));
+      setView([start[0] + (target[0] - start[0]) * k, start[1] + (target[1] - start[1]) * k]);
+      if (k < 1) glide.current = requestAnimationFrame(step);
+      else then?.();
+    };
+    glide.current = requestAnimationFrame(step);
+  };
   // (Zooming or moving it yourself: it stops following now, from where it is.)
   const takeOver = () => {
+    cancelAnimationFrame(glide.current);
     if (!follow) return;
     setFollow(false);
     setView([from, to]);
@@ -455,7 +481,11 @@ export default function DayBar({
         aria-label={live ? "Zoom in on now" : "Zoom in"}
         title={live ? "Zoom in on now (moves along with the time)" : "Zoom in"}
         disabled={!live && shown <= MIN_VIEW}
-        onClick={() => (live ? setFollow(true) : zoomAround(0.5))}
+        onClick={() => {
+          if (live) return glideTo(followed, () => setFollow(true));
+          const pivot = (from + to) / 2;
+          glideTo(fit(pivot - (to - from) / 4, pivot + (to - from) / 4));
+        }}
         className={`grid size-7 place-items-center rounded-full transition-colors disabled:opacity-40 ${follow ? "bg-paper text-ink shadow-sm" : "hover:text-ink"}`}
       >
         {lens(true)}
@@ -465,10 +495,7 @@ export default function DayBar({
         aria-pressed={!follow && !zoomed}
         aria-label="Zoom out to the whole day"
         title="Whole day"
-        onClick={() => {
-          setFollow(false);
-          setView([dayStart, dayEnd]);
-        }}
+        onClick={() => glideTo([dayStart, dayEnd])}
         className={`grid size-7 place-items-center rounded-full transition-colors ${!follow && !zoomed ? "bg-paper text-ink shadow-sm" : "hover:text-ink"}`}
       >
         {lens(false)}
