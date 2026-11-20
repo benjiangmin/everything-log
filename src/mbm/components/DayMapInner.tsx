@@ -109,7 +109,9 @@ export default function DayMapInner({
   // What lights up for the hovered stretch: the trips (moving) or the stops (still) during it.
   const barLit = useMemo(() => {
     if (!focus) return null;
-    const overlaps = (a: number, b: number) => a < focus.end && b > focus.start;
+    // (Overlapping by more than a moment: a trip that ends just as an untracked stretch begins
+    // isn't part of it.)
+    const overlaps = (a: number, b: number) => Math.min(b, focus.end) - Math.max(a, focus.start) > Math.min(60_000, (focus.end - focus.start) / 2);
     const trip = new Set(focus.kind === "still" ? [] : trips.filter((t) => overlaps(t.start, t.end)).map((t) => t.key));
     const stops = new Set(
       focus.kind === "moving"

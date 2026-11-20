@@ -27,6 +27,7 @@ export default function DayBar({
   byId,
   onSelect,
   onSelectGap,
+  splitGap,
   onHover,
   marks = null,
   phone = [],
@@ -53,6 +54,9 @@ export default function DayBar({
   byId: Map<string, Activity>;
   onSelect?: (b: Block) => void;
   onSelectGap?: (gap: { start: number; end: number }) => void; // click untracked time to fill it in
+  // An untracked stretch over more than one stop: the part at time t (where you were, or a trip),
+  // so pointing along it shows and fills in just that part.
+  splitGap?: (t: number, gap: { start: number; end: number }) => { start: number; end: number; where: string } | null;
   onHover?: (span: { start: number; end: number; block?: Block; at?: number } | null) => void; // at: the time under the pointer
   marks?: { start: number; end: number }[] | null; // outlined (what you're hovering on the map) // what's hovered (the map lights it up)
   phone?: PhoneUse[]; // apps you used (a thin line under the bar)
@@ -279,6 +283,19 @@ export default function DayBar({
   };
 
   const nameOf = (b: Block) => (b.activity_id ? byId.get(b.activity_id) : undefined);
+  // The part of an untracked stretch under the pointer (see splitGap).
+  const [gapPart, setGapPart] = useState<{ start: number; end: number; where: string } | null>(null);
+  const timeAtX = (x: number) => {
+    const r = barRef.current!.getBoundingClientRect();
+    return from + ((x - r.left) / r.width) * shown;
+  };
+  const pointGap = (x: number, g: { start: number; end: number }) => {
+    if (!barRef.current || edge) return;
+    const t = timeAtX(x);
+    const part = splitGap?.(t, g) ?? null;
+    setGapPart((p) => (p && part && p.start === part.start && p.end === part.end ? p : part));
+    onHover?.({ start: g.start, end: g.end, at: t });
+  };
   // The time under the pointer, as it moves along an entry (one entry can cover two places: the
   // map lights up the one you were at then).
   const pointAt = (x: number, p: Placed) => {
@@ -430,11 +447,24 @@ export default function DayBar({
             </>
           ) : (
             <>
-              <p className="font-display text-base font-semibold">Untracked</p>
-              <p className="num mt-0.5 text-sm opacity-80">
-                {clock(new Date(hover.start), tz)} – {clock(new Date(hover.end), tz)} · {span(hover.end - hover.start)}
-              </p>
-              {onSelectGap && <p className="mt-1 text-xs opacity-70">{hover.end >= now - 60_000 ? "Click to say what you're doing" : "Click to fill it in"}</p>}
+              {(() => {
+                // Pointing at one part of a stretch over several places: that part.
+                const part = gapPart && gapPart.start >= hover.start - 1000 && gapPart.end <= hover.end + 1000 ? gapPart : null;
+                const s = part ?? hover;
+                return (
+                  <>
+                    <p className="font-display text-base font-semibold">Untracked{part ? <span className="font-normal opacity-80"> · {part.where}</span> : null}</p>
+                    <p className="num mt-0.5 text-sm opacity-80">
+                      {clock(new Date(s.start), tz)} – {clock(new Date(s.end), tz)} · {span(s.end - s.start)}
+                    </p>
+                    {onSelectGap && (
+                      <p className="mt-1 text-xs opacity-70">
+                        {s.end >= now - 60_000 ? "Click to say what you're doing" : part ? "Click to fill in this part" : "Click to fill it in"}
+                      </p>
+                    )}
+                  </>
+                );
+              })()}
             </>
           )}
         </div>
@@ -484,10 +514,18 @@ export default function DayBar({
               key={g.start}
               type="button"
               aria-label={`Untracked, ${clock(new Date(g.start), tz)} to ${clock(new Date(g.end), tz)}. Fill it in`}
-              onMouseEnter={() => setHover(g)}
+              onMouseEnter={() => {
+                setGapPart(null);
+                setHover(g);
+              }}
+              onMouseMove={(e) => pointGap(e.clientX, g)}
               onFocus={() => setHover(g)}
               onBlur={() => setHover(null)}
-              onClick={() => onSelectGap(g)}
+              onClick={(e) => {
+                // (Just the part you're pointing at, when the stretch covers more than one place.)
+                const part = splitGap?.(timeAtX(e.clientX), g);
+                onSelectGap(part ? { start: part.start, end: part.end } : g);
+              }}
               className={`${cls} transition-[filter] hover:brightness-95`}
               style={style}
             />
