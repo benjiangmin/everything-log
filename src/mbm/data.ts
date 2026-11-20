@@ -27,6 +27,8 @@ export type Visit = {
   outline?: Outline | null; // the building it's in (its place's, 032_places_by_building.sql)
   placeId?: string; // the named place it's at
   placeNeedsOutline?: boolean; // that place's building hasn't been looked up yet
+  placeOwn?: string | null; // (047) your name for its place
+  placeReal?: { name: string; address: string | null } | null; // (047) the actual place it's linked to
 };
 // Using your phone (018_phone_use.sql): unlocked → locked ('phone'), or one app open ('app').
 export type PhoneUse = { id: string; kind: "phone" | "app"; app: string | null; started_at: string; ended_at: string | null };
@@ -115,9 +117,9 @@ export async function getDay(dayKey: string): Promise<Day> {
     return out;
   }
   const [firstVisits, pointRows, phoneRows] = await Promise.all([
-    visitsOn("id, arrived_at, departed_at, lat, lng, auto_name, outline, places(id, name, lat, lng, outline, outline_checked)").then((r) =>
-      r.error ? visitsOn("id, arrived_at, departed_at, lat, lng, auto_name, places(name, lat, lng)") : r,
-    ), // (without outline: 021 not run yet)
+    visitsOn("id, arrived_at, departed_at, lat, lng, auto_name, outline, places(id, name, lat, lng, outline, outline_checked, own_name, real_name, real_address)")
+      .then((r) => (r.error ? visitsOn("id, arrived_at, departed_at, lat, lng, auto_name, outline, places(id, name, lat, lng, outline, outline_checked)") : r)) // (047 not run yet)
+      .then((r) => (r.error ? visitsOn("id, arrived_at, departed_at, lat, lng, auto_name, places(name, lat, lng)") : r)), // (without outline: 021 not run yet)
     allPoints(),
     client
       .from("phone_use")
@@ -128,7 +130,7 @@ export async function getDay(dayKey: string): Promise<Day> {
       .limit(3000),
   ]);
   const visitRows = firstVisits.error ? await visitsOn("id, arrived_at, departed_at, lat, lng, places(name)") : firstVisits; // 006 not run yet
-  type PlaceRow = { id?: string; name: string; lat?: number; lng?: number; outline?: Outline | null; outline_checked?: boolean };
+  type PlaceRow = { id?: string; name: string; lat?: number; lng?: number; outline?: Outline | null; outline_checked?: boolean; own_name?: string | null; real_name?: string | null; real_address?: string | null };
   type VisitRow = Omit<Visit, "place" | "auto_name"> & { auto_name?: string | null; places: PlaceRow | PlaceRow[] | null };
   const visits: Visit[] = visitRows.error
     ? []
@@ -140,7 +142,8 @@ export async function getDay(dayKey: string): Promise<Day> {
         const gps = "lat" in pin ? { gps: { lat: v.lat, lng: v.lng } } : {};
         // Its building: the place's (032_places_by_building.sql), or the stop's own.
         const where = place?.id ? { placeId: place.id, placeNeedsOutline: place.outline_checked === false } : {};
-        return { ...v, ...pin, ...gps, ...where, outline: place?.outline ?? v.outline ?? null, auto_name: v.auto_name ?? null, place: place?.name ?? null };
+        const names = place && "real_name" in place ? { placeOwn: place.own_name ?? null, placeReal: place.real_name ? { name: place.real_name, address: place.real_address ?? null } : null } : {};
+        return { ...v, ...pin, ...gps, ...where, ...names, outline: place?.outline ?? v.outline ?? null, auto_name: v.auto_name ?? null, place: place?.name ?? null };
       });
   const points: RoutePoint[] = pointRows;
   const phone: PhoneUse[] = phoneRows.error ? [] : (phoneRows.data as PhoneUse[]); // (018 not run yet: none)

@@ -2,7 +2,8 @@
 
 import dynamic from "next/dynamic";
 import { useEffect, useState, useTransition } from "react";
-import { entryPlaceInfo, newPlaceForEntry, setEntryPlace, type EntryPlaceInfo, type PlaceLite } from "@/app/mbm/actions";
+import { entryPlaceInfo, newPlaceForEntry, setEntryPlace, setEntryPlacePick, type EntryPlaceInfo, type PlaceLite } from "@/app/mbm/actions";
+import PlaceSearch, { type Found } from "./PlaceSearch";
 import { metres } from "@/mbm/trips";
 
 const PickOnMap = dynamic(() => import("./PlacePickerMap"), {
@@ -49,6 +50,15 @@ export default function EntryPlace({ blockId }: { blockId: string }) {
     });
   }
 
+  function pick(p: Found) {
+    setMessage(null);
+    run(async () => {
+      const res = await setEntryPlacePick(blockId, p);
+      if (res.ok) await saved();
+      else setMessage(res.message);
+    });
+  }
+
   function create(name: string, lat: number, lng: number) {
     setMessage(null);
     run(async () => {
@@ -58,10 +68,11 @@ export default function EntryPlace({ blockId }: { blockId: string }) {
     });
   }
 
-  // Your places, the usual one first, then closest to where the phone had you.
+  // A few quick picks (the usual one, then the closest to where the phone had you); a search for
+  // everything else, yours and Google's.
   const near = info.phone;
   const sorted = [...info.places].sort((a, b) => (near ? metres(a, near) - metres(b, near) : a.name.localeCompare(b.name)));
-  const list: PlaceLite[] = info.usual ? [info.usual, ...sorted.filter((p) => p.id !== info.usual!.id)] : sorted;
+  const list: PlaceLite[] = (info.usual ? [info.usual, ...sorted.filter((p) => p.id !== info.usual!.id)] : sorted).slice(0, 3);
 
   return (
     <div className={pending ? "opacity-60" : ""}>
@@ -90,6 +101,7 @@ export default function EntryPlace({ blockId }: { blockId: string }) {
 
       {open && (
         <div className="mt-2 flex flex-col gap-3 rounded-control border border-line p-3">
+          <PlaceSearch places={info.places} near={near} onPick={pick} autoFocus placeholder="Search your places, or anywhere" busy={pending} />
           {list.length > 0 && (
             <div className="flex flex-wrap gap-1.5">
               {list.map((p) => {

@@ -3,7 +3,8 @@
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { APIProvider, InfoWindow, Map, useMap, useMapsLibrary } from "@vis.gl/react-google-maps";
 import { useRouter } from "next/navigation";
-import { lockDay, lookupPlaceOutline, moveStop, namePlace, rememberedRoute, removeStop, reportRoute, saveBlock, setPlaceOutline, trailCells } from "@/app/mbm/actions";
+import { lockDay, lookupPlaceOutline, moveStop, myPlaces, rememberedRoute, removeStop, reportRoute, saveBlock, setPlaceOutline, setStopPlace, trailCells, type PlaceLite, type PlacePick } from "@/app/mbm/actions";
+import { Search as PlaceSearch, type Found } from "./PlaceSearch";
 
 // Which version of the path engine drew a route (saved with "Route looks wrong" reports).
 const PATH_ENGINE = "legs+trails+match-v2 (2026-11-18: your dots win on your own paths)";
@@ -1000,35 +1001,94 @@ function WholeDay({ onClick }: { onClick: () => void }) {
 
 // (Google's popup pads only its left side; the extra right padding below evens it out.)
 function NameStop({ visit, onDone, onMove }: { visit: Visit; onDone: () => void; onMove: () => void }) {
-  const [name, setName] = useState(visit.place ?? visit.auto_name ?? "");
+  // Your name for it (top), and the actual place it's linked to (below). Without your own name,
+  // the actual place's name is what shows.
+  const legacy = visit.placeReal === undefined; // (047 not run yet: just a name)
+  const startOwn = visit.placeOwn ?? (visit.placeReal ? "" : (visit.place ?? (legacy ? (visit.auto_name ?? "") : "")));
+  const [own, setOwn] = useState(startOwn);
+  const [real, setReal] = useState<Found | null>(null);
+  const [searching, setSearching] = useState(!legacy && !visit.placeReal);
+  const [places, setPlaces] = useState<PlaceLite[]>([]);
   const confirm = useConfirm();
   const [message, setMessage] = useState<string | null>(null);
   const [pending, run] = useTransition();
+  useEffect(() => {
+    if (legacy) return;
+    let live = true;
+    myPlaces().then((p) => live && setPlaces(p));
+    return () => {
+      live = false;
+    };
+  }, [legacy]);
+  const linked = real ? { name: real.label, address: real.detail } : (visit.placeReal ?? null);
+  const changed = own.trim() !== startOwn.trim() || !!real;
+  const save = () => {
+    setMessage(null);
+    run(async () => {
+      const pick: PlacePick | null = real ?? (visit.placeId ? { kind: "mine", id: visit.placeId } : null);
+      const res = await setStopPlace(visit.id, own.trim() !== startOwn.trim() || real ? own : null, pick);
+      if (res.ok) onDone();
+      else setMessage(res.message);
+    });
+  };
+  const label = "text-[11px] font-semibold text-[#86705f]";
   return (
     <form
       onSubmit={(e) => {
         e.preventDefault();
-        setMessage(null);
-        run(async () => {
-          const res = await namePlace(visit.id, name);
-          if (res.ok) onDone();
-          else setMessage(res.message);
-        })
+        save();
       }}
-      className="flex w-60 flex-col gap-2 p-1 pr-4 font-sans"
+      className="flex w-72 flex-col gap-2 p-1 pr-4 font-sans"
     >
-      {!visit.place && visit.auto_name && <p className="text-xs text-[#86705f]">Name found by your phone</p>}
+      <p className={label}>{legacy ? (!visit.place && visit.auto_name ? "Name found by your phone" : "Name") : "Your name for it"}</p>
       <input
-        value={name}
-        onChange={(e) => setName(e.target.value)}
-        placeholder="Name this place (Home, Theory…)"
+        value={own}
+        onChange={(e) => setOwn(e.target.value)}
+        placeholder={linked ? `Optional (else “${linked.name}”)` : "Home, Theory… (optional)"}
         maxLength={80}
-        autoFocus
+        autoFocus={!searching}
         className="rounded-[10px] border border-[#e2d5c4] bg-[#faf6f0] px-2.5 py-2 text-sm text-[#2b1c14] outline-none focus:border-[#2b1c14]"
       />
-      <div className="flex gap-2">
-        <button type="submit" disabled={pending || !name.trim()} className="flex-1 rounded-[10px] bg-[#3e281b] py-2 text-sm font-semibold text-[#faf6f0] disabled:opacity-50">
-          {pending ? "Saving…" : visit.place ? "Rename" : "Save name"}
+      {!legacy && (
+        <>
+          <p className={`${label} mt-1`}>Actual place</p>
+          {linked && !searching ? (
+            <div className="flex items-start gap-2 rounded-[10px] bg-[#f0e7db] px-2.5 py-2">
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-sm font-semibold text-[#2b1c14]">{linked.name}</span>
+                {linked.address && <span className="block truncate text-xs text-[#86705f]">{linked.address}</span>}
+              </span>
+              <button type="button" onClick={() => setSearching(true)} className="shrink-0 text-xs font-semibold text-[#3e281b] underline underline-offset-2">
+                Change
+              </button>
+            </div>
+          ) : (
+            <>
+              {!linked && visit.auto_name && <p className="-mt-1 text-xs text-[#86705f]">Your phone guessed this. Not right? Search for where you were.</p>}
+              <PlaceSearch
+                places={places}
+                initial={linked ? "" : (visit.auto_name ?? "")}
+                near={{ lat: visit.lat, lng: visit.lng }}
+                autoFocus
+                placeholder="Search: Pres House, Target…"
+                inputClassName="w-full rounded-[10px] border border-[#e2d5c4] bg-[#faf6f0] px-2.5 py-2 text-sm text-[#2b1c14] focus:border-[#2b1c14]"
+                onPick={(p) => {
+                  setReal(p);
+                  setSearching(false);
+                }}
+              />
+              {linked && (
+                <button type="button" onClick={() => setSearching(false)} className="self-start text-xs text-[#86705f] underline underline-offset-2">
+                  Keep {linked.name}
+                </button>
+              )}
+            </>
+          )}
+        </>
+      )}
+      <div className="mt-1 flex gap-2">
+        <button type="submit" disabled={pending || !changed || (!own.trim() && !linked)} className="flex-1 rounded-[10px] bg-[#3e281b] py-2 text-sm font-semibold text-[#faf6f0] disabled:opacity-50">
+          {pending ? "Saving…" : "Save"}
         </button>
         <button type="button" onClick={onDone} className="rounded-[10px] px-3 py-2 text-sm text-[#86705f] hover:bg-[#f0e7db]">
           Close

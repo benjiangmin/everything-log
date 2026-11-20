@@ -233,7 +233,7 @@ export async function retimeBlocks(changes: { id: string; start?: string; end?: 
 
 // ---------- Where an entry happened ----------
 
-export type PlaceLite = { id: string; name: string; lat: number; lng: number };
+export type PlaceLite = { id: string; name: string; lat: number; lng: number; real_name?: string | null; real_address?: string | null };
 export type EntryPlaceInfo = {
   places: PlaceLite[]; // all your named places
   current: PlaceLite | null; // the place you set on this entry
@@ -251,7 +251,11 @@ export async function entryPlaceInfo(blockId: string): Promise<EntryPlaceInfo> {
   const b = block.data as { started_at: string; ended_at: string | null; activity_id: string | null; place_id: string | null };
   const end = b.ended_at ?? new Date().toISOString();
   const [places, visits, past] = await Promise.all([
-    client.from("places").select("id, name, lat, lng").order("name"),
+    client
+      .from("places")
+      .select("id, name, lat, lng, real_name, real_address")
+      .order("name")
+      .then((r) => (r.error ? client.from("places").select("id, name, lat, lng").order("name") : r)), // (047 not run yet)
     client.from("visits").select("arrived_at, departed_at, lat, lng, auto_name, places(name)").lt("arrived_at", end).or(`departed_at.is.null,departed_at.gt.${b.started_at}`),
     b.activity_id
       ? client.from("blocks").select("place_id").eq("activity_id", b.activity_id).not("place_id", "is", null).neq("id", blockId).limit(200)
@@ -830,4 +834,54 @@ export async function tuckBetween(blockId: string): Promise<Result> {
   if (!data) return fail("There isn't the same job right before and after it any more.");
   refresh();
   return { ok: true };
+}
+
+// ---------- Actual places (047_real_places.sql) ----------
+
+// One of your places, or an actual place from Google (picked in a place search).
+export type PlacePick = { kind: "mine"; id: string } | { kind: "real"; googleId: string | null; name: string; address: string | null; lat: number; lng: number };
+const NEEDS_047 = "Run 047_real_places.sql in Supabase first.";
+const realOf = (p: Extract<PlacePick, { kind: "real" }>) => {
+  if (![p.lat, p.lng].every(Number.isFinite) || Math.abs(p.lat) > 90 || Math.abs(p.lng) > 180) return null;
+  const name = String(p.name ?? "").trim().slice(0, 200);
+  if (!name) return null;
+  return { google_id: p.googleId ? String(p.googleId).slice(0, 300) : null, name, address: p.address ? String(p.address).slice(0, 300) : null, lat: p.lat, lng: p.lng };
+};
+
+// A stop: your name for it (null: unchanged; "": none, show the actual place's), and what actual
+// place it was (null: unchanged).
+export async function setStopPlace(visitId: string, own: string | null, pick: PlacePick | null): Promise<Result> {
+  if (!isUuid(visitId)) return fail("That stop is gone.");
+  const name = own === null ? null : String(own).replace(/\s+/g, " ").trim().slice(0, 80);
+  if (pick === null) {
+    if (!name) return fail("Give it a name, or pick the actual place.");
+    return namePlace(visitId, name);
+  }
+  const real = pick.kind === "real" ? realOf(pick) : null;
+  if (pick.kind === "real" && !real) return fail("That place has no location.");
+  if (pick.kind === "mine" && !isUuid(pick.id)) return fail("That place is gone.");
+  const client = await mbm();
+  await unlockDaysOf(client, visitId);
+  const { error } = await client.rpc("set_stop_place", { p_visit: visitId, p_own: name, p_place: pick.kind === "mine" ? pick.id : null, p_real: real });
+  if (error) return fail(/set_stop_place|place_for_real/.test(error.message) ? NEEDS_047 : error.message);
+  refresh();
+  return { ok: true };
+}
+
+// An entry happened at a place found in the search.
+export async function setEntryPlacePick(blockId: string, pick: PlacePick): Promise<Result> {
+  if (pick.kind === "mine") return setEntryPlace(blockId, pick.id);
+  const real = realOf(pick);
+  if (!real) return fail("That place has no location.");
+  const { data, error } = await (await mbm()).rpc("place_for_real", { p_real: real });
+  if (error) return fail(/place_for_real/.test(error.message) ? NEEDS_047 : error.message);
+  return setEntryPlace(blockId, data as string);
+}
+
+// Your places, for a place search.
+export async function myPlaces(): Promise<PlaceLite[]> {
+  const client = await mbm();
+  let r = await client.from("places").select("id, name, lat, lng, real_name, real_address").order("name").limit(500);
+  if (r.error) r = (await client.from("places").select("id, name, lat, lng").order("name").limit(500)) as typeof r;
+  return (r.data ?? []) as PlaceLite[];
 }
