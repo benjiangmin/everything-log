@@ -297,6 +297,7 @@ export default function DayBar({
   };
 
   const nameOf = (b: Block) => (b.activity_id ? byId.get(b.activity_id) : undefined);
+  const leaving = useRef<ReturnType<typeof setTimeout> | undefined>(undefined); // (clearing the hover, a moment after leaving the row under)
   // The part of an untracked stretch under the pointer (see splitGap).
   const [gapPart, setGapPart] = useState<{ start: number; end: number; where: string } | null>(null);
   const timeAtX = (x: number) => {
@@ -618,34 +619,6 @@ export default function DayBar({
               </button>
             );
           })}
-        {/* The ↑ for an entry under a job you're pointing at: at the bottom of the bar, right
-            above it (the row under is too thin to hold it). */}
-        {onLift &&
-          !edge &&
-          side.map((p) => {
-            const w = hover?.block?.id === p.block.id ? under.get(p.block.id) : undefined;
-            if (!w) return null;
-            const outer = nameOf(w)?.name ?? "the one above";
-            return (
-              <button
-                key={`lift-${p.block.id}`}
-                type="button"
-                data-tuck
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setEdgeError(null);
-                  void onLift(p.block).then((problem) => problem && setEdgeError(problem));
-                }}
-                aria-label={`Bring ${nameOf(p.block)?.name ?? "this"} back up, and split ${outer} around it`}
-                className="absolute bottom-0.5 z-30 grid size-6 -translate-x-1/2 place-items-center rounded-full bg-paper text-ink shadow-md ring-1 ring-ink/20 transition-transform hover:scale-110"
-                style={{ left: `${at((p.start + p.end) / 2)}%` }}
-              >
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                  <path d="M12 19V6M6 12l6-6 6 6" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </button>
-            );
-          })}
         {/* While dragging an edge: a line where it'll go. */}
         {edge && <div aria-hidden="true" className="pointer-events-none absolute inset-y-0 z-30 w-0.5 -translate-x-1/2 bg-ink" style={{ left: `${at(edge.at)}%` }} />}
         {/* Faint lines at the time marks. */}
@@ -675,8 +648,51 @@ export default function DayBar({
 
       {/* Running alongside (+ Start): a thin strip per extra row, under the bar. */}
       {sideRows > 0 && (
-        <div className="relative mt-1 overflow-hidden" style={{ height: sideRows * 10 - 2 }} onMouseLeave={() => setHover(null)}>
+        <div
+          className="relative mt-1 overflow-hidden"
+          style={{ height: sideRows * 10 - 2 }}
+          onMouseEnter={() => clearTimeout(leaving.current)}
+          onMouseLeave={() => {
+            // (Not at once: the ↑ for what you were pointing at is up on the bar, past a small gap.
+            // Get there within half a second and it stays.)
+            clearTimeout(leaving.current);
+            leaving.current = setTimeout(() => setHover(null), 500);
+          }}
+        >
           {side.map((p) => entry(p, { ...pill(p.start, p.end), top: (p.lane - 1) * 10, height: 8 }, "rounded-full"))}
+        </div>
+      )}
+      {sideRows > 0 && (
+        <div className="relative h-0">
+        {/* The ↑ for an entry under a job you're pointing at: just below it (the row is too thin to
+            hold it, and above it is the job, which would take the pointer first). */}
+        {onLift &&
+          !edge &&
+          side.map((p) => {
+            const w = hover?.block?.id === p.block.id ? under.get(p.block.id) : undefined;
+            if (!w) return null;
+            const outer = nameOf(w)?.name ?? "the one above";
+            return (
+              <button
+                key={`lift-${p.block.id}`}
+                type="button"
+                data-tuck
+                onMouseEnter={() => clearTimeout(leaving.current)}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setEdgeError(null);
+                  void onLift(p.block).then((problem) => problem && setEdgeError(problem));
+                }}
+                aria-label={`Bring ${nameOf(p.block)?.name ?? "this"} back up, and split ${outer} around it`}
+                className="absolute top-0.5 z-30 grid size-6 -translate-x-1/2 place-items-center rounded-full bg-paper text-ink shadow-md ring-1 ring-ink/20 transition-transform hover:scale-110"
+                style={{ left: `${at((p.start + p.end) / 2)}%` }}
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path d="M12 19V6M6 12l6-6 6 6" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </button>
+            );
+          })}
         </div>
       )}
 
