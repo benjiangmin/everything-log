@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import {
   deletePlace,
   editPlace,
@@ -90,12 +90,11 @@ export default function PlacesView({
       else router.refresh();
     });
   };
-  const shownPlaces =
-    show === "unlinked"
-      ? searched.filter((p) => !p.real_name)
-      : show === "alike"
-        ? groups.flat()
-        : searched;
+  const [sort, setSort] = useState<Sort>("az");
+  const shownPlaces = sortPlaces(
+    show === "unlinked" ? searched.filter((p) => !p.real_name) : show === "alike" ? groups.flat() : searched,
+    sort,
+  );
   const shownStops = query
     ? stops.filter((s) => s.auto_name?.toLowerCase().includes(query))
     : stops;
@@ -208,28 +207,45 @@ export default function PlacesView({
               {shownPlaces.length}
             </span>
           </Heading>
-          <div role="radiogroup" aria-label="Show" className="flex gap-1.5">
-            {(
-              [
-                ["all", "All"],
-                [
-                  "unlinked",
-                  `Not linked · ${searched.filter((p) => !p.real_name).length}`,
-                ],
-                ["alike", `Look alike · ${groups.length}`],
-              ] as const
-            ).map(([v, label]) => (
+          <div className="flex items-center gap-1.5">
+            {show !== "all" && (
               <button
-                key={v}
                 type="button"
-                role="radio"
-                aria-checked={show === v}
-                onClick={() => setShow(v)}
-                className={`rounded-full px-3 py-1.5 text-sm font-semibold transition-colors ${show === v ? "bg-ink text-paper" : "text-muted ring-1 ring-line hover:text-ink"}`}
+                onClick={() => setShow("all")}
+                aria-label={`Stop showing only ${show === "unlinked" ? "places not linked" : "look-alikes"}`}
+                className="flex items-center gap-1.5 rounded-full bg-ink py-1 pl-3 pr-2 text-sm font-semibold text-paper"
               >
-                {label}
+                {show === "unlinked" ? "Not linked" : "Look alike"}
+                <span aria-hidden="true" className="text-paper/70">
+                  ×
+                </span>
               </button>
-            ))}
+            )}
+            <Menu
+              label="Sort"
+              icon={<path d="M7 4v16M7 20l-3-3M7 20l3-3M17 20V4M17 4l-3 3M17 4l3 3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />}
+              value={sort}
+              onPick={(v) => setSort(v as Sort)}
+              options={[
+                ["az", "A to Z"],
+                ["za", "Z to A"],
+                ["most", "Most visited"],
+                ["least", "Least visited"],
+                ["recent", "Visited most recently"],
+              ]}
+            />
+            <Menu
+              label="Filter"
+              active={show !== "all"}
+              icon={<path d="M4 5h16l-6 7.5V19l-4 1.5v-8L4 5z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />}
+              value={show}
+              onPick={(v) => setShow(v as typeof show)}
+              options={[
+                ["all", `All places · ${searched.length}`],
+                ["unlinked", `Not linked to an actual place · ${searched.filter((p) => !p.real_name).length}`],
+                ["alike", `Look alike · ${groups.length}`],
+              ]}
+            />
           </div>
         </div>
         {!closed.places && show === "alike" && (
@@ -742,5 +758,88 @@ function Heading({
       </svg>
       <span>{children}</span>
     </button>
+  );
+}
+
+type Sort = "az" | "za" | "most" | "least" | "recent";
+function sortPlaces(list: PlaceRow[], sort: Sort) {
+  const name = (a: PlaceRow, b: PlaceRow) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" });
+  const out = [...list];
+  if (sort === "az") out.sort(name);
+  if (sort === "za") out.sort((a, b) => name(b, a));
+  if (sort === "most") out.sort((a, b) => b.count - a.count || name(a, b));
+  if (sort === "least") out.sort((a, b) => a.count - b.count || name(a, b));
+  if (sort === "recent") out.sort((a, b) => (b.last ?? "").localeCompare(a.last ?? "") || name(a, b));
+  return out;
+}
+
+// An icon button that opens a short list to pick one from (sort, filter).
+function Menu({
+  label,
+  icon,
+  value,
+  options,
+  onPick,
+  active = false,
+}: {
+  label: string;
+  icon: React.ReactNode;
+  value: string;
+  options: (readonly [string, string])[];
+  onPick: (v: string) => void;
+  active?: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const box = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const away = (e: MouseEvent) => !box.current?.contains(e.target as Node) && setOpen(false);
+    const esc = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
+    document.addEventListener("mousedown", away);
+    document.addEventListener("keydown", esc);
+    return () => {
+      document.removeEventListener("mousedown", away);
+      document.removeEventListener("keydown", esc);
+    };
+  }, [open]);
+  return (
+    <div ref={box} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-label={label}
+        title={label}
+        className={`grid size-9 place-items-center rounded-full ring-1 transition-colors ${active ? "bg-ink text-paper ring-ink" : open ? "bg-surface text-ink ring-ink/30" : "text-muted ring-line hover:text-ink"}`}
+      >
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          {icon}
+        </svg>
+      </button>
+      {open && (
+        <div role="menu" aria-label={label} className="absolute right-0 top-11 z-30 min-w-56 rounded-card bg-paper p-1.5 shadow-xl shadow-ink/15 ring-1 ring-line">
+          <p className="px-3 pb-1 pt-1.5 text-xs font-semibold text-muted">{label}</p>
+          {options.map(([v, text]) => (
+            <button
+              key={v}
+              type="button"
+              role="menuitemradio"
+              aria-checked={value === v}
+              onClick={() => {
+                onPick(v);
+                setOpen(false);
+              }}
+              className={`flex w-full items-center gap-2 rounded-control px-3 py-2 text-left text-sm hover:bg-surface ${value === v ? "font-semibold" : ""}`}
+            >
+              <span className="w-4 shrink-0 text-accent" aria-hidden="true">
+                {value === v ? "✓" : ""}
+              </span>
+              {text}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
