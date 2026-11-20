@@ -111,9 +111,30 @@ export function buildTrips(visits: Visit[], points: RoutePoint[]): Trip[] {
     const to = vs[i + 1] ?? null;
     const lo = from ? left[i] : -Infinity;
     if (lo === null) continue; // still at the last stop
-    const hi = to ? ms(to.arrived_at) : Infinity;
-    if (hi <= lo) continue;
-    const inside = pts.filter((p) => p.t >= lo && p.t <= hi);
+    const said = to ? ms(to.arrived_at) : Infinity;
+    if (said <= lo) continue;
+    // The phone sometimes says you've arrived while you're still a block away (walking up the
+    // street to home), and that you left only once you're well down the road. Those dots are the
+    // walk, not the stop: the trip runs until the first dot that's really at the next stop, and
+    // from the last one really at this one. (Up to 15 minutes either way; good dots only.)
+    const atStop = (q: (typeof pts)[number], s: Visit) => nearOutline(s.outline, q.lat, q.lng) || metres(q, s) <= 60 || (s.gps != null && metres(q, s.gps) <= 60);
+    const good = (q: (typeof pts)[number]) => q.acc == null || q.acc <= 40;
+    let hi = said;
+    if (to)
+      for (const q of pts) {
+        if (q.t <= said) continue;
+        if (q.t > said + 15 * 60_000 || (to.departed_at && q.t >= ms(to.departed_at)) || atStop(q, to)) break;
+        if (good(q)) hi = q.t;
+      }
+    let start = lo;
+    if (from && lo > -Infinity)
+      for (let k = pts.length - 1; k >= 0; k--) {
+        const q = pts[k];
+        if (q.t >= lo) continue;
+        if (q.t < lo - 15 * 60_000 || q.t <= ms(from.arrived_at) || atStop(q, from)) break;
+        if (good(q)) start = q.t;
+      }
+    const inside = pts.filter((p) => p.t >= start && p.t <= hi);
     // Dots right by the stop at either end are you still in (or around) the building, not the
     // trip: the trip starts and ends at the stop's node instead. That's dots within 30 m, or
     // standing-still ones within 75 m (GPS drifting around inside). Dots you were walking on stay,
@@ -148,7 +169,7 @@ export function buildTrips(visits: Visit[], points: RoutePoint[]): Trip[] {
       const first = runs[0][0];
       const lastRun = runs[runs.length - 1];
       const last = lastRun[lastRun.length - 1];
-      const joinsFrom = from && !missed({ ...spot(from), t: lo }, first); // the dots pick up right after leaving
+      const joinsFrom = from && !missed({ ...spot(from), t: start }, first); // the dots pick up right after leaving
       const joinsTo = to && !missed(last, { ...spot(to), t: hi }); // …and run right up to the next stop
       if (from && !joinsFrom) pieces.push({ path: [spot(from), spot(first)], missing: true });
       runs.forEach((run, r) => {
@@ -187,7 +208,7 @@ export function buildTrips(visits: Visit[], points: RoutePoint[]): Trip[] {
       fromId: from?.id ?? null,
       toId: to?.id ?? null,
       start: from ? lo : dots[0].t,
-      end: to ? hi : dots[dots.length - 1].t,
+      end: to ? said : dots[dots.length - 1].t, // (its times stay the stops'; only its line takes in the walk-up dots)
       pieces: kept,
       pace: pace(dots),
       waits: kept.flatMap((p) => (p.dots ? splitLegs(p.dots).filter((l) => l.mode === "wait").map((l) => ({ at: waitSpot(l), start: l.start, end: l.end })) : [])),
