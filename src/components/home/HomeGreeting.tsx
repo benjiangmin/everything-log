@@ -42,9 +42,10 @@ export default function HomeGreeting() {
   const second = useSyncExternalStore(tick, readSecond, none);
   const now = second === null ? null : new Date(second * 1000);
 
+  // One line: the greeting on the left, the time and date on the right (wraps on a phone).
   return (
-    <header className="mb-10 sm:mb-14">
-      <h1 className="font-display text-4xl font-semibold tracking-tight text-ink sm:text-5xl">
+    <header className="mb-6 flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1 sm:mb-8">
+      <h1 className="font-display text-3xl font-semibold tracking-tight text-ink sm:text-4xl">
         {hello ? (
           <>
             {hello}, <span className="text-accent">{NAME}</span>
@@ -53,11 +54,11 @@ export default function HomeGreeting() {
           <span className="invisible">Hello, {NAME}</span>
         )}
       </h1>
-      <p className="mt-3 flex flex-wrap items-baseline gap-x-3 text-muted">
-        <span className="font-display text-2xl font-medium tabular-nums text-ink sm:text-3xl">
-          {now ? now.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", second: "2-digit" }) : " "}
+      <p className="flex flex-wrap items-baseline gap-x-3 text-muted sm:justify-end">
+        <span className="font-display text-xl font-medium tabular-nums text-ink sm:text-2xl">
+          {now ? now.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", second: "2-digit" }) : " "}
         </span>
-        <span className="text-base">{now?.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" })}</span>
+        <span className="text-sm">{now?.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" })}</span>
       </p>
     </header>
   );
