@@ -17,8 +17,12 @@ export type StopRow = { id: string; arrived_at: string; departed_at: string | nu
 export default function PlacesView({ places, stops, tz, now, needsSql }: { places: PlaceRow[]; stops: StopRow[]; tz: string; now: number; needsSql: boolean }) {
   const [q, setQ] = useState("");
   const [open, setOpen] = useState<string | null>(null);
+  const [show, setShow] = useState<"all" | "unlinked" | "alike">("all");
   const query = q.trim().toLowerCase();
-  const shownPlaces = query ? places.filter((p) => [p.name, p.real_name, p.real_address].some((x) => x?.toLowerCase().includes(query))) : places;
+  const searched = query ? places.filter((p) => [p.name, p.real_name, p.real_address].some((x) => x?.toLowerCase().includes(query))) : places;
+  const groups = lookAlike(searched);
+  const shownPlaces = show === "unlinked" ? searched.filter((p) => !p.real_name) : show === "alike" ? groups.flat() : searched;
+  const groupOf = new Map(groups.flatMap((g, i) => g.map((p) => [p.id, i] as const)));
   const shownStops = query ? stops.filter((s) => s.auto_name?.toLowerCase().includes(query)) : stops;
   const day = (iso: string) => new Intl.DateTimeFormat("en-US", { timeZone: tz, weekday: "short", month: "short", day: "numeric" }).format(new Date(iso));
 
@@ -53,12 +57,35 @@ export default function PlacesView({ places, stops, tz, now, needsSql }: { place
       </div>
 
       <section className="mt-8">
-        <h2 className="font-display text-xl font-semibold">
-          Your places <span className="text-base font-normal text-muted">{shownPlaces.length}</span>
-        </h2>
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <h2 className="font-display text-xl font-semibold">
+            Your places <span className="text-base font-normal text-muted">{shownPlaces.length}</span>
+          </h2>
+          <div role="radiogroup" aria-label="Show" className="flex gap-1.5">
+            {(
+              [
+                ["all", "All"],
+                ["unlinked", `Not linked · ${searched.filter((p) => !p.real_name).length}`],
+                ["alike", `Look alike · ${groups.length}`],
+              ] as const
+            ).map(([v, label]) => (
+              <button
+                key={v}
+                type="button"
+                role="radio"
+                aria-checked={show === v}
+                onClick={() => setShow(v)}
+                className={`rounded-full px-3 py-1.5 text-sm font-semibold transition-colors ${show === v ? "bg-ink text-paper" : "text-muted ring-1 ring-line hover:text-ink"}`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+        {show === "alike" && <p className="mt-2 text-sm text-muted">Places that might be the same one: open one and merge it into the other.</p>}
         <ul className="mt-3 divide-y divide-line rounded-card border border-line bg-paper">
-          {shownPlaces.map((p) => (
-            <li key={p.id}>
+          {shownPlaces.map((p, i) => (
+            <li key={p.id} className={show === "alike" && i > 0 && groupOf.get(p.id) !== groupOf.get(shownPlaces[i - 1].id) ? "border-t-4 border-t-surface" : ""}>
               <button type="button" onClick={() => setOpen(open === p.id ? null : p.id)} aria-expanded={open === p.id} className="flex w-full items-center gap-3 px-5 py-3.5 text-left hover:bg-surface/60">
                 <Pin filled />
                 <span className="min-w-0 flex-1">
@@ -73,7 +100,11 @@ export default function PlacesView({ places, stops, tz, now, needsSql }: { place
               {open === p.id && !needsSql && <EditPlace place={p} places={places} onDone={() => setOpen(null)} />}
             </li>
           ))}
-          {shownPlaces.length === 0 && <li className="px-5 py-4 text-sm text-muted">{query ? "No places match." : "None yet. Name a stop below, or on the Day map."}</li>}
+          {shownPlaces.length === 0 && (
+            <li className="px-5 py-4 text-sm text-muted">
+              {show === "unlinked" ? "Every place is linked to an actual place." : show === "alike" ? "No places look alike." : query ? "No places match." : "None yet. Name a stop below, or on the Day map."}
+            </li>
+          )}
         </ul>
       </section>
 
@@ -282,4 +313,19 @@ function Pin({ filled = false }: { filled?: boolean }) {
       <circle cx="12" cy="9.5" r="2.5" stroke="currentColor" strokeWidth="2" />
     </svg>
   );
+}
+
+// Places that might be the same one, in groups: the same name give or take punctuation and
+// spaces ("Home", "Home!"), the same actual place, or within 60 m of each other.
+function lookAlike(places: PlaceRow[]): PlaceRow[][] {
+  const norm = (s: string | null | undefined) => (s ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
+  const metres = (a: PlaceRow, b: PlaceRow) => Math.hypot((a.lat - b.lat) * 111_000, (a.lng - b.lng) * 111_000 * Math.cos((a.lat * Math.PI) / 180));
+  const same = (a: PlaceRow, b: PlaceRow) =>
+    (norm(a.name).length >= 2 && norm(a.name) === norm(b.name)) || (!!a.real_name && norm(a.real_name) === norm(b.real_name)) || metres(a, b) <= 60;
+  const parent = places.map((_, i) => i);
+  const root = (i: number): number => (parent[i] === i ? i : (parent[i] = root(parent[i])));
+  for (let i = 0; i < places.length; i++) for (let j = i + 1; j < places.length; j++) if (same(places[i], places[j])) parent[root(i)] = root(j);
+  const groups = new Map<number, PlaceRow[]>();
+  places.forEach((p, i) => groups.set(root(i), [...(groups.get(root(i)) ?? []), p]));
+  return [...groups.values()].filter((g) => g.length > 1).sort((a, b) => b.length - a.length);
 }
