@@ -44,7 +44,8 @@ export default function DayView({
   const byId = new Map(day.activities.map((a) => [a.id, a]));
   const { placed, lanes, gaps } = layOut(day.blocks, dayStart, dayEnd, now);
   const [focus, setFocus] = useState<Focus | null>(null); // hovering the bar → lit up on the map
-  const [pin, setPin] = useState<DayPlan | null>(null); // hovering a plan on the bar → where it is, on the map
+  const [pin, setPin] = useState<DayPlan | null>(null);
+  const [zoomSlot, setZoomSlot] = useState<HTMLDivElement | null>(null); // (over the map: where the bar's zoom icons go) // hovering a plan on the bar → where it is, on the map
   const router = useRouter();
   const [marks, setMarks] = useState<{ start: number; end: number }[] | null>(null); // hovering the map → outlined on the bar
   // Remembered (per browser), so it stays when going to another day.
@@ -81,6 +82,7 @@ export default function DayView({
       onSelectPlan={(p) => router.push(`/mbm/plan?event=${encodeURIComponent(p.id)}`)}
       phone={day.phone}
       slim={mapMode}
+      zoomSlot={zoomSlot}
       onHover={(h) => {
         if (!h) {
           setFocus(null);
@@ -174,6 +176,7 @@ export default function DayView({
                   {title}
                   {subtitle && <span className="ml-2 text-sm font-normal text-muted">{subtitle}</span>}
                 </h1>
+                <div ref={setZoomSlot} />
                 {nav}
                 {toggle(false)}
               </div>

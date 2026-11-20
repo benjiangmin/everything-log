@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState, type CSSProperties, type PointerEvent, type ReactNode } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type PointerEvent } from "react";
+import { createPortal } from "react-dom";
 import type { Activity, Block, PhoneUse } from "@/mbm/data";
 import { clock, span, zonedTime } from "@/mbm/time";
 import type { Placed } from "./segments";
@@ -33,6 +34,7 @@ export default function DayBar({
   phone = [],
   compact = false,
   slim = false,
+  zoomSlot = null,
   plans = [],
   onTuck,
   onLift,
@@ -64,6 +66,7 @@ export default function DayBar({
   phone?: PhoneUse[]; // apps you used (a thin line under the bar)
   compact?: boolean; // the home page's smaller version
   slim?: boolean; // the day page with the map opened up: a shorter bar, no zoom row
+  zoomSlot?: HTMLElement | null; // (slim) where the zoom icons go: the box's header
 }) {
   // Just left the row under: the hover clears in half a second, unless you point at something
   // first (e.g. its ↑, past a small gap).
@@ -100,7 +103,16 @@ export default function DayBar({
   const zoomable = !compact;
   // The part of the day on screen. Whole day unless zoomed in.
   const [view, setView] = useState<[number, number]>([dayStart, dayEnd]);
-  const [from, to] = zoomable ? view : [dayStart, dayEnd];
+  // "Now": zoomed in on the last 2 hours and the next one, moving along as the time does. Any
+  // zooming or dragging of your own stops it following.
+  const [follow, setFollow] = useState(false);
+  const live = now > dayStart && now < dayEnd;
+  const followed: [number, number] = (() => {
+    const len = Math.min(dayEnd - dayStart, 3 * 3600_000);
+    const start = Math.min(dayEnd - len, Math.max(dayStart, now - 2 * 3600_000));
+    return [start, start + len];
+  })();
+  const [from, to] = zoomable ? (follow && live ? followed : view) : [dayStart, dayEnd];
   const shown = to - from;
   const zoomed = shown < total - 1000;
   const at = (t: number) => ((t - from) / shown) * 100;
@@ -112,12 +124,20 @@ export default function DayBar({
     const start = Math.min(dayEnd - len, Math.max(dayStart, a));
     return [start, start + len];
   };
-  const zoomAround = (factor: number, frac = 0.5) =>
+  // (Zooming or moving it yourself: it stops following now, from where it is.)
+  const takeOver = () => {
+    if (!follow) return;
+    setFollow(false);
+    setView([from, to]);
+  };
+  const zoomAround = (factor: number, frac = 0.5) => {
+    takeOver();
     setView(([a, b]) => {
       const len = b - a;
       const pivot = a + len * frac;
       return fit(pivot - (pivot - a) * factor, pivot + (b - pivot) * factor);
     });
+  };
 
   // Pinch / Ctrl+scroll zooms around the pointer; sideways scroll pans. A plain scroll still
   // scrolls the page. (Needs a non-passive listener so the browser doesn't zoom the page too.)
@@ -148,6 +168,7 @@ export default function DayBar({
       const dx = e.shiftKey ? e.deltaY : e.deltaX;
       if (!zoomed || Math.abs(dx) <= Math.abs(e.shiftKey ? 0 : e.deltaY)) return;
       e.preventDefault();
+      takeOver();
       const move = (dx / rect.width) * shown;
       setView(fit(from + move, to + move));
     };
@@ -169,6 +190,7 @@ export default function DayBar({
     if (!d.moved && Math.abs(dx) < 4) return;
     if (!d.moved) {
       d.moved = true;
+      takeOver();
       barRef.current.setPointerCapture(e.pointerId);
       setHover(null);
     }
@@ -415,6 +437,44 @@ export default function DayBar({
       ? { bubble: { top: anchor.bottom + LINE }, line: { top: anchor.bottom, height: LINE }, dot: { top: anchor.bottom } }
       : { bubble: { bottom: anchor.h - (anchor.top - LINE) }, line: { top: anchor.top - LINE, height: LINE }, dot: { top: anchor.top } }
     : null;
+
+  // Two ways to look, as two icons: zoomed in on now (following it; on another day, just in a
+  // step), or the whole day.
+  const lens = (plus: boolean) => (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <circle cx="10.5" cy="10.5" r="6.5" stroke="currentColor" strokeWidth="2.2" />
+      <path d="M15.5 15.5L20 20M7.5 10.5h6" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
+      {plus && <path d="M10.5 7.5v6" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />}
+    </svg>
+  );
+  const zoomTo = (
+    <span role="group" aria-label="Zoom" className="flex items-center gap-0.5 rounded-full bg-surface p-0.5 text-muted">
+      <button
+        type="button"
+        aria-pressed={follow}
+        aria-label={live ? "Zoom in on now" : "Zoom in"}
+        title={live ? "Zoom in on now (moves along with the time)" : "Zoom in"}
+        disabled={!live && shown <= MIN_VIEW}
+        onClick={() => (live ? setFollow(true) : zoomAround(0.5))}
+        className={`grid size-7 place-items-center rounded-full transition-colors disabled:opacity-40 ${follow ? "bg-paper text-ink shadow-sm" : "hover:text-ink"}`}
+      >
+        {lens(true)}
+      </button>
+      <button
+        type="button"
+        aria-pressed={!follow && !zoomed}
+        aria-label="Zoom out to the whole day"
+        title="Whole day"
+        onClick={() => {
+          setFollow(false);
+          setView([dayStart, dayEnd]);
+        }}
+        className={`grid size-7 place-items-center rounded-full transition-colors ${!follow && !zoomed ? "bg-paper text-ink shadow-sm" : "hover:text-ink"}`}
+      >
+        {lens(false)}
+      </button>
+    </span>
+  );
 
   return (
     <div
@@ -758,23 +818,15 @@ export default function DayBar({
         </div>
       )}
 
+      {/* Over the map: the zoom icons go up in the box's header (zoomSlot). */}
+      {zoomable && slim && zoomSlot && createPortal(zoomTo, zoomSlot)}
       {zoomable && !slim && (
         <div className="mt-2 flex items-center justify-between gap-3 text-xs text-muted">
           <span className="num">
             {zoomed ? `${clock(new Date(from), tz)} – ${clock(new Date(to), tz)}` : "Pinch or Ctrl+scroll on the bar to zoom"}
           </span>
           <span className="flex items-center gap-1">
-            {zoomed && (
-              <button type="button" onClick={() => setView([dayStart, dayEnd])} className="rounded-control px-2 py-1 hover:bg-surface hover:text-ink">
-                Whole day
-              </button>
-            )}
-            <ZoomButton label="Zoom out" disabled={!zoomed} onClick={() => zoomAround(2)}>
-              −
-            </ZoomButton>
-            <ZoomButton label="Zoom in" disabled={shown <= MIN_VIEW} onClick={() => zoomAround(0.5, showNow && !zoomed ? at(now) / 100 : 0.5)}>
-              +
-            </ZoomButton>
+            {zoomTo}
           </span>
         </div>
       )}
@@ -785,20 +837,6 @@ export default function DayBar({
 const MIN_VIEW = 10 * 60000; // zoom in as far as 10 minutes across
 const TINY_PX = 7; // narrower than this on screen: drawn as a chip this wide
 
-function ZoomButton({ label, disabled, onClick, children }: { label: string; disabled: boolean; onClick: () => void; children: ReactNode }) {
-  return (
-    <button
-      type="button"
-      aria-label={label}
-      title={label}
-      disabled={disabled}
-      onClick={onClick}
-      className="grid size-7 place-items-center rounded-control text-base leading-none ring-1 ring-line transition-colors hover:bg-surface hover:text-ink disabled:opacity-40 disabled:hover:bg-transparent"
-    >
-      {children}
-    </button>
-  );
-}
 
 // Label spacing (minutes) by how much is on screen: the finest that keeps about 8 labels.
 const STEPS = [1, 2, 5, 10, 15, 30, 60, 120, 180, 360];
