@@ -65,9 +65,28 @@ export default function DayBar({
   compact?: boolean; // the home page's smaller version
   slim?: boolean; // the day page with the map opened up: a shorter bar, no zoom row
 }) {
+  // Just left the row under: the hover clears in half a second, unless you point at something
+  // first (e.g. its ↑, past a small gap).
+  const [leftRow, setLeftRow] = useState(false);
   // What the bubble is about: an entry, or an untracked stretch.
   const [hover, setHoverState] = useState<{ start: number; end: number; block?: Block; phone?: PhoneUse; plan?: DayPlan } | null>(null);
+  // (The latest onHover, so a re-render doesn't restart the half second.)
+  const tellHover = useRef(onHover);
+  useEffect(() => {
+    tellHover.current = onHover;
+  });
+  useEffect(() => {
+    if (!leftRow) return;
+    const t = setTimeout(() => {
+      setLeftRow(false);
+      setHoverState(null);
+      tellHover.current?.(null);
+    }, 500);
+    return () => clearTimeout(t);
+  }, [leftRow]);
   const setHover = (h: { start: number; end: number; block?: Block } | null) => {
+    // (Pointing at something new: a pending "clear" from leaving the row under mustn't wipe it.)
+    if (h) setLeftRow(false);
     if (hover?.plan) onHoverPlan?.(null);
     setHoverState(h);
     onHover?.(h && { start: h.start, end: h.end, block: h.block });
@@ -297,7 +316,6 @@ export default function DayBar({
   };
 
   const nameOf = (b: Block) => (b.activity_id ? byId.get(b.activity_id) : undefined);
-  const leaving = useRef<ReturnType<typeof setTimeout> | undefined>(undefined); // (clearing the hover, a moment after leaving the row under)
   // The part of an untracked stretch under the pointer (see splitGap).
   const [gapPart, setGapPart] = useState<{ start: number; end: number; where: string } | null>(null);
   const timeAtX = (x: number) => {
@@ -306,6 +324,9 @@ export default function DayBar({
   };
   const pointGap = (x: number, g: { start: number; end: number }) => {
     if (!barRef.current || edge) return;
+    // (Moving over it, its bubble is up, even if "entering" was missed, e.g. the bar redrew under
+    // a pointer that never moved off it.)
+    if (hover?.block || hover?.plan || hover?.phone || hover?.start !== g.start || hover?.end !== g.end) setHover(g);
     const t = timeAtX(x);
     const part = splitGap?.(t, g) ?? null;
     setGapPart((p) => (p && part && p.start === part.start && p.end === part.end ? p : part));
@@ -315,7 +336,9 @@ export default function DayBar({
   // map lights up the one you were at then).
   const pointAt = (x: number, p: Placed) => {
     const el = barRef.current;
-    if (!onHover || !el || edge) return;
+    if (edge) return;
+    if (hover?.block?.id !== p.block.id) setHover(p); // (see pointGap)
+    if (!onHover || !el) return;
     const r = el.getBoundingClientRect();
     onHover({ start: p.start, end: p.end, block: p.block, at: from + ((x - r.left) / r.width) * shown });
   };
@@ -655,13 +678,8 @@ export default function DayBar({
         <div
           className="relative mt-1 overflow-hidden"
           style={{ height: sideRows * 10 - 2 }}
-          onMouseEnter={() => clearTimeout(leaving.current)}
-          onMouseLeave={() => {
-            // (Not at once: the ↑ for what you were pointing at is up on the bar, past a small gap.
-            // Get there within half a second and it stays.)
-            clearTimeout(leaving.current);
-            leaving.current = setTimeout(() => setHover(null), 500);
-          }}
+          onMouseEnter={() => setLeftRow(false)}
+          onMouseLeave={() => setLeftRow(true)} // (not at once: its ↑ is just below, past a small gap)
         >
           {side.map((p) => entry(p, { ...pill(p.start, p.end), top: (p.lane - 1) * 10, height: 8 }, "rounded-full"))}
         </div>
@@ -681,7 +699,7 @@ export default function DayBar({
                 key={`lift-${p.block.id}`}
                 type="button"
                 data-tuck
-                onMouseEnter={() => clearTimeout(leaving.current)}
+                onMouseEnter={() => setLeftRow(false)}
                 onClick={(e) => {
                   e.stopPropagation();
                   setEdgeError(null);

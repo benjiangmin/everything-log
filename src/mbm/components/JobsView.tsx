@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition, type ReactNode } from "react";
 import { deleteCategory, deleteJob, jobEntryCount, placeIdFor, saveCategory, saveJob, type JobPrefs } from "@/app/mbm/actions";
 import PageMark from "./PageMark";
+import { reveal } from "./reveal";
 import PlaceSearch from "./PlaceSearch";
 import { PALETTE } from "@/mbm/colors";
 
@@ -28,6 +29,14 @@ export default function JobsView({ jobs, categories, places, needsSql = false, n
   const [adding, setAdding] = useState(false);
   const [q, setQ] = useState("");
   const catOf = (j: Job) => categories.find((c) => c.id === j.category_id) ?? null;
+  // What you open scrolls to the middle of the screen.
+  useEffect(() => {
+    if (openJob) reveal(`job-${openJob}`);
+  }, [openJob]);
+  useEffect(() => {
+    if (openCat) reveal(`cat-${openCat}`);
+    else if (adding) reveal("cat-new");
+  }, [openCat, adding]);
   // Linked from an entry's box: /mbm/account/jobs#job-<id> opens that job.
   useEffect(() => {
     const m = window.location.hash.match(/^#job-(.+)$/);
@@ -381,7 +390,7 @@ function CategoryCard({ category, jobs, places, open, onToggle, onDone }: { cate
     });
   const label = name.trim() || "This category";
   return (
-    <div className="overflow-hidden rounded-card border border-line bg-paper">
+    <div id={category ? `cat-${category.id}` : "cat-new"} className="scroll-mt-24 overflow-hidden rounded-card border border-line bg-paper">
       {category && (
         <button type="button" onClick={onToggle} aria-expanded={open} className="flex w-full items-center gap-4 px-5 py-4 text-left hover:bg-surface/60">
           <span className="h-10 w-1.5 shrink-0 rounded-full" style={{ background: category.color }} aria-hidden="true" />

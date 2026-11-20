@@ -13,6 +13,7 @@ import {
   type PlacePick,
 } from "@/app/mbm/actions";
 import PageMark from "./PageMark";
+import { reveal } from "./reveal";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
 import { clock, dayKeyOf, span } from "@/mbm/time";
 import { ClearSearch } from "./JobsView";
@@ -65,6 +66,10 @@ export default function PlacesView({
   const [, startApart] = useTransition();
   const [q, setQ] = useState("");
   const [open, setOpen] = useState<string | null>(null);
+  // What you open scrolls to the middle of the screen.
+  useEffect(() => {
+    if (open) reveal(`row-${open}`);
+  }, [open]);
   const [show, setShow] = useState<"all" | "unlinked" | "alike">("all");
   const query = q.trim().toLowerCase();
   const searched = query
@@ -262,7 +267,7 @@ export default function PlacesView({
               <div key={groupKey(g)} className="group relative">
                 <ul className="divide-y divide-line overflow-hidden rounded-card border border-line bg-paper">
                   {g.map((p) => (
-                    <li key={p.id}>{placeRow(p)}</li>
+                    <li key={p.id} id={`row-${p.id}`}>{placeRow(p)}</li>
                   ))}
                 </ul>
                 <button
@@ -279,7 +284,7 @@ export default function PlacesView({
         {!closed.places && !(show === "alike" && groups.length > 0) && (
           <ul className="mt-3 divide-y divide-line rounded-card border border-line bg-paper">
             {shownPlaces.map((p) => (
-              <li key={p.id}>{placeRow(p)}</li>
+              <li key={p.id} id={`row-${p.id}`}>{placeRow(p)}</li>
             ))}
             {shownPlaces.length === 0 && (
               <li className="px-5 py-4 text-sm text-muted">
@@ -311,7 +316,7 @@ export default function PlacesView({
             {shownStops.map((s) => {
               const end = s.departed_at ? +new Date(s.departed_at) : now;
               return (
-                <li key={s.id}>
+                <li key={s.id} id={`row-${s.id}`}>
                   <button
                     type="button"
                     onClick={() => setOpen(open === s.id ? null : s.id)}
