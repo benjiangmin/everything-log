@@ -11,30 +11,40 @@ import TodoBox from "@/components/home/TodoBox";
 import { getTodos } from "@/lib/todos";
 
 // Home: two screens you snap between.
-//   Home: a greeting and the clock, the Home bar, Minute by Minute, your todo list.
+//   Home: a greeting and the clock (on the left, on a wide screen), the Home bar, Minute by
+//   Minute, your todo list.
 //   Documents: the Documents bar (Edit lives here; it sticks to the top) and your categories.
 // The layout lives in Supabase (supabase/home.sql); change it from the page with Edit.
 export default function Home() {
   return (
-    <main className="mx-auto w-full max-w-4xl px-4">
+    <main className="mx-auto w-full max-w-4xl px-4 lg:max-w-6xl">
       <HomeScreens
         home={
-          <>
-            <HomeGreeting />
-            <PageHeader title="Home" />
-            {/* Minute by Minute (its own app, see src/mbm): what you're doing now + today's bar. */}
-            <Suspense fallback={<div className="mt-6 h-40 animate-pulse rounded-card border-2 border-ink/15" />}>
-              <HomeMbm />
-            </Suspense>
-            <Suspense fallback={<div className="mt-6 h-28 animate-pulse rounded-card border-2 border-ink/15" />}>
-              <Todos />
-            </Suspense>
-          </>
+          // Wide screens: the greeting and clock on the left (staying put as you scroll), the rest
+          // on the right. Narrow: one column, as before.
+          <div className="lg:grid lg:grid-cols-[16rem_minmax(0,1fr)] lg:gap-12">
+            <div className="lg:sticky lg:top-8 lg:self-start">
+              <HomeGreeting />
+            </div>
+            <div>
+              <PageHeader title="Home" />
+              {/* Minute by Minute (its own app, see src/mbm): what you're doing now + today's bar. */}
+              <Suspense fallback={<div className="mt-6 h-40 animate-pulse rounded-card border-2 border-ink/15" />}>
+                <HomeMbm />
+              </Suspense>
+              <Suspense fallback={<div className="mt-6 h-28 animate-pulse rounded-card border-2 border-ink/15" />}>
+                <Todos />
+              </Suspense>
+            </div>
+          </div>
         }
         documents={
-          <Suspense fallback={<Skeleton />}>
-            <Categories />
-          </Suspense>
+          // (Documents stays the width it was.)
+          <div className="mx-auto w-full max-w-4xl">
+            <Suspense fallback={<Skeleton />}>
+              <Categories />
+            </Suspense>
+          </div>
         }
       />
     </main>
