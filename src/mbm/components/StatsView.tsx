@@ -3,6 +3,7 @@
 import { useState, useTransition, type ReactNode } from "react";
 import { setPinned } from "@/app/mbm/actions";
 import type { JobMeta, Range, Stats } from "@/mbm/stats";
+import { RANGE_COLOR } from "./RangeRail";
 
 // The numbers for a day / week / month / year: totals up top, then time per activity (with a
 // search: "time spent on …") and time per app.
@@ -55,7 +56,7 @@ export default function StatsView({
 
       <div className="grid gap-8 lg:grid-cols-2">
         <TimeSpent activities={stats.activities} elapsed={elapsed} initial={query} savedPins={pins} meta={meta} range={range} />
-        <Apps apps={stats.apps} />
+        <Apps apps={stats.apps} color={RANGE_COLOR[range]} />
       </div>
 
       {/* (No list of unmarked stretches any more: the bar shows them, and the Day page fills them in.) */}
@@ -96,7 +97,9 @@ function Row({
   note,
   onPick,
   pin,
+  barColor,
 }: {
+  barColor?: string; // (the bar's own color, when it isn't the dot's)
   color?: string;
   icon?: ReactNode;
   label: string;
@@ -115,8 +118,8 @@ function Row({
         {note && <span className="text-xs text-muted">{note}</span>}
         <span className="num font-semibold">{hm(seconds)}</span>
       </div>
-      <div className="mt-1.5 h-3 overflow-hidden rounded-[3px] bg-surface">
-        <div className="h-full rounded-[3px]" style={{ width: `${max > 0 && seconds > 0 ? Math.max(2, (seconds / max) * 100) : 0}%`, background: color ?? "var(--ink)", opacity: color ? 1 : 0.55 }} />
+      <div className="mt-1.5 h-3 overflow-hidden rounded-[4.5px] bg-surface">
+        <div className="h-full rounded-[4.5px]" style={{ width: `${max > 0 && seconds > 0 ? Math.max(2, (seconds / max) * 100) : 0}%`, background: barColor ?? color ?? "var(--ink)", opacity: barColor || color ? 1 : 0.55 }} />
       </div>
     </>
   );
@@ -378,7 +381,7 @@ function TimeSpent({
       ) : (
         <ul>
           {pinned.map((a) => (
-            <Row key={`pin-${a.name}`} color={a.color} label={a.name} seconds={a.seconds} max={max} pin={pinFor(a.name)} />
+            <Row key={`pin-${a.name}`} color={a.color} label={a.name} seconds={a.seconds} max={max} pin={pinFor(a.name)} note={goalNote(a.seconds, metaOf(a.name)?.goal, metaOf(a.name)?.per)} />
           ))}
           {pinned.length > 0 && shownRest.length > 0 && <li aria-hidden="true" className="my-1.5 border-t border-dashed border-line" />}
           {shownRest.map((i) =>
@@ -440,7 +443,8 @@ function TimeSpent({
   );
 }
 
-function Apps({ apps }: { apps: Stats["apps"] }) {
+// (Its bars in the color of the day/week/month/year you're looking at.)
+function Apps({ apps, color }: { apps: Stats["apps"]; color?: string }) {
   const [all, setAll] = useState(false);
   const max = apps[0]?.seconds ?? 0;
   return (
@@ -450,7 +454,7 @@ function Apps({ apps }: { apps: Stats["apps"] }) {
       ) : (
         <ul>
           {(all ? apps : apps.slice(0, LIST)).map((a) => (
-            <Row key={a.app} icon={<AppIcon name={a.app} />} label={a.app} seconds={a.seconds} max={max} />
+            <Row key={a.app} icon={<AppIcon name={a.app} />} label={a.app} seconds={a.seconds} max={max} barColor={color} />
           ))}
         </ul>
       )}

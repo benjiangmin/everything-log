@@ -953,3 +953,19 @@ export async function setCalendarHidden(hide: boolean): Promise<Result> {
   revalidatePath("/mbm/day");
   return { ok: true };
 }
+
+// Places that look alike but aren't the same: off the Look alike list (051).
+export async function keepApart(ids: string[]): Promise<Result> {
+  if (!Array.isArray(ids) || ids.length < 2 || !ids.every(isUuid)) return fail("Those places are gone.");
+  const client = await mbm();
+  const { data: auth } = await client.auth.getUser();
+  if (!auth.user) return fail("Sign in first.");
+  const key = [...ids].sort().join("+");
+  const { data, error: readError } = await client.from("profiles").select("kept_apart").maybeSingle();
+  if (readError) return fail(/kept_apart/.test(readError.message) ? "Run 051_arrive_when_there.sql in Supabase first." : readError.message);
+  const kept = ((data as { kept_apart?: string[] } | null)?.kept_apart ?? []).filter((k) => k !== key);
+  const { error } = await client.from("profiles").upsert({ user_id: auth.user.id, kept_apart: [...kept, key].slice(-500) });
+  if (error) return fail(error.message);
+  revalidatePath("/mbm/account/places");
+  return { ok: true };
+}
