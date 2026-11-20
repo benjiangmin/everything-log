@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition, type ReactNode } from "react";
 import { deleteCategory, deleteJob, jobEntryCount, placeIdFor, saveCategory, saveJob, type JobPrefs } from "@/app/mbm/actions";
+import PageMark from "./PageMark";
 import PlaceSearch from "./PlaceSearch";
 import { PALETTE } from "@/mbm/colors";
 
@@ -93,7 +94,8 @@ export default function JobsView({ jobs, categories, places, needsSql = false, n
   );
 
   return (
-    <div>
+    <div className="relative isolate">
+      <PageMark kind="jobs" />
       <p className="text-sm font-semibold text-muted">
         <Link href="/mbm/account" className="hover:text-ink">
           Your account

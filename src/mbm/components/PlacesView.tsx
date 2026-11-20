@@ -12,6 +12,7 @@ import {
   setStopPlace,
   type PlacePick,
 } from "@/app/mbm/actions";
+import PageMark from "./PageMark";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
 import { clock, dayKeyOf, span } from "@/mbm/time";
 import { ClearSearch } from "./JobsView";
@@ -138,7 +139,8 @@ export default function PlacesView({
   );
 
   return (
-    <div>
+    <div className="relative isolate">
+      <PageMark kind="places" />
       <p className="text-sm font-semibold text-muted">
         <Link href="/mbm/account" className="hover:text-ink">
           Your account
@@ -241,9 +243,9 @@ export default function PlacesView({
               value={show}
               onPick={(v) => setShow(v as typeof show)}
               options={[
-                ["all", `All places · ${searched.length}`],
-                ["unlinked", `Not linked to an actual place · ${searched.filter((p) => !p.real_name).length}`],
-                ["alike", `Look alike · ${groups.length}`],
+                ["all", "All places"],
+                ["unlinked", "Not linked to an actual place"],
+                ["alike", "Look alike"],
               ]}
             />
           </div>
