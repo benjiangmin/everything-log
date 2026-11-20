@@ -172,7 +172,7 @@ export default function HomeScreens({ home, documents, docsBadge }: { home: Reac
         {/* 江, big and faint behind it all: the family name. */}
         <div aria-hidden="true" className="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
           <span
-            className="absolute -bottom-[6%] right-[-4%] select-none text-[min(70vw,34rem)] leading-none text-accent opacity-[0.06]"
+            className="absolute -bottom-[6%] left-[-4%] select-none text-[min(70vw,34rem)] leading-none text-accent opacity-[0.06]"
             style={{ fontFamily: '"Songti SC", "STSong", "Noto Serif SC", "Source Han Serif SC", serif' }}
           >
             江
