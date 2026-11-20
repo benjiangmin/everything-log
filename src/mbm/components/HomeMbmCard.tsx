@@ -13,7 +13,10 @@ export default function HomeMbmCard({ day, renderedAt }: { day: Day; renderedAt:
   const now = useNow(renderedAt);
   const dayStart = +new Date(day.start);
   const dayEnd = +new Date(day.end);
-  const { placed, lanes, gaps } = layOut(day.blocks, dayStart, dayEnd, now);
+  // (Just the main row here: the row under it, e.g. a Commute under Work, is on the Day page.)
+  const { placed: all, gaps } = layOut(day.blocks, dayStart, dayEnd, now);
+  const placed = all.filter((p) => p.lane === 0);
+  const lanes = 1;
   return (
     <section aria-label="Minute by Minute" className="mt-6 rounded-card border-2 border-ink p-4 sm:p-5">
       <LiveRefresh />

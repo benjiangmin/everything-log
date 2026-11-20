@@ -2,6 +2,7 @@ import { Suspense } from "react";
 import { connection } from "next/server";
 import { getCategories, getHomeLayout } from "@/lib/home";
 import { getAlertCategoryIds, getAlertHrefs } from "@/lib/alerts";
+import AlertDot from "@/components/home/AlertDot";
 import CategoryGrid from "@/components/home/CategoryGrid";
 import HomeGreeting from "@/components/home/HomeGreeting";
 import HomeScreens from "@/components/home/HomeScreens";
@@ -38,6 +39,11 @@ export default function Home() {
             </div>
           </div>
         }
+        docsBadge={
+          <Suspense fallback={null}>
+            <DocsAlert />
+          </Suspense>
+        }
         documents={
           // (Documents stays the width it was.)
           <div className="mx-auto w-full max-w-4xl">
@@ -61,6 +67,15 @@ async function Categories() {
   return (
     <CategoryGrid categories={categories} sections={layout.sections} description={layout.description} alerts={alerts} />
   );
+}
+
+// The red "!" on the Documents arrow: something in one of your categories needs you.
+async function DocsAlert() {
+  await connection();
+  const ids = await getAlertHrefs()
+    .then(getAlertCategoryIds)
+    .catch(() => []);
+  return ids.length ? <AlertDot label="Something in Documents needs you" /> : null;
 }
 
 async function Todos() {
