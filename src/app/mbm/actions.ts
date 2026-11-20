@@ -753,23 +753,27 @@ export type JobPrefs = {
   stop_on_commute: boolean | null;
   places: string[] | null; // null: its category's
   start_mode: "always" | "calendar" | "never" | null; // arriving at its places (044)
-  weekly_goal_min: number | null;
+  weekly_goal_min: number | null; // the goal's amount, in minutes
+  goal_per?: "day" | "week"; // (049) per day or per week
   hide_from_stats: boolean | null;
 };
-const NEEDS_043 = "Run 043_jobs_and_categories.sql, then 044_clearer_jobs.sql, in Supabase first.";
+const NEEDS_043 = "Run the newest SQL files in Supabase first (043 through 049).";
 const cleanPrefs = (p: JobPrefs) => ({
   stop_on_commute: typeof p.stop_on_commute === "boolean" ? p.stop_on_commute : null,
   places: Array.isArray(p.places) ? p.places.filter(isUuid).slice(0, 30) : null,
   start_mode: p.start_mode === "always" || p.start_mode === "calendar" || p.start_mode === "never" ? p.start_mode : null,
   weekly_goal_min: typeof p.weekly_goal_min === "number" && p.weekly_goal_min >= 1 ? Math.min(10080, Math.round(p.weekly_goal_min)) : null,
   hide_from_stats: typeof p.hide_from_stats === "boolean" ? p.hide_from_stats : null,
+  ...(p.goal_per === "day" || p.goal_per === "week" ? { goal_per: p.goal_per } : {}),
 });
-const missing043 = (msg: string) => /categor|stop_on_commute|start_mode|auto_start|weekly_goal|hide_from_stats|own_color|delete_job|tuck_between/i.test(msg);
+const missing043 = (msg: string) => /categor|stop_on_commute|start_mode|auto_start|weekly_goal|goal_per|hide_from_stats|own_color|delete_job|tuck_between/i.test(msg);
 
-export async function saveJob(id: string, input: JobPrefs & { category_id: string | null }): Promise<Result> {
+export async function saveJob(id: string, input: JobPrefs & { category_id: string | null; color?: string }): Promise<Result> {
   if (!isUuid(id)) return fail("That job is gone.");
   const category_id = input.category_id && isUuid(input.category_id) ? input.category_id : null;
-  const { error } = await (await mbm()).from("activities").update({ ...cleanPrefs(input), category_id }).eq("id", id);
+  // (Its color: in a category it's the category's; this is kept as its own for if it leaves.)
+  const color = typeof input.color === "string" && /^#[0-9a-f]{6}$/i.test(input.color) ? { color: input.color.toLowerCase() } : {};
+  const { error } = await (await mbm()).from("activities").update({ ...cleanPrefs(input), category_id, ...color }).eq("id", id);
   if (error) return fail(missing043(error.message) ? NEEDS_043 : error.message);
   refresh();
   return { ok: true };
@@ -926,4 +930,26 @@ export async function placeIdFor(pick: PlacePick): Promise<Result & { id?: strin
   const { data, error } = await (await mbm()).rpc("place_for_real", { p_real: real });
   if (error) return fail(/place_for_real/.test(error.message) ? NEEDS_047 : error.message);
   return { ok: true, id: data as string };
+}
+
+// An unnamed stop's building, found by your browser (or null: none there). Saved, so it's looked
+// up once; if it's one of your places' buildings, the stop becomes that place (046).
+export async function setStopOutline(visitId: string, outline: [number, number][] | null): Promise<Result> {
+  if (!isUuid(visitId)) return fail("Bad stop.");
+  const clean = outline && outline.length >= 3 && outline.length <= 2000 ? outline.map(([a, b]) => [Math.round(a * 1e7) / 1e7, Math.round(b * 1e7) / 1e7]) : null;
+  const { error } = await (await mbm()).rpc("set_stop_outline", { p_visit_id: visitId, p_outline: clean });
+  if (error) return fail(error.message);
+  return { ok: true };
+}
+
+// Show or hide Google Calendar's events on Plan and the Day bar (049).
+export async function setCalendarHidden(hide: boolean): Promise<Result> {
+  const client = await mbm();
+  const { data: auth } = await client.auth.getUser();
+  if (!auth.user) return fail("Sign in first.");
+  const { error } = await client.from("profiles").upsert({ user_id: auth.user.id, hide_calendar: !!hide });
+  if (error) return fail(/hide_calendar/.test(error.message) ? "Run 049_hide_calendar_daily_goals.sql in Supabase first." : error.message);
+  revalidatePath("/mbm/plan");
+  revalidatePath("/mbm/day");
+  return { ok: true };
 }

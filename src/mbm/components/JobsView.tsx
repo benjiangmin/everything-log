@@ -68,8 +68,9 @@ export default function JobsView({ jobs, categories, places, needsSql = false }:
             onKeyDown={(e) => e.key === "Escape" && setQ("")}
             placeholder={`Search your ${jobs.length} jobs…`}
             aria-label="Search your jobs"
-            className="w-full rounded-full border border-line bg-paper py-3 pl-11 pr-4 outline-none focus:border-ink [&::-webkit-search-cancel-button]:hidden"
+            className="w-full rounded-full border border-line bg-paper py-3 pl-11 pr-11 outline-none focus:border-ink [&::-webkit-search-cancel-button]:hidden"
           />
+          {q && <ClearSearch onClear={() => setQ("")} />}
         </div>
         <p className="mt-4 text-sm font-semibold text-muted">{query ? `${found.length} found` : "Used most recently"}</p>
         <ul className="mt-2 divide-y divide-line rounded-card border border-line bg-paper">
@@ -126,16 +127,17 @@ export default function JobsView({ jobs, categories, places, needsSql = false }:
 
 // ---------- What the settings add up to, in plain words ----------
 
-type Effective = { stop: boolean; places: string[]; mode: Mode; hidden: boolean; goal: number | null };
+type Effective = { stop: boolean; places: string[]; mode: Mode; hidden: boolean; goal: number | null; per: "day" | "week" };
 const effective = (p: JobPrefs, parent: JobPrefs | null): Effective => ({
   stop: p.stop_on_commute ?? parent?.stop_on_commute ?? true,
   places: p.places ?? parent?.places ?? [],
   mode: (p.start_mode ?? parent?.start_mode ?? "never") as Mode,
   hidden: p.hide_from_stats ?? parent?.hide_from_stats ?? false,
   goal: p.weekly_goal_min,
+  per: p.goal_per ?? "week",
 });
 const list = (names: string[]) => (names.length <= 1 ? (names[0] ?? "") : `${names.slice(0, -1).join(", ")} or ${names[names.length - 1]}`);
-const hours = (min: number) => (min % 60 === 0 ? `${min / 60}h` : `${(min / 60).toFixed(1)}h`);
+const hours = (min: number) => (min < 60 ? `${min}m` : min % 60 === 0 ? `${min / 60}h` : `${(min / 60).toFixed(1)}h`);
 
 function sentences(name: string, e: Effective, places: Place[], groupOf = false): string[] {
   const it = groupOf ? "they" : name;
@@ -157,7 +159,7 @@ function sentences(name: string, e: Effective, places: Place[], groupOf = false)
         : `${groupOf ? "Each" : name} keeps going when you leave, until you stop it.`,
     );
   }
-  if (e.goal) out.push(`Goal: ${hours(e.goal)} a week${groupOf ? ", all together" : ""}.`);
+  if (e.goal) out.push(`Goal: ${hours(e.goal)} a ${e.per}${groupOf ? ", all together" : ""}.`);
   if (e.hidden) out.push(`Left out of Stats (${it === name ? "it still shows" : "they still show"} on the Day bar).`);
   return out;
 }
@@ -170,7 +172,7 @@ function short(j: Job, c: Category | null, places: Place[]) {
   if (at && e.mode === "always") bits.push("starts itself");
   if (at && e.mode === "calendar") bits.push("starts if planned");
   if (!e.stop) bits.push("doesn't stop when you leave");
-  if (e.goal) bits.push(`${hours(e.goal)}/week`);
+  if (e.goal) bits.push(`${hours(e.goal)}/${e.per}`);
   if (e.hidden) bits.push("not in Stats");
   return bits.join(" · ");
 }
@@ -184,16 +186,18 @@ function JobSettings({ job, jobs, categories, places, onDone }: { job: Job; jobs
     places: job.places ?? null,
     start_mode: job.start_mode ?? null,
     weekly_goal_min: job.weekly_goal_min ?? null,
+    goal_per: job.goal_per ?? "week",
     hide_from_stats: job.hide_from_stats ?? null,
     category_id: job.category_id ?? null,
   });
+  const [color, setColor] = useState(job.category_id ? (job.own_color ?? job.color) : job.color);
   const cat = categories.find((c) => c.id === p.category_id) ?? null;
   const [message, setMessage] = useState<string | null>(null);
   const [pending, start] = useTransition();
   const [deleting, setDeleting] = useState(false);
   const save = () =>
     start(async () => {
-      const res = await saveJob(job.id, p);
+      const res = await saveJob(job.id, { ...p, ...(color !== (job.category_id ? (job.own_color ?? job.color) : job.color) ? { color } : {}) });
       if (!res.ok) return setMessage(res.message);
       router.refresh();
       onDone();
@@ -210,6 +214,9 @@ function JobSettings({ job, jobs, categories, places, onDone }: { job: Job; jobs
             </option>
           ))}
         </select>
+      </Field>
+      <Field title="Color">
+        <JobColor color={color} onChange={setColor} category={cat} />
       </Field>
       <Prefs name={job.name} value={p} onChange={(v) => setP({ ...p, ...v })} parent={cat} places={places} />
       {deleting ? (
@@ -293,7 +300,9 @@ function CategoryCard({ category, jobs, places, open, onToggle, onDone }: { cate
   const [name, setName] = useState(category?.name ?? "");
   const [color, setColor] = useState(category?.color ?? PALETTE[3]);
   const [p, setP] = useState<JobPrefs>(
-    category ? { stop_on_commute: category.stop_on_commute, places: category.places, start_mode: category.start_mode, weekly_goal_min: category.weekly_goal_min, hide_from_stats: category.hide_from_stats } : blank,
+    category
+      ? { stop_on_commute: category.stop_on_commute, places: category.places, start_mode: category.start_mode, weekly_goal_min: category.weekly_goal_min, goal_per: category.goal_per, hide_from_stats: category.hide_from_stats }
+      : blank,
   );
   const [message, setMessage] = useState<string | null>(null);
   const [pending, start] = useTransition();
@@ -322,7 +331,7 @@ function CategoryCard({ category, jobs, places, open, onToggle, onDone }: { cate
             <span className="block font-display text-lg font-semibold">{category.name}</span>
             <span className="block truncate text-sm text-muted">{jobs.length ? jobs.map((j) => j.name).join(", ") : "No jobs in it yet. Pick it in a job's settings above."}</span>
           </span>
-          {category.weekly_goal_min && <span className="shrink-0 text-sm text-muted">{hours(category.weekly_goal_min)}/week</span>}
+          {category.weekly_goal_min && <span className="shrink-0 text-sm text-muted">{hours(category.weekly_goal_min)}/{category.goal_per ?? "week"}</span>}
         </button>
       )}
       {open && (
@@ -446,19 +455,8 @@ function Prefs({
         />
       </Field>
 
-      <Field title="Weekly goal" help={group ? "For all its jobs together, on Stats." : "Shown on Stats, in the week view."}>
-        <span className="flex items-center gap-2 text-sm">
-          <input
-            type="number"
-            min={0}
-            step={0.5}
-            value={value.weekly_goal_min ? value.weekly_goal_min / 60 : ""}
-            onChange={(ev) => onChange({ weekly_goal_min: ev.target.value ? Math.round(Number(ev.target.value) * 60) || null : null })}
-            placeholder="None"
-            className="w-28 rounded-control border border-line bg-paper px-3 py-2.5"
-          />
-          <span className="text-muted">hours a week</span>
-        </span>
+      <Field title="Goal" help={`${group ? "For all its jobs together. " : ""}Shown on Stats: a daily goal on each day (and ×7 on the week), a weekly one on the week.`}>
+        <Goal value={value.weekly_goal_min} per={value.goal_per ?? "week"} onChange={(min, per) => onChange({ weekly_goal_min: min, goal_per: per })} />
       </Field>
 
       <Field title="Stats">
@@ -581,5 +579,76 @@ function AddPlace({ places, onAdd }: { places: Place[]; onAdd: (id: string, plac
       </button>
       {message && <p className="mt-1 text-xs text-danger">{message}</p>}
     </div>
+  );
+}
+
+// A goal: an amount (minutes or hours) a day or a week. Stored in minutes.
+function Goal({ value, per, onChange }: { value: number | null; per: "day" | "week"; onChange: (min: number | null, per: "day" | "week") => void }) {
+  const [unit, setUnit] = useState<"min" | "h">(value && value < 60 ? "min" : "h");
+  const shown = value ? (unit === "h" ? Math.round((value / 60) * 100) / 100 : value) : "";
+  const set = (n: string, u = unit, p = per) => onChange(n === "" ? null : Math.max(1, Math.min(p === "day" ? 1440 : 10080, Math.round(Number(n) * (u === "h" ? 60 : 1)))) || null, p);
+  const sel = "select-field rounded-control border border-line bg-paper py-2.5 pl-3 text-sm";
+  return (
+    <span className="flex flex-wrap items-center gap-2 text-sm">
+      <input type="number" min={0} step={unit === "h" ? 0.5 : 5} value={shown} onChange={(e) => set(e.target.value)} placeholder="None" aria-label="Goal amount" className="w-24 rounded-control border border-line bg-paper px-3 py-2.5" />
+      <select
+        value={unit}
+        aria-label="Minutes or hours"
+        onChange={(e) => {
+          const u = e.target.value as "min" | "h";
+          setUnit(u);
+          if (shown !== "") set(String(shown), u);
+        }}
+        className={sel}
+      >
+        <option value="min">minutes</option>
+        <option value="h">hours</option>
+      </select>
+      <select value={per} aria-label="Per day or week" onChange={(e) => onChange(value, e.target.value as "day" | "week")} className={sel}>
+        <option value="day">a day</option>
+        <option value="week">a week</option>
+      </select>
+    </span>
+  );
+}
+
+// A job's own color (not while it's in a category: then it's the category's).
+function JobColor({ color, onChange, category }: { color: string; onChange: (c: string) => void; category: Category | null }) {
+  if (category)
+    return (
+      <p className="flex items-center gap-2 text-sm text-muted">
+        <span className="size-5 rounded-full" style={{ background: category.color }} aria-hidden="true" />
+        {category.name}&apos;s color. Take it out of {category.name} to give it its own.
+      </p>
+    );
+  return (
+    <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Color">
+      {PALETTE.map((c) => (
+        <button
+          key={c}
+          type="button"
+          role="radio"
+          aria-checked={color === c}
+          aria-label={c}
+          onClick={() => onChange(c)}
+          className={`size-8 rounded-full transition-transform hover:scale-110 ${color === c ? "ring-2 ring-ink ring-offset-2 ring-offset-paper" : ""}`}
+          style={{ background: c }}
+        />
+      ))}
+      <label className="relative grid size-8 cursor-pointer place-items-center rounded-full ring-1 ring-line" title="Any color" style={PALETTE.includes(color) ? {} : { background: color }}>
+        <input type="color" value={color} onChange={(e) => onChange(e.target.value)} className="absolute inset-0 cursor-pointer opacity-0" />
+        {PALETTE.includes(color) && <span className="text-sm text-muted">+</span>}
+      </label>
+    </div>
+  );
+}
+
+export function ClearSearch({ onClear }: { onClear: () => void }) {
+  return (
+    <button type="button" onClick={onClear} aria-label="Clear the search" className="absolute right-2.5 top-1/2 grid size-7 -translate-y-1/2 place-items-center rounded-full text-muted hover:bg-surface hover:text-ink">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path d="M6 6l12 12M18 6L6 18" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" />
+      </svg>
+    </button>
   );
 }

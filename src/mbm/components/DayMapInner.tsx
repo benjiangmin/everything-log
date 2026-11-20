@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState, useTransition, type ReactNode } from "react";
 import { APIProvider, InfoWindow, Map, useMap, useMapsLibrary } from "@vis.gl/react-google-maps";
 import { useRouter } from "next/navigation";
-import { lockDay, lookupPlaceOutline, moveStop, myPlaces, rememberedRoute, removeStop, reportRoute, saveBlock, setPlaceOutline, setStopPlace, trailCells, type PlaceLite, type PlacePick } from "@/app/mbm/actions";
+import { lockDay, lookupPlaceOutline, moveStop, myPlaces, rememberedRoute, removeStop, reportRoute, saveBlock, setPlaceOutline, setStopOutline, setStopPlace, trailCells, type PlaceLite, type PlacePick } from "@/app/mbm/actions";
 import { Search as PlaceSearch, type Found } from "./PlaceSearch";
 
 // Which version of the path engine drew a route (saved with "Route looks wrong" reports).
@@ -923,6 +923,24 @@ function usePlaceBuildings(visits: Visit[]): BuildingStatus | null {
   useEffect(() => {
     const todo = new globalThis.Map<string, { lat: number; lng: number }>(); // (Map here is the map component)
     for (const v of visits) if (v.placeId && v.placeNeedsOutline && !lookedUp.has(v.placeId)) todo.set(v.placeId, { lat: v.lat, lng: v.lng });
+    // Unnamed stops of 8 minutes or more get their building too (once: it's saved), up to 12 a day.
+    const stops = new globalThis.Map<string, { lat: number; lng: number }>();
+    for (const v of visits) {
+      const long = (v.departed_at ? +new Date(v.departed_at) : Date.now()) - +new Date(v.arrived_at) >= 8 * 60_000;
+      if (!v.placeId && v.stopNeedsOutline && long && !lookedUp.has(`stop:${v.id}`) && stops.size < 12) stops.set(v.id, { lat: v.lat, lng: v.lng });
+    }
+    for (const id of stops.keys()) lookedUp.add(`stop:${id}`);
+    if (stops.size)
+      (async () => {
+        let saved = false;
+        for (const [id, at] of stops) {
+          const outline = await buildingAt(at.lat, at.lng).catch(() => undefined);
+          if (outline === undefined) lookedUp.delete(`stop:${id}`); // (couldn't reach it: next time)
+          else if ((await setStopOutline(id, outline).catch(() => ({ ok: false }))).ok && outline) saved = true;
+          await new Promise((r) => setTimeout(r, 1200));
+        }
+        if (saved) router.refresh();
+      })();
     if (!todo.size) return;
     for (const id of todo.keys()) lookedUp.add(id);
     (async () => {

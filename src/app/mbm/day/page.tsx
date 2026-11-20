@@ -4,7 +4,7 @@ import { connection } from "next/server";
 import { redirect } from "next/navigation";
 import { getDay, mbmTz } from "@/mbm/data";
 import { mbm, mbmReady, mbmUser } from "@/mbm/supabase";
-import { eventsBetween, placeFor } from "@/mbm/plans";
+import { calendarHidden, eventsBetween, isGoogleEvent, placeFor } from "@/mbm/plans";
 import type { DayPlan } from "@/mbm/components/DayBar";
 import { dayKeyOf, dayRange, dayTitle, isDayKey, shiftDay } from "@/mbm/time";
 import DayView from "@/mbm/components/DayView";
@@ -90,11 +90,11 @@ async function upcoming(now: Date, dayKey: string, tz: string): Promise<DayPlan[
   try {
     const client = await mbm();
     const { end } = dayRange(dayKey, tz);
-    const [events, places] = await Promise.all([eventsBetween(client, now, end), client.from("places").select("name, lat, lng").not("name", "is", null).limit(300)]);
+    const [events, places, hidden] = await Promise.all([eventsBetween(client, now, end), client.from("places").select("name, lat, lng").not("name", "is", null).limit(300), calendarHidden(client)]);
     const mine = (places.data ?? []) as { name: string; lat: number; lng: number }[];
     return events
       // (Started, or skipped: not a plan any more. The entry is what's on the bar.)
-      .filter((e) => !e.all_day && !e.started_block && !e.skipped)
+      .filter((e) => !e.all_day && !e.started_block && !e.skipped && !(hidden && isGoogleEvent(e)))
       .map((e) => ({ id: e.id, title: e.title, start: +new Date(e.starts_at), end: +new Date(e.ends_at), location: e.location, at: placeFor(e, mine) }));
   } catch {
     return [];

@@ -6,6 +6,7 @@ import { useState, useTransition } from "react";
 import { deletePlace, editPlace, mergePlaces, removeStop, setStopPlace, type PlacePick } from "@/app/mbm/actions";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
 import { clock, dayKeyOf, span } from "@/mbm/time";
+import { ClearSearch } from "./JobsView";
 import PlaceSearch, { type Found } from "./PlaceSearch";
 
 // Your places (your name for each, the actual place, how often you're there) and the stops you
@@ -52,8 +53,9 @@ export default function PlacesView({ places, stops, tz, now, needsSql }: { place
           onChange={(e) => setQ(e.target.value)}
           placeholder={`Search ${places.length} places and ${stops.length} unnamed stops…`}
           aria-label="Search places"
-          className="w-full rounded-full border border-line bg-paper py-3 pl-11 pr-4 outline-none focus:border-ink [&::-webkit-search-cancel-button]:hidden"
+          className="w-full rounded-full border border-line bg-paper py-3 pl-11 pr-11 outline-none focus:border-ink [&::-webkit-search-cancel-button]:hidden"
         />
+        {q && <ClearSearch onClear={() => setQ("")} />}
       </div>
 
       <section className="mt-8">

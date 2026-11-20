@@ -27,6 +27,7 @@ export type Visit = {
   outline?: Outline | null; // the building it's in (its place's, 032_places_by_building.sql)
   placeId?: string; // the named place it's at
   placeNeedsOutline?: boolean; // that place's building hasn't been looked up yet
+  stopNeedsOutline?: boolean; // an unnamed stop whose building hasn't been looked up yet
   placeOwn?: string | null; // (047) your name for its place
   placeReal?: { name: string; address: string | null } | null; // (047) the actual place it's linked to
 };
@@ -117,7 +118,7 @@ export async function getDay(dayKey: string): Promise<Day> {
     return out;
   }
   const [firstVisits, pointRows, phoneRows] = await Promise.all([
-    visitsOn("id, arrived_at, departed_at, lat, lng, auto_name, outline, places(id, name, lat, lng, outline, outline_checked, own_name, real_name, real_address)")
+    visitsOn("id, arrived_at, departed_at, lat, lng, auto_name, outline, outline_checked, places(id, name, lat, lng, outline, outline_checked, own_name, real_name, real_address)")
       .then((r) => (r.error ? visitsOn("id, arrived_at, departed_at, lat, lng, auto_name, outline, places(id, name, lat, lng, outline, outline_checked)") : r)) // (047 not run yet)
       .then((r) => (r.error ? visitsOn("id, arrived_at, departed_at, lat, lng, auto_name, places(name, lat, lng)") : r)), // (without outline: 021 not run yet)
     allPoints(),
@@ -141,7 +142,10 @@ export async function getDay(dayKey: string): Promise<Day> {
         const pin = place && typeof place.lat === "number" && typeof place.lng === "number" ? { lat: place.lat, lng: place.lng } : {};
         const gps = "lat" in pin ? { gps: { lat: v.lat, lng: v.lng } } : {};
         // Its building: the place's (032_places_by_building.sql), or the stop's own.
-        const where = place?.id ? { placeId: place.id, placeNeedsOutline: place.outline_checked === false } : {};
+        const where = place?.id
+          ? { placeId: place.id, placeNeedsOutline: place.outline_checked === false }
+          : { stopNeedsOutline: (v as { outline_checked?: boolean }).outline_checked === false && !v.outline }; // (an unnamed stop's own building)
+        delete (v as { outline_checked?: boolean }).outline_checked;
         const names = place && "real_name" in place ? { placeOwn: place.own_name ?? null, placeReal: place.real_name ? { name: place.real_name, address: place.real_address ?? null } : null } : {};
         return { ...v, ...pin, ...gps, ...where, ...names, outline: place?.outline ?? v.outline ?? null, auto_name: v.auto_name ?? null, place: place?.name ?? null };
       });

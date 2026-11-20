@@ -6,7 +6,7 @@ import { canWrite, googleStatus, syncCalendar } from "@/mbm/google";
 import { mbm, mbmReady, mbmUser } from "@/mbm/supabase";
 import { dayKeyOf, dayRange } from "@/mbm/time";
 import PlanView from "@/mbm/components/PlanView";
-import { eventsBetween } from "@/mbm/plans";
+import { calendarHidden, eventsBetween, isGoogleEvent } from "@/mbm/plans";
 
 export const metadata = { title: "Plan" };
 
@@ -35,16 +35,19 @@ async function Plan({ day: asked, open }: { day?: string; open?: string }) {
   const { start, end } = dayRange(day, tz);
   const client = await mbm();
   await syncCalendar(client).catch(() => null); // (at most every 10 minutes)
-  const [events, places, google, write, acts, renderedAt] = await Promise.all([
+  const [all, hidden, places, google, write, acts, renderedAt] = await Promise.all([
     eventsBetween(client, start, end),
+    calendarHidden(client),
     client.from("places").select("id, name, lat, lng").not("name", "is", null).limit(300),
     googleStatus(client).catch(() => null),
     canWrite(client).catch(() => false),
     client.from("activities").select("name, color"),
     loadedAt(),
   ]);
+  const events = hidden ? all.filter((e) => !isGoogleEvent(e)) : all;
   return (
     <PlanView
+      calendarHidden={hidden}
       day={day}
       today={today}
       tz={tz}

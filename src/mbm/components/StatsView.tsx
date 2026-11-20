@@ -54,7 +54,7 @@ export default function StatsView({
       </section>
 
       <div className="grid gap-8 lg:grid-cols-2">
-        <TimeSpent activities={stats.activities} elapsed={elapsed} initial={query} savedPins={pins} meta={meta} week={range === "week"} />
+        <TimeSpent activities={stats.activities} elapsed={elapsed} initial={query} savedPins={pins} meta={meta} range={range} />
         <Apps apps={stats.apps} />
       </div>
 
@@ -115,7 +115,7 @@ function Row({
         {note && <span className="text-xs text-muted">{note}</span>}
         <span className="num font-semibold">{hm(seconds)}</span>
       </div>
-      <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-surface">
+      <div className="mt-1.5 h-3 overflow-hidden rounded-full bg-surface">
         <div className="h-full rounded-full" style={{ width: `${max > 0 && seconds > 0 ? Math.max(2, (seconds / max) * 100) : 0}%`, background: color ?? "var(--ink)", opacity: color ? 1 : 0.55 }} />
       </div>
     </>
@@ -198,22 +198,28 @@ function TimeSpent({
   initial,
   savedPins,
   meta,
-  week,
+  range,
 }: {
   activities: Stats["activities"];
   elapsed: number;
   initial: string;
   savedPins: string[] | null;
   meta: JobMeta;
-  week: boolean; // (weekly goals show on the week)
+  range: Range; // (goals show on a day, a week)
 }) {
   const metaOf = (name: string) => meta.jobs[name.trim().toLowerCase()];
   // Jobs set to "Hide from Stats" aren't listed (they're still on the bar).
   const hidden = everything.filter((a) => metaOf(a.name)?.hidden);
   const activities = everything.filter((a) => !metaOf(a.name)?.hidden);
   const [openCats, setOpenCats] = useState<Set<string>>(new Set());
-  const goalNote = (seconds: number, goal: number | null | undefined) =>
-    week && goal ? `${Math.round((seconds / 60 / goal) * 100)}% of ${goal % 60 ? (goal / 60).toFixed(1) : goal / 60}h goal` : undefined;
+  // A goal per day shows on a day (and ×7 on a week); per week, on a week.
+  const goalNote = (seconds: number, goal: number | null | undefined, per: "day" | "week" = "week") => {
+    if (!goal) return undefined;
+    const target = range === "day" ? (per === "day" ? goal : null) : range === "week" ? (per === "day" ? goal * 7 : goal) : null;
+    if (!target) return undefined;
+    const t = target < 60 ? `${target}m` : target % 60 ? `${(target / 60).toFixed(1)}h` : `${target / 60}h`;
+    return `${Math.round((seconds / 60 / target) * 100)}% of ${t} goal`;
+  };
   const [q, setQ] = useState(initial);
   const [all, setAll] = useState(false);
   const [sort, setSort] = useState<Sort>("most");
@@ -248,7 +254,7 @@ function TimeSpent({
   const rest = activities.filter((a) => !pinnedKeys.has(key(a.name)) && matches(a.name)).sort(sorter);
   const found = [...pinned, ...rest];
   // Not searching: a category's jobs go under it (one row with their total; click for each).
-  type Item = { kind: "job"; a: (typeof rest)[number] } | { kind: "cat"; id: string; name: string; color: string; seconds: number; goal: number | null; jobs: typeof rest };
+  type Item = { kind: "job"; a: (typeof rest)[number] } | { kind: "cat"; id: string; name: string; color: string; seconds: number; goal: number | null; per?: "day" | "week"; jobs: typeof rest };
   const items: Item[] = [];
   if (query) rest.forEach((a) => items.push({ kind: "job", a }));
   else {
@@ -261,7 +267,7 @@ function TimeSpent({
         continue;
       }
       let g = cats.get(id);
-      if (!g) cats.set(id, (g = { kind: "cat", id, name: c.name, color: c.color, seconds: 0, goal: c.goal, jobs: [] }));
+      if (!g) cats.set(id, (g = { kind: "cat", id, name: c.name, color: c.color, seconds: 0, goal: c.goal, per: c.per, jobs: [] }));
       g.seconds += a.seconds;
       g.jobs.push(a);
     }
@@ -370,7 +376,7 @@ function TimeSpent({
           {pinned.length > 0 && shownRest.length > 0 && <li aria-hidden="true" className="my-1.5 border-t border-dashed border-line" />}
           {shownRest.map((i) =>
             i.kind === "job" ? (
-              <Row key={i.a.name} color={i.a.color} label={i.a.name} seconds={i.a.seconds} max={max} pin={pinFor(i.a.name)} note={goalNote(i.a.seconds, metaOf(i.a.name)?.goal)} />
+              <Row key={i.a.name} color={i.a.color} label={i.a.name} seconds={i.a.seconds} max={max} pin={pinFor(i.a.name)} note={goalNote(i.a.seconds, metaOf(i.a.name)?.goal, metaOf(i.a.name)?.per)} />
             ) : (
               <li key={`cat-${i.id}`}>
                 <ul>
@@ -379,7 +385,7 @@ function TimeSpent({
                     label={`${openCats.has(i.id) ? "▾" : "▸"} ${i.name}`}
                     seconds={i.seconds}
                     max={max}
-                    note={goalNote(i.seconds, i.goal) ?? `${i.jobs.length} job${i.jobs.length === 1 ? "" : "s"}`}
+                    note={goalNote(i.seconds, i.goal, i.per) ?? `${i.jobs.length} job${i.jobs.length === 1 ? "" : "s"}`}
                     onPick={() =>
                       setOpenCats((set) => {
                         const next = new Set(set);
@@ -393,7 +399,7 @@ function TimeSpent({
                     <li className="ml-4 border-l border-line pl-3">
                       <ul>
                         {[...i.jobs].sort(sorter).map((a) => (
-                          <Row key={a.name} color={a.color} label={a.name} seconds={a.seconds} max={i.seconds} pin={pinFor(a.name)} note={goalNote(a.seconds, metaOf(a.name)?.goal)} />
+                          <Row key={a.name} color={a.color} label={a.name} seconds={a.seconds} max={i.seconds} pin={pinFor(a.name)} note={goalNote(a.seconds, metaOf(a.name)?.goal, metaOf(a.name)?.per)} />
                         ))}
                       </ul>
                     </li>

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
-import { deletePlan, savePlan } from "@/app/mbm/actions";
+import { deletePlan, savePlan, setCalendarHidden } from "@/app/mbm/actions";
 import { clock, dayTitle, shiftDay, zonedTime } from "@/mbm/time";
 import PlaceField, { type Picked } from "./PlaceField";
 import { useNow } from "./useNow";
@@ -57,7 +57,9 @@ export default function PlanView({
   colors,
   openId,
   renderedAt,
+  calendarHidden = false,
 }: {
+  calendarHidden?: boolean; // Google Calendar's events hidden (here and on the Day bar)
   day: string;
   today: string;
   tz: string;
@@ -300,6 +302,25 @@ export default function PlanView({
       </div>
 
       <GoogleNote google={google} canWrite={canWrite} />
+      {google?.connected && (
+        <label className="mt-3 inline-flex cursor-pointer items-center gap-2.5 text-sm">
+          <input
+            type="checkbox"
+            checked={!calendarHidden}
+            disabled={pending}
+            onChange={(e) =>
+              start(async () => {
+                const res = await safely(() => setCalendarHidden(!e.target.checked));
+                if (!res.ok) setMessage(res.message);
+                else router.refresh();
+              })
+            }
+            className="size-4 accent-[var(--accent)]"
+          />
+          Show Google Calendar events
+          <span className="text-muted">{calendarHidden ? "(hidden here and on the Day bar; only your own plans show)" : ""}</span>
+        </label>
+      )}
 
       {allDay.length > 0 && (
         <div className="mt-4 flex flex-wrap gap-2">

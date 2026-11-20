@@ -76,24 +76,30 @@ export async function getStats(period: Period, tz: string): Promise<Stats> {
 
 // Your jobs' categories, goals and hiding (043). Empty before it's run.
 export type JobMeta = {
-  jobs: Record<string, { category: string | null; hidden: boolean; goal: number | null }>; // by lower-cased name
-  categories: Record<string, { name: string; color: string; goal: number | null }>; // by id
+  jobs: Record<string, { category: string | null; hidden: boolean; goal: number | null; per?: "day" | "week" }>; // by lower-cased name
+  categories: Record<string, { name: string; color: string; goal: number | null; per?: "day" | "week" }>; // by id
 };
 export async function getJobMeta(): Promise<JobMeta> {
   const client = await mbm();
   const [a, c] = await Promise.all([
-    client.from("activities").select("name, category_id, hide_from_stats, weekly_goal_min"),
-    client.from("categories").select("id, name, color, hide_from_stats, weekly_goal_min"),
+    client
+      .from("activities")
+      .select("name, category_id, hide_from_stats, weekly_goal_min, goal_per")
+      .then((r) => (r.error ? client.from("activities").select("name, category_id, hide_from_stats, weekly_goal_min") : r)), // (049 not run yet)
+    client
+      .from("categories")
+      .select("id, name, color, hide_from_stats, weekly_goal_min, goal_per")
+      .then((r) => (r.error ? client.from("categories").select("id, name, color, hide_from_stats, weekly_goal_min") : r)),
   ]);
   if (a.error || c.error) return { jobs: {}, categories: {} };
-  const cats = (c.data ?? []) as { id: string; name: string; color: string; hide_from_stats: boolean | null; weekly_goal_min: number | null }[];
+  const cats = (c.data ?? []) as { id: string; name: string; color: string; hide_from_stats: boolean | null; weekly_goal_min: number | null; goal_per?: "day" | "week" }[];
   const byId = new Map(cats.map((x) => [x.id, x]));
   const jobs: JobMeta["jobs"] = {};
-  for (const j of (a.data ?? []) as { name: string; category_id: string | null; hide_from_stats: boolean | null; weekly_goal_min: number | null }[]) {
+  for (const j of (a.data ?? []) as { name: string; category_id: string | null; hide_from_stats: boolean | null; weekly_goal_min: number | null; goal_per?: "day" | "week" }[]) {
     const cat = j.category_id ? byId.get(j.category_id) : undefined;
-    jobs[j.name.trim().toLowerCase()] = { category: cat?.id ?? null, hidden: j.hide_from_stats ?? cat?.hide_from_stats ?? false, goal: j.weekly_goal_min };
+    jobs[j.name.trim().toLowerCase()] = { category: cat?.id ?? null, hidden: j.hide_from_stats ?? cat?.hide_from_stats ?? false, goal: j.weekly_goal_min, per: j.goal_per ?? "week" };
   }
-  return { jobs, categories: Object.fromEntries(cats.map((x) => [x.id, { name: x.name, color: x.color, goal: x.weekly_goal_min }])) };
+  return { jobs, categories: Object.fromEntries(cats.map((x) => [x.id, { name: x.name, color: x.color, goal: x.weekly_goal_min, per: x.goal_per ?? "week" }])) };
 }
 
 export const todayKey = (tz: string) => dayKeyOf(new Date(), tz);

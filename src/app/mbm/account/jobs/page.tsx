@@ -24,9 +24,19 @@ async function Jobs() {
   const user = await mbmUser();
   if (!user) redirect("/mbm/login?next=/mbm/account/jobs");
   const client = await mbm();
+  const jobCols = "id, name, color, own_color, category_id, stop_on_commute, places, start_mode, weekly_goal_min, hide_from_stats, last_used_at";
+  const catCols = "id, name, color, stop_on_commute, places, start_mode, weekly_goal_min, hide_from_stats";
   const [jobs, cats, places] = await Promise.all([
-    client.from("activities").select("id, name, color, own_color, category_id, stop_on_commute, places, start_mode, weekly_goal_min, hide_from_stats, last_used_at").order("last_used_at", { ascending: false }),
-    client.from("categories").select("id, name, color, stop_on_commute, places, start_mode, weekly_goal_min, hide_from_stats").order("name"),
+    client
+      .from("activities")
+      .select(`${jobCols}, goal_per`)
+      .order("last_used_at", { ascending: false })
+      .then((r) => (r.error ? client.from("activities").select(jobCols).order("last_used_at", { ascending: false }) : r)), // (049 not run yet)
+    client
+      .from("categories")
+      .select(`${catCols}, goal_per`)
+      .order("name")
+      .then((r) => (r.error ? client.from("categories").select(catCols).order("name") : r)),
     client.from("places").select("id, name").order("name").limit(300),
   ]);
   if (jobs.error || cats.error) {
