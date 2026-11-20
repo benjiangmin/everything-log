@@ -835,7 +835,7 @@ export async function tuckBetween(blockId: string): Promise<Result> {
   if (!isUuid(blockId)) return fail("That entry is gone.");
   const { data, error } = await (await mbm()).rpc("tuck_between", { p_block: blockId });
   if (error) return fail(missing043(error.message) ? NEEDS_043 : error.message);
-  if (!data) return fail("There isn't the same job right before and after it any more.");
+  if (!data) return fail("There isn't the same job before and after it any more.");
   refresh();
   return { ok: true };
 }
@@ -967,5 +967,15 @@ export async function keepApart(ids: string[]): Promise<Result> {
   const { error } = await client.from("profiles").upsert({ user_id: auth.user.id, kept_apart: [...kept, key].slice(-500) });
   if (error) return fail(error.message);
   revalidatePath("/mbm/account/places");
+  return { ok: true };
+}
+
+// An entry under a job comes back up; the job is cut around it (052).
+export async function liftOut(blockId: string): Promise<Result> {
+  if (!isUuid(blockId)) return fail("That entry is gone.");
+  const { data, error } = await (await mbm()).rpc("lift_out", { p_block: blockId });
+  if (error) return fail(/lift_out/.test(error.message) ? "Run 052_tuck_across.sql in Supabase first." : error.message);
+  if (!data) return fail("It isn't under anything any more.");
+  refresh();
   return { ok: true };
 }

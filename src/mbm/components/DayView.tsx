@@ -3,7 +3,7 @@
 import { useEffect, useState, useSyncExternalStore, type ReactNode } from "react";
 import type { Day } from "@/mbm/data";
 import { useRouter } from "next/navigation";
-import { tuckBetween } from "@/app/mbm/actions";
+import { liftOut, tuckBetween } from "@/app/mbm/actions";
 import DayBar, { type DayPlan } from "./DayBar";
 import DayMap from "./DayMap";
 import type { Focus } from "./DayMapInner";
@@ -67,6 +67,11 @@ export default function DayView({
       onSelect={(b) => openMbm({ kind: "edit", dayKey: day.dayKey, blockId: b.id })}
       marks={marks}
       plans={plans}
+      onLift={async (b) => {
+        const res = await liftOut(b.id).catch(() => ({ ok: false as const, message: "Couldn't do that. Check your connection." }));
+        if (res.ok) router.refresh();
+        return res.ok ? null : res.message;
+      }}
       onTuck={async (b) => {
         const res = await tuckBetween(b.id).catch(() => ({ ok: false as const, message: "Couldn't do that. Check your connection." }));
         if (res.ok) router.refresh();

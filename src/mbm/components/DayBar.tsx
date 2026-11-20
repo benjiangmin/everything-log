@@ -35,11 +35,13 @@ export default function DayBar({
   slim = false,
   plans = [],
   onTuck,
+  onLift,
   onSelectPlan,
   onHoverPlan,
 }: {
   plans?: DayPlan[];
   onTuck?: (b: Block) => Promise<string | null>; // (a problem, or null) a sandwiched entry (Work, Coffee, Work): under one joined Work
+  onLift?: (b: Block) => Promise<string | null>; // …and back up again (the job cut around it)
   onSelectPlan?: (p: DayPlan) => void; // click: change it on the Plan tab
   onHoverPlan?: (p: DayPlan | null) => void; // hover: where it is, on the map
   placed: Placed[];
@@ -256,20 +258,32 @@ export default function DayBar({
   const shownPlans = plans.filter((p) => p.end > now && p.start < dayEnd && p.end > from && p.start < to);
   const main = shownPlaced.filter((p) => p.lane === 0);
   const side = shownPlaced.filter((p) => p.lane > 0);
-  // Sandwiched: the same job right before and after it (5 minutes apart or less), and it's
-  // not that job. Hovering it shows a ↓ to put it under them, joined.
-  const GAP = 5 * 60_000;
+  // Sandwiched: the same job somewhere before and after it (within 12 hours: Work, Commute,
+  // Eating, Commute, Work), and it's not that job. Hovering it shows a ↓: the two become one,
+  // with everything between under it. (The same rule as tuck_between, 052.)
+  const HALF_DAY = 12 * 3600_000;
   const sandwich = new Map<string, Block>(); // middle's id → the entry before it
   main.forEach((p, i) => {
-    const b = main[i - 1];
-    const a = main[i + 1];
-    if (!b || !a || !p.block.ended_at) return;
-    const job = b.block.activity_id;
-    if (!job || job !== a.block.activity_id || job === p.block.activity_id) return;
-    // (Never under a Commute: Work, Commute, Work tucks the Commute; Commute, Work, Commute doesn't tuck Work.)
-    if (b.block.source === "location" || byId.get(job)?.name === "Commute") return;
-    if (p.start - b.end > GAP || a.start - p.end > GAP) return;
-    sandwich.set(p.block.id, b.block);
+    if (!p.block.ended_at || !p.block.activity_id) return;
+    for (let k = i - 1; k >= 0; k--) {
+      const b = main[k];
+      if (p.start - b.end > HALF_DAY) break;
+      const job = b.block.activity_id;
+      // (Never under a Commute: Work, Commute, Work tucks the Commute; Commute, Work, Commute doesn't tuck Work.)
+      if (!job || job === p.block.activity_id || b.block.source === "location" || byId.get(job)?.name === "Commute" || !b.block.ended_at) continue;
+      if (main.some((a, j) => j > i && a.block.activity_id === job && a.start >= p.end - 60_000 && a.start <= b.end + HALF_DAY)) {
+        sandwich.set(p.block.id, b.block);
+        break;
+      }
+    }
+  });
+  // Under a job (on a row below, all of it inside one entry above): hovering it shows a ↑ that
+  // brings it back up and cuts the job around it (lift_out).
+  const under = new Map<string, Block>(); // its id → the entry it's under
+  side.forEach((p) => {
+    if (!p.block.ended_at) return;
+    const w = main.find((m) => m.block.source !== "location" && m.block.activity_id !== p.block.activity_id && m.start < p.start && m.end > p.end);
+    if (w) under.set(p.block.id, w.block);
   });
   const sideRows = Math.max(0, ...side.map((p) => p.lane));
   // Left / width of a pill, with a 1px gap each side. Something too short to see (a 2-minute
@@ -441,6 +455,9 @@ export default function DayBar({
                 {span((hover.block.ended_at ? +new Date(hover.block.ended_at) : now) - +new Date(hover.block.started_at))}
               </p>
               {hover.block.note && <p className="mt-1 line-clamp-3 text-sm opacity-80">{hover.block.note}</p>}
+              {onLift && under.has(hover.block.id) && (
+                <p className="mt-1 text-xs opacity-70">↑ Back up: split {nameOf(under.get(hover.block.id)!)?.name} around it</p>
+              )}
               {onTuck && sandwich.has(hover.block.id) && (
                 <p className="mt-1 text-xs opacity-70">↓ Put it under {nameOf(sandwich.get(hover.block.id)!)?.name}, as one {nameOf(sandwich.get(hover.block.id)!)?.name}</p>
               )}
@@ -597,6 +614,34 @@ export default function DayBar({
               >
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                   <path d="M12 5v13M6 12l6 6 6-6" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </button>
+            );
+          })}
+        {/* The ↑ for an entry under a job you're pointing at: at the bottom of the bar, right
+            above it (the row under is too thin to hold it). */}
+        {onLift &&
+          !edge &&
+          side.map((p) => {
+            const w = hover?.block?.id === p.block.id ? under.get(p.block.id) : undefined;
+            if (!w) return null;
+            const outer = nameOf(w)?.name ?? "the one above";
+            return (
+              <button
+                key={`lift-${p.block.id}`}
+                type="button"
+                data-tuck
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setEdgeError(null);
+                  void onLift(p.block).then((problem) => problem && setEdgeError(problem));
+                }}
+                aria-label={`Bring ${nameOf(p.block)?.name ?? "this"} back up, and split ${outer} around it`}
+                className="absolute bottom-0.5 z-30 grid size-6 -translate-x-1/2 place-items-center rounded-full bg-paper text-ink shadow-md ring-1 ring-ink/20 transition-transform hover:scale-110"
+                style={{ left: `${at((p.start + p.end) / 2)}%` }}
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path d="M12 19V6M6 12l6-6 6 6" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
               </button>
             );
