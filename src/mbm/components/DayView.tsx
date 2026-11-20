@@ -156,6 +156,7 @@ export default function DayView({
           <div className="pointer-events-none absolute inset-x-3 top-3 z-20 sm:inset-x-5 sm:top-5">
             <section
               aria-label="The day"
+              data-covers-map
               className="pointer-events-auto rounded-card bg-paper/85 px-4 pb-3 pt-3 shadow-xl shadow-ink/15 ring-1 ring-ink/10 backdrop-blur-md sm:px-5"
             >
               <div className="mb-2.5 flex items-center gap-3">

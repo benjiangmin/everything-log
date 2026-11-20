@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition, type ReactNode } from "react";
 import { APIProvider, InfoWindow, Map, useMap, useMapsLibrary } from "@vis.gl/react-google-maps";
 import { useRouter } from "next/navigation";
 import { lockDay, lookupPlaceOutline, moveStop, myPlaces, rememberedRoute, removeStop, reportRoute, saveBlock, setPlaceOutline, setStopPlace, trailCells, type PlaceLite, type PlacePick } from "@/app/mbm/actions";
@@ -67,12 +67,12 @@ export default function DayMapInner({
   const [moveNote, setMoveNote] = useState<string | null>(null);
   const [, runMove] = useTransition();
   // A trip you clicked: "Add as Commute" (when nothing's tracked for it), and "Route looks wrong".
-  const [adding, setAdding] = useState<{ trip: Trip; x: number; y: number; untracked: boolean; note?: string; report?: "writing" | "sent" } | null>(null);
+  const [adding, setAdding] = useState<{ trip: Trip; x: number; y: number; untracked: boolean; below?: boolean; note?: string; report?: "writing" | "sent" } | null>(null);
   const [reportText, setReportText] = useState("");
   const [addPending, runAdd] = useTransition();
   const [zoom, setZoom] = useState(15);
   // What the pointer is on: trips under it (several, where paths overlap) or a stop.
-  const [pointed, setPointed] = useState<{ trips: string[]; stops: string[]; x: number; y: number } | null>(null);
+  const [pointed, setPointed] = useState<{ trips: string[]; stops: string[]; x: number; y: number; cover?: number } | null>(null);
   const box = useRef<HTMLDivElement>(null);
   // A stop whose building is known but whose spot is out on the street (GPS wanders indoors): it's
   // drawn in the middle of the building, and its routes go there.
@@ -122,7 +122,7 @@ export default function DayMapInner({
 
   // Pointing at something on the map: light it up here, and tell the day bar its times.
   const point = (p: { trips: string[]; stops: string[]; x: number; y: number } | null) => {
-    setPointed(p);
+    setPointed(p && { ...p, cover: coveredIn(box.current) });
     if (!onPointer) return;
     if (!p) return onPointer(null);
     const at = p.stops.length ? placeTime(visits.filter((v) => p.stops.includes(v.id)), blocks, activities, day, { visits, points, trips }) : null;
@@ -180,7 +180,9 @@ export default function DayMapInner({
             const under = pointed ? trips.filter((x) => pointed.trips.includes(x.key)) : [];
             const t = under.find((x) => tripRow(x, blocks, activities, tz).untracked) ?? under[0];
             setReportText("");
-            setAdding(t && pointed ? { trip: t, x: pointed.x, y: pointed.y, untracked: tripRow(t, blocks, activities, tz).untracked ?? false } : null);
+            // (Not enough room above the click, under the bars over the map: it opens below it.)
+            const below = !!pointed && pointed.y - coveredIn(box.current) < 190;
+            setAdding(t && pointed ? { trip: t, x: pointed.x, y: pointed.y, below, untracked: tripRow(t, blocks, activities, tz).untracked ?? false } : null);
             return;
           }
           if (!at) return;
@@ -304,15 +306,17 @@ export default function DayMapInner({
         })}
         {open && (
           <InfoWindow position={{ lat: open.lat, lng: open.lng }} pixelOffset={[0, -28]} onCloseClick={() => setOpen(null)} headerDisabled>
-            <NameStop
-              key={open.id}
-              visit={open}
-              onDone={() => setOpen(null)}
-              onMove={() => {
-                setMoving(open);
-                setOpen(null);
-              }}
-            />
+            <KeepInView>
+              <NameStop
+                key={open.id}
+                visit={open}
+                onDone={() => setOpen(null)}
+                onMove={() => {
+                  setMoving(open);
+                  setOpen(null);
+                }}
+              />
+            </KeepInView>
           </InfoWindow>
         )}
       </Map>
@@ -339,8 +343,8 @@ export default function DayMapInner({
     </APIProvider>
       {adding && (
         <div
-          className="absolute z-40 w-max -translate-x-1/2 -translate-y-full rounded-card bg-paper p-1.5 text-sm shadow-xl shadow-ink/20 ring-1 ring-line"
-          style={{ left: adding.x, top: adding.y - 12 }}
+          className={`absolute z-40 w-max -translate-x-1/2 rounded-card bg-paper p-1.5 text-sm shadow-xl shadow-ink/20 ring-1 ring-line ${adding.below ? "" : "-translate-y-full"}`}
+          style={{ left: adding.x, top: adding.below ? adding.y + 14 : adding.y - 12 }}
         >
           {adding.report === "sent" ? (
             <p className="px-3 py-1.5 text-ink">Saved. Thanks: this one&rsquo;s a test case now.</p>
@@ -425,6 +429,7 @@ export default function DayMapInner({
         <Tip
           x={pointed.x}
           y={pointed.y}
+          cover={pointed.cover ?? 0}
           heading={!pointed.stops.length && pointed.trips.length > 1 ? `${pointed.trips.length} trips here` : undefined}
           rows={[
             ...trips.filter((t) => pointed.trips.includes(t.key)).map((t) => tripRow(t, blocks, activities, tz)),
@@ -561,9 +566,9 @@ function samePlace(visits: Visit[], v: Visit): Visit[] {
 }
 
 // The little speech bubble by the pointer: everything under it (overlapping paths all listed).
-function Tip({ x, y, rows, heading }: { x: number; y: number; rows: Row[]; heading?: string }) {
+function Tip({ x, y, rows, heading, cover = 0 }: { x: number; y: number; rows: Row[]; heading?: string; cover?: number }) {
   if (!rows.length) return null;
-  const below = y < 40 + rows.length * 40; // near the top of the map: show it under the pointer instead
+  const below = y - cover < 40 + rows.length * 40; // near the top of what you can see of the map: show it under the pointer instead
   return (
     <div
       role="tooltip"
@@ -1164,4 +1169,49 @@ function trustworthy(dots: Dot[]): boolean {
 function middleOf(outline: [number, number][]) {
   const n = outline.length || 1;
   return { lat: outline.reduce((t, [lat]) => t + lat, 0) / n, lng: outline.reduce((t, [, lng]) => t + lng, 0) / n };
+}
+
+// ---------- Popups you can always see ----------
+
+// How far down the window the bars over the map reach (the site's top bar, and the day box when
+// it floats on the map): marked data-covers-map.
+function coveredTop() {
+  let bottom = 0;
+  document.querySelectorAll<HTMLElement>("[data-covers-map]").forEach((el) => {
+    const r = el.getBoundingClientRect();
+    if (r.height > 0 && r.top < window.innerHeight / 2) bottom = Math.max(bottom, r.bottom);
+  });
+  return bottom;
+}
+// …and how much of the top of the map that hides (px, from the map's top).
+function coveredIn(box: HTMLElement | null) {
+  return box ? Math.max(0, coveredTop() - box.getBoundingClientRect().top) : 0;
+}
+
+// A popup on the map: if any of it is under the bars or below the bottom of the window (when it
+// opens, or grows, e.g. search results), the map slides so it's all in view.
+function KeepInView({ children }: { children: ReactNode }) {
+  const map = useMap();
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || !map) return;
+    const fit = () => {
+      const r = el.getBoundingClientRect();
+      const top = coveredTop() + 12;
+      const bottom = window.innerHeight - 12;
+      let dy = 0;
+      if (r.top < top) dy = r.top - top;
+      else if (r.bottom > bottom) dy = Math.min(r.bottom - bottom, r.top - top);
+      if (Math.abs(dy) > 2) map.panBy(0, dy);
+    };
+    const t = setTimeout(fit, 120); // (after Google's own nudge)
+    const watch = new ResizeObserver(() => fit());
+    watch.observe(el);
+    return () => {
+      clearTimeout(t);
+      watch.disconnect();
+    };
+  }, [map]);
+  return <div ref={ref}>{children}</div>;
 }
