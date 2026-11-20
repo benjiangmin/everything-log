@@ -728,7 +728,22 @@ function useFilledTrips(trips: Trip[], points: RoutePoint[]): { trips: Trip[]; s
           // Hardly any dots for a real distance (one or two: the phone barely saw the trip): that's
           // a gap, not a straight line through whatever's between. Filled in like one, below.
           const thin = (p.dots?.length ?? 0) < 3 && metres(a, b) >= 120;
-          if (!thin && legs.length && body.length >= 2) path = [...head, ...body, ...(p.ends?.to ? [b] : [])]; // (joined back to where it really starts and ends)
+          if (!thin && legs.length && body.length >= 2) {
+            // Joined back to where it really starts and ends. A long way from the last dot to the
+            // stop (the phone said you'd arrived while you were still walking up): along the
+            // paths, not a straight line through whatever's between.
+            // (Not when the paths go far round: then the short straight bit is the better guess.)
+            const joinTo = async (from: Spot, to: Spot) => {
+              if (metres(from, to) <= 40) return [];
+              const way = await walkingRoute(from, to).catch(() => null);
+              const long = way ? way.slice(1).reduce((t, s, i) => t + metres(way[i], s), 0) : Infinity;
+              return way && long <= metres(from, to) * 2.5 + 60 ? way : [];
+            };
+            const first = head.length ? head[head.length - 1] : null;
+            const lead = first && metres(first, body[0]) > 40 ? await joinTo(first, body[0]) : [];
+            const tail = p.ends?.to ? await joinTo(body[body.length - 1], b) : [];
+            path = [...head, ...lead, ...body, ...tail, ...(p.ends?.to ? [b] : [])];
+          }
           if (thin) {
             const whole = t.pieces.length === 1 && t.fromId && t.toId;
             const remembered = whole ? await rememberedRoute(t.fromId!, t.toId!).catch(() => null) : null;
@@ -949,7 +964,7 @@ function usePlaceBuildings(visits: Visit[]): BuildingStatus | null {
       let saved = false;
       for (const [id, at] of todo) {
         let result: string = "busy";
-        const outline = await buildingAt(at.lat, at.lng).catch(() => undefined);
+        const outline = await buildingAt(at.lat, at.lng, undefined, 45).catch(() => undefined);
         if (outline !== undefined) {
           const res = await setPlaceOutline(id, outline).catch((e: Error) => ({ ok: false as const, message: e.message }));
           result = res.ok ? (outline ? "found" : "none") : res.message;

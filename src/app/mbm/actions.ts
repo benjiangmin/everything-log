@@ -561,7 +561,7 @@ export async function setPlaceOutline(placeId: string, outline: [number, number]
 // OpenStreetMap). Saves it too. "busy": try again later.
 export async function lookupPlaceOutline(placeId: string, lat: number, lng: number): Promise<"found" | "none" | "busy" | string> {
   if (!isUuid(placeId) || !Number.isFinite(lat) || !Number.isFinite(lng)) return "Bad place.";
-  const outline = await buildingAt(lat, lng);
+  const outline = await buildingAt(lat, lng, undefined, 45);
   if (outline === undefined) return "busy";
   const res = await setPlaceOutline(placeId, outline);
   return res.ok ? (outline ? "found" : "none") : res.message;

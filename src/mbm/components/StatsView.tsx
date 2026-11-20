@@ -115,8 +115,8 @@ function Row({
         {note && <span className="text-xs text-muted">{note}</span>}
         <span className="num font-semibold">{hm(seconds)}</span>
       </div>
-      <div className="mt-1.5 h-3 overflow-hidden rounded-full bg-surface">
-        <div className="h-full rounded-full" style={{ width: `${max > 0 && seconds > 0 ? Math.max(2, (seconds / max) * 100) : 0}%`, background: color ?? "var(--ink)", opacity: color ? 1 : 0.55 }} />
+      <div className="mt-1.5 h-3 overflow-hidden rounded-[3px] bg-surface">
+        <div className="h-full rounded-[3px]" style={{ width: `${max > 0 && seconds > 0 ? Math.max(2, (seconds / max) * 100) : 0}%`, background: color ?? "var(--ink)", opacity: color ? 1 : 0.55 }} />
       </div>
     </>
   );
@@ -245,13 +245,20 @@ function TimeSpent({
   };
 
   const query = q.trim().toLowerCase();
-  const matches = (name: string) => !query || startsAWord(name, query);
+  // (Close enough counts too: "devotionals" finds Devotions.)
+  const matches = (name: string) => !query || startsAWord(name, query) || sharedStart(key(name), query) >= Math.min(6, query.length);
   const sorter = (a: { name: string; seconds: number }, b: { name: string; seconds: number }) =>
     sort === "az" ? a.name.localeCompare(b.name) : sort === "least" ? a.seconds - b.seconds : b.seconds - a.seconds;
 
   // Pinned: the activity if there is one (its time, its color), else just the name at 0m.
   const pinned = pins.map((p) => byKey.get(key(p)) ?? { name: p, color: "#cdbca9" as string | undefined, seconds: 0 }).filter((a) => matches(a.name)).sort(sorter);
-  const rest = activities.filter((a) => !pinnedKeys.has(key(a.name)) && matches(a.name)).sort(sorter);
+  // Searching: your jobs with no time here too (0m), so you can find and pin them.
+  const idle = query
+    ? Object.values(meta.jobs)
+        .filter((j) => j.name && !j.hidden && !byKey.has(key(j.name)) && !pinnedKeys.has(key(j.name)) && matches(j.name))
+        .map((j) => ({ name: j.name!, color: j.color ?? "#cdbca9", seconds: 0 }))
+    : [];
+  const rest = [...activities.filter((a) => !pinnedKeys.has(key(a.name)) && matches(a.name)), ...idle].sort(sorter);
   const found = [...pinned, ...rest];
   // Not searching: a category's jobs go under it (one row with their total; click for each).
   type Item = { kind: "job"; a: (typeof rest)[number] } | { kind: "cat"; id: string; name: string; color: string; seconds: number; goal: number | null; per?: "day" | "week"; jobs: typeof rest };
@@ -456,3 +463,9 @@ function Apps({ apps }: { apps: Stats["apps"] }) {
   );
 }
 
+// How many letters two names start with in common.
+function sharedStart(a: string, b: string) {
+  let i = 0;
+  while (i < a.length && i < b.length && a[i] === b[i]) i++;
+  return i;
+}

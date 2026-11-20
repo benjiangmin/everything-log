@@ -43,5 +43,10 @@ async function Jobs() {
     const plain = await client.from("activities").select("id, name, color, last_used_at").order("last_used_at", { ascending: false });
     return <JobsView needsSql jobs={(plain.data ?? []).map((j) => ({ ...j, stop_on_commute: null, places: null, start_mode: null, weekly_goal_min: null, hide_from_stats: null })) as Job[]} categories={[]} places={(places.data ?? []) as { id: string; name: string }[]} />;
   }
-  return <JobsView jobs={(jobs.data ?? []) as Job[]} categories={(cats.data ?? []) as Category[]} places={(places.data ?? []) as { id: string; name: string }[]} />;
+  return <JobsView now={await loadedAt()} jobs={(jobs.data ?? []) as Job[]} categories={(cats.data ?? []) as Category[]} places={(places.data ?? []) as { id: string; name: string }[]} />;
+}
+
+// (Outside the component: it reads the clock.)
+async function loadedAt() {
+  return Date.now();
 }

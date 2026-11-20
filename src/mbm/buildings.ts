@@ -13,8 +13,10 @@ const SERVERS = [
   "https://overpass.kumi.systems/api/interpreter",
 ];
 
-export async function buildingAt(lat: number, lng: number, log?: string[]): Promise<Outline | null | undefined> {
-  const at = `around:25,${lat.toFixed(6)},${lng.toFixed(6)}`;
+// within: how far from the spot a building can be (a place's pin can sit on the pavement by its
+// door: 45 m; an unnamed stop, 25 m, so one out on the street doesn't get the building next to it).
+export async function buildingAt(lat: number, lng: number, log?: string[], within = 25): Promise<Outline | null | undefined> {
+  const at = `around:${within},${lat.toFixed(6)},${lng.toFixed(6)}`;
   // Buildings are simple shapes ("ways"), or for big ones (the library) a few pieces joined up
   // ("relations").
   const q = `[out:json][timeout:8];(way(${at})[building];relation(${at})[building];);out geom;`;

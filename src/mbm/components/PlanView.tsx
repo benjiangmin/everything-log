@@ -303,23 +303,29 @@ export default function PlanView({
 
       <GoogleNote google={google} canWrite={canWrite} />
       {google?.connected && (
-        <label className="mt-3 inline-flex cursor-pointer items-center gap-2.5 text-sm">
-          <input
-            type="checkbox"
-            checked={!calendarHidden}
+        <div className="mt-3 flex items-center gap-3 text-sm">
+          <button
+            type="button"
+            role="switch"
+            aria-checked={!calendarHidden}
+            aria-label="Show Google Calendar events"
             disabled={pending}
-            onChange={(e) =>
+            onClick={() =>
               start(async () => {
-                const res = await safely(() => setCalendarHidden(!e.target.checked));
+                const res = await safely(() => setCalendarHidden(!calendarHidden));
                 if (!res.ok) setMessage(res.message);
                 else router.refresh();
               })
             }
-            className="size-4 accent-[var(--accent)]"
-          />
-          Show Google Calendar events
-          <span className="text-muted">{calendarHidden ? "(hidden here and on the Day bar; only your own plans show)" : ""}</span>
-        </label>
+            className={`relative h-6 w-11 shrink-0 rounded-full transition-colors disabled:opacity-60 ${calendarHidden ? "bg-line" : "bg-accent"}`}
+          >
+            <span className={`absolute top-0.5 size-5 rounded-full bg-paper shadow transition-[left] ${calendarHidden ? "left-0.5" : "left-[1.375rem]"}`} />
+          </button>
+          <span>
+            Google Calendar events {calendarHidden ? "hidden" : "shown"}
+            {calendarHidden && <span className="text-muted"> (here and on the Day bar; your own plans still show)</span>}
+          </span>
+        </div>
       )}
 
       {allDay.length > 0 && (

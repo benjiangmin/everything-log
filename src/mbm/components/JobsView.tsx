@@ -11,16 +11,18 @@ import { PALETTE } from "@/mbm/colors";
 // by itself when you arrive at Russell Labs…"), with an "In short" line that updates as you change
 // them. A category (School) gives its jobs its color, and settings they follow unless changed.
 
-export type Job = JobPrefs & { id: string; name: string; color: string; own_color?: string | null; category_id?: string | null };
+export type Job = JobPrefs & { id: string; name: string; color: string; own_color?: string | null; category_id?: string | null; last_used_at?: string | null };
 export type Category = JobPrefs & { id: string; name: string; color: string };
 type Place = { id: string; name: string };
 type Mode = "always" | "calendar" | "never";
 
 const blank: JobPrefs = { stop_on_commute: null, places: null, start_mode: null, weekly_goal_min: null, hide_from_stats: null };
 const RECENT = 5;
+const STALE_DAYS = 50; // (not used in this long: listed apart, below)
 
-export default function JobsView({ jobs, categories, places, needsSql = false }: { jobs: Job[]; categories: Category[]; places: Place[]; needsSql?: boolean }) {
+export default function JobsView({ jobs, categories, places, needsSql = false, now = 0 }: { jobs: Job[]; categories: Category[]; places: Place[]; needsSql?: boolean; now?: number }) {
   const [openJob, setOpenJob] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState<string | null>(null); // (opened straight at "Delete?")
   const [openCat, setOpenCat] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const [q, setQ] = useState("");
@@ -34,10 +36,61 @@ export default function JobsView({ jobs, categories, places, needsSql = false }:
   }, []);
 
   const query = q.trim().toLowerCase();
-  const found = query ? jobs.filter((j) => j.name.toLowerCase().includes(query) || catOf(j)?.name.toLowerCase().includes(query)) : jobs.slice(0, RECENT);
+  const stale = (j: Job) => !!now && (!j.last_used_at || +new Date(j.last_used_at) < now - STALE_DAYS * 864e5);
+  const found = query ? jobs.filter((j) => j.name.toLowerCase().includes(query) || catOf(j)?.name.toLowerCase().includes(query)) : jobs.filter((j) => !stale(j)).slice(0, RECENT);
+  const old = query ? [] : jobs.filter(stale);
   // (The one you came here for stays in the list.)
-  const opened = openJob && !found.some((j) => j.id === openJob) ? jobs.find((j) => j.id === openJob) : undefined;
+  const opened = openJob && !found.some((j) => j.id === openJob) && !old.some((j) => j.id === openJob) ? jobs.find((j) => j.id === openJob) : undefined;
   const shown = opened ? [opened, ...found] : found;
+  const list = (items: Job[], empty?: string) => (
+    <ul className="mt-2 divide-y divide-line overflow-hidden rounded-card border border-line bg-paper">
+      {items.map((j) => (
+        <li key={j.id} id={`job-${j.id}`} className="group relative scroll-mt-24">
+          <button
+            type="button"
+            disabled={needsSql}
+            onClick={() => {
+              setDeleting(null);
+              setOpenJob(openJob === j.id ? null : j.id);
+            }}
+            aria-expanded={openJob === j.id}
+            className="flex w-full items-center gap-3 rounded-[inherit] px-5 py-3.5 pr-24 text-left outline-none hover:bg-surface/60 focus-visible:bg-surface/60 disabled:cursor-default"
+          >
+            <span className="size-3.5 shrink-0 rounded-full" style={{ background: j.color }} aria-hidden="true" />
+            <span className="min-w-0 flex-1 truncate font-semibold">{j.name}</span>
+            <span className="hidden max-w-[50%] truncate text-sm text-muted sm:block">{short(j, catOf(j), places)}</span>
+            {catOf(j) && <span className="shrink-0 rounded-full bg-surface px-2.5 py-0.5 text-xs font-semibold">{catOf(j)!.name}</span>}
+          </button>
+          {/* Edit and delete, on the right when you point at it. */}
+          {!needsSql && (
+            <span className="absolute right-3 top-[1.6rem] flex -translate-y-1/2 gap-0.5 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
+              <IconButton
+                label={`Edit ${j.name}`}
+                onClick={() => {
+                  setDeleting(null);
+                  setOpenJob(j.id);
+                }}
+              >
+                <path d="M4 20h4L19 9l-4-4L4 16v4z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
+              </IconButton>
+              <IconButton
+                label={`Delete ${j.name}`}
+                danger
+                onClick={() => {
+                  setDeleting(j.id);
+                  setOpenJob(j.id);
+                }}
+              >
+                <path d="M5 7h14M10 7V4h4v3M7 7l1 13h8l1-13" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+              </IconButton>
+            </span>
+          )}
+          {openJob === j.id && <JobSettings key={`${j.id}-${deleting === j.id}`} job={j} jobs={jobs} categories={categories} places={places} startDeleting={deleting === j.id} onDone={() => setOpenJob(null)} />}
+        </li>
+      ))}
+      {items.length === 0 && empty && <li className="px-5 py-4 text-sm text-muted">{empty}</li>}
+    </ul>
+  );
 
   return (
     <div>
@@ -73,26 +126,15 @@ export default function JobsView({ jobs, categories, places, needsSql = false }:
           {q && <ClearSearch onClear={() => setQ("")} />}
         </div>
         <p className="mt-4 text-sm font-semibold text-muted">{query ? `${found.length} found` : "Used most recently"}</p>
-        <ul className="mt-2 divide-y divide-line rounded-card border border-line bg-paper">
-          {shown.map((j) => (
-            <li key={j.id} id={`job-${j.id}`} className="scroll-mt-24">
-              <button
-                type="button"
-                disabled={needsSql}
-                onClick={() => setOpenJob(openJob === j.id ? null : j.id)}
-                aria-expanded={openJob === j.id}
-                className="flex w-full items-center gap-3 px-5 py-3.5 text-left hover:bg-surface/60 disabled:cursor-default"
-              >
-                <span className="size-3.5 shrink-0 rounded-full" style={{ background: j.color }} aria-hidden="true" />
-                <span className="min-w-0 flex-1 truncate font-semibold">{j.name}</span>
-                <span className="hidden max-w-[50%] truncate text-sm text-muted sm:block">{short(j, catOf(j), places)}</span>
-                {catOf(j) && <span className="shrink-0 rounded-full bg-surface px-2.5 py-0.5 text-xs font-semibold">{catOf(j)!.name}</span>}
-              </button>
-              {openJob === j.id && <JobSettings job={j} jobs={jobs} categories={categories} places={places} onDone={() => setOpenJob(null)} />}
-            </li>
-          ))}
-          {shown.length === 0 && <li className="px-5 py-4 text-sm text-muted">{query ? `No job called “${q.trim()}”.` : "No jobs yet. They appear here once you track something."}</li>}
-        </ul>
+        {list(shown, query ? `No job called “${q.trim()}”.` : "No jobs yet. They appear here once you track something.")}
+        {old.length > 0 && (
+          <>
+            <p className="mt-6 text-sm font-semibold text-muted">
+              Not used in {STALE_DAYS}+ days · {old.length}
+            </p>
+            {list(old)}
+          </>
+        )}
       </section>
 
       {/* Categories */}
@@ -179,7 +221,21 @@ function short(j: Job, c: Category | null, places: Place[]) {
 
 // ---------- A job ----------
 
-function JobSettings({ job, jobs, categories, places, onDone }: { job: Job; jobs: Job[]; categories: Category[]; places: Place[]; onDone: () => void }) {
+function JobSettings({
+  job,
+  jobs,
+  categories,
+  places,
+  onDone,
+  startDeleting = false,
+}: {
+  job: Job;
+  jobs: Job[];
+  categories: Category[];
+  places: Place[];
+  onDone: () => void;
+  startDeleting?: boolean;
+}) {
   const router = useRouter();
   const [p, setP] = useState<JobPrefs & { category_id: string | null }>({
     stop_on_commute: job.stop_on_commute ?? null,
@@ -194,7 +250,7 @@ function JobSettings({ job, jobs, categories, places, onDone }: { job: Job; jobs
   const cat = categories.find((c) => c.id === p.category_id) ?? null;
   const [message, setMessage] = useState<string | null>(null);
   const [pending, start] = useTransition();
-  const [deleting, setDeleting] = useState(false);
+  const [deleting, setDeleting] = useState(startDeleting);
   const save = () =>
     start(async () => {
       const res = await saveJob(job.id, { ...p, ...(color !== (job.category_id ? (job.own_color ?? job.color) : job.color) ? { color } : {}) });
@@ -350,13 +406,19 @@ function CategoryCard({ category, jobs, places, open, onToggle, onDone }: { cate
                   aria-checked={color === c}
                   aria-label={c}
                   onClick={() => setColor(c)}
-                  className={`size-8 rounded-full transition-transform hover:scale-110 ${color === c ? "ring-2 ring-ink ring-offset-2 ring-offset-paper" : ""}`}
+                  className={`grid size-8 place-items-center rounded-full transition-transform hover:scale-110 ${color === c ? "ring-2 ring-ink ring-offset-2 ring-offset-paper" : ""}`}
                   style={{ background: c }}
-                />
+                >
+                  {color === c && <Tick />}
+                </button>
               ))}
-              <label className="relative grid size-8 cursor-pointer place-items-center rounded-full ring-1 ring-line" title="Any color" style={PALETTE.includes(color) ? {} : { background: color }}>
+              <label
+                className={`relative grid size-8 cursor-pointer place-items-center rounded-full ${PALETTE.includes(color) ? "ring-1 ring-line" : "ring-2 ring-ink ring-offset-2 ring-offset-paper"}`}
+                title="Any color"
+                style={PALETTE.includes(color) ? {} : { background: color }}
+              >
                 <input type="color" value={color} onChange={(e) => setColor(e.target.value)} className="absolute inset-0 cursor-pointer opacity-0" />
-                {PALETTE.includes(color) && <span className="text-sm text-muted">+</span>}
+                {PALETTE.includes(color) ? <span className="text-sm text-muted">+</span> : <Tick />}
               </label>
             </div>
           </Field>
@@ -631,15 +693,41 @@ function JobColor({ color, onChange, category }: { color: string; onChange: (c: 
           aria-checked={color === c}
           aria-label={c}
           onClick={() => onChange(c)}
-          className={`size-8 rounded-full transition-transform hover:scale-110 ${color === c ? "ring-2 ring-ink ring-offset-2 ring-offset-paper" : ""}`}
+          className={`grid size-8 place-items-center rounded-full transition-transform hover:scale-110 ${color === c ? "ring-2 ring-ink ring-offset-2 ring-offset-paper" : ""}`}
           style={{ background: c }}
-        />
+        >
+          {color === c && <Tick />}
+        </button>
       ))}
-      <label className="relative grid size-8 cursor-pointer place-items-center rounded-full ring-1 ring-line" title="Any color" style={PALETTE.includes(color) ? {} : { background: color }}>
+      <label
+        className={`relative grid size-8 cursor-pointer place-items-center rounded-full ${PALETTE.includes(color) ? "ring-1 ring-line" : "ring-2 ring-ink ring-offset-2 ring-offset-paper"}`}
+        title="Any color"
+        style={PALETTE.includes(color) ? {} : { background: color }}
+      >
         <input type="color" value={color} onChange={(e) => onChange(e.target.value)} className="absolute inset-0 cursor-pointer opacity-0" />
-        {PALETTE.includes(color) && <span className="text-sm text-muted">+</span>}
+        {PALETTE.includes(color) ? <span className="text-sm text-muted">+</span> : <Tick />}
       </label>
+      <span className="self-center text-sm text-muted">{PALETTE.includes(color) ? "" : "Your own color"}</span>
     </div>
+  );
+}
+
+// (The chosen color: a tick on it.)
+function Tick() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true" className="pointer-events-none drop-shadow">
+      <path d="M5 12.5l4.5 4.5L19 7.5" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function IconButton({ label, onClick, danger = false, children }: { label: string; onClick: () => void; danger?: boolean; children: React.ReactNode }) {
+  return (
+    <button type="button" onClick={onClick} aria-label={label} title={label} className={`grid size-8 place-items-center rounded-full text-muted hover:bg-surface ${danger ? "hover:text-danger" : "hover:text-ink"}`}>
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        {children}
+      </svg>
+    </button>
   );
 }
 

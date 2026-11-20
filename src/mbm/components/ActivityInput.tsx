@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import type { Activity } from "@/mbm/data";
 
 // A text box for what you're doing, suggesting your activities as you type (↑↓ + Enter to pick).
@@ -28,6 +28,19 @@ export default function ActivityInput({
   const [active, setActive] = useState(0);
   const listId = useId();
   const box = useRef<HTMLInputElement>(null);
+  // The text stops short of what's on the right (color, settings, + Note), however wide that is,
+  // so a long name never runs under it.
+  const side = useRef<HTMLDivElement>(null);
+  const [room, setRoom] = useState(0);
+  useEffect(() => {
+    const el = side.current;
+    if (!el) return;
+    const fit = () => setRoom(el.offsetWidth);
+    fit();
+    const watch = new ResizeObserver(fit);
+    watch.observe(el);
+    return () => watch.disconnect();
+  }, [trailing]);
   const q = value.trim().toLowerCase();
   // What you've typed exactly first (so Enter keeps "Work", not "working on this project"), then
   // ones starting with it, then the rest.
@@ -76,10 +89,14 @@ export default function ActivityInput({
         autoComplete="off"
         placeholder={placeholder}
         aria-label={placeholder}
-        style={{ outline: "none" }}
-        className={`w-full rounded-control border border-line bg-paper px-3 py-2.5 text-ink placeholder:text-muted/70 focus:border-ink ${trailing ? "pr-32" : ""} ${className}`}
+        style={{ outline: "none", ...(trailing ? { paddingRight: room + 16 } : {}) }}
+        className={`w-full text-ellipsis rounded-control border border-line bg-paper px-3 py-2.5 text-ink placeholder:text-muted/70 focus:border-ink ${className}`}
       />
-      {trailing && <div className="absolute right-2 top-1/2 -translate-y-1/2">{trailing}</div>}
+      {trailing && (
+        <div ref={side} className="absolute right-2 top-1/2 -translate-y-1/2">
+          {trailing}
+        </div>
+      )}
       {showing && (
         <ul id={listId} role="listbox" className="panel-pop absolute inset-x-0 top-full z-40 mt-1 overflow-hidden rounded-control border border-line bg-paper p-1 shadow-xl shadow-ink/15">
           {matches.map((a, i) => (
