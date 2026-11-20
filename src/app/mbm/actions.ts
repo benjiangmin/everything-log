@@ -885,3 +885,45 @@ export async function myPlaces(): Promise<PlaceLite[]> {
   if (r.error) r = (await client.from("places").select("id, name, lat, lng").order("name").limit(500)) as typeof r;
   return (r.data ?? []) as PlaceLite[];
 }
+
+// ---------- The Places page (048_manage_places.sql) ----------
+
+const NEEDS_048 = "Run 047_real_places.sql, then 048_manage_places.sql, in Supabase first.";
+const missing048 = (m: string) => /merge_places|delete_place|edit_place|place_for_real|real_name/.test(m);
+
+// Your name for a place (null: unchanged; "": none) and the actual place it is (null: unchanged).
+export async function editPlace(id: string, own: string | null, real: Extract<PlacePick, { kind: "real" }> | null): Promise<Result> {
+  if (!isUuid(id)) return fail("That place is gone.");
+  const r = real ? realOf(real) : null;
+  if (real && !r) return fail("That place has no location.");
+  const { error } = await (await mbm()).rpc("edit_place", { p_id: id, p_own: own === null ? null : String(own).replace(/\s+/g, " ").trim().slice(0, 80), p_real: r });
+  if (error) return fail(missing048(error.message) ? NEEDS_048 : error.message);
+  refresh();
+  return { ok: true };
+}
+
+export async function mergePlaces(from: string, into: string): Promise<Result> {
+  if (!isUuid(from) || !isUuid(into)) return fail("That place is gone.");
+  const { error } = await (await mbm()).rpc("merge_places", { p_from: from, p_into: into });
+  if (error) return fail(missing048(error.message) ? NEEDS_048 : error.message);
+  refresh();
+  return { ok: true };
+}
+
+export async function deletePlace(id: string): Promise<Result> {
+  if (!isUuid(id)) return fail("That place is gone.");
+  const { error } = await (await mbm()).rpc("delete_place", { p_id: id });
+  if (error) return fail(missing048(error.message) ? NEEDS_048 : error.message);
+  refresh();
+  return { ok: true };
+}
+
+// A place picked in a search, as one of yours (an actual place becomes yours): its id.
+export async function placeIdFor(pick: PlacePick): Promise<Result & { id?: string }> {
+  if (pick.kind === "mine") return isUuid(pick.id) ? { ok: true, id: pick.id } : fail("That place is gone.");
+  const real = realOf(pick);
+  if (!real) return fail("That place has no location.");
+  const { data, error } = await (await mbm()).rpc("place_for_real", { p_real: real });
+  if (error) return fail(/place_for_real/.test(error.message) ? NEEDS_047 : error.message);
+  return { ok: true, id: data as string };
+}

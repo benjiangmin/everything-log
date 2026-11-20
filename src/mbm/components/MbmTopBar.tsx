@@ -137,6 +137,9 @@ function ProfileMenu({ email, me }: { email: string | null; me: { name: string |
             <Link href="/mbm/account/jobs" onClick={() => setOpen(false)} className={item} role="menuitem">
               Jobs and categories
             </Link>
+            <Link href="/mbm/account/places" onClick={() => setOpen(false)} className={item} role="menuitem">
+              Places
+            </Link>
           </div>
           <div className="h-px bg-line" />
           <form action={signOut} className="pt-1">

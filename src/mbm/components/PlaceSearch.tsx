@@ -20,6 +20,7 @@ export default function PlaceSearch(props: {
   autoFocus?: boolean;
   inputClassName?: string;
   busy?: boolean;
+  mineOnly?: boolean; // (just your places: e.g. merging)
 }) {
   return (
     <APIProvider apiKey={KEY ?? ""}>
@@ -38,6 +39,7 @@ export function Search({
   autoFocus = false,
   inputClassName = "w-full rounded-control border border-line bg-paper px-3 py-2.5 text-sm",
   busy = false,
+  mineOnly = false,
 }: {
   places: Mine[];
   onPick: (p: Found) => void;
@@ -47,6 +49,7 @@ export function Search({
   autoFocus?: boolean;
   inputClassName?: string;
   busy?: boolean;
+  mineOnly?: boolean;
 }) {
   const lib = useMapsLibrary("places");
   const token = useMemo(() => (lib ? new lib.AutocompleteSessionToken() : null), [lib]);
@@ -55,11 +58,11 @@ export function Search({
   const [problem, setProblem] = useState<string | null>(null);
   const [active, setActive] = useState(0);
   const q = text.trim().toLowerCase();
-  const mine = q ? places.filter((p) => p.name.toLowerCase().includes(q) || p.real_name?.toLowerCase().includes(q)).slice(0, 4) : [];
+  const mine = q || mineOnly ? places.filter((p) => p.name.toLowerCase().includes(q) || p.real_name?.toLowerCase().includes(q)).slice(0, mineOnly ? 8 : 4) : [];
 
   // Google's, a moment after you stop typing (near where you were first).
   useEffect(() => {
-    if (!lib || !token || q.length < 2) return;
+    if (!lib || !token || q.length < 2 || mineOnly) return;
     let live = true;
     const t = setTimeout(async () => {
       try {
@@ -87,17 +90,17 @@ export function Search({
       live = false;
       clearTimeout(t);
     };
-  }, [lib, token, q, text, near, places]);
+  }, [lib, token, q, text, near, places, mineOnly]);
 
   const options: { key: string; main: string; rest: string; yours: boolean; pick: () => void | Promise<void> }[] = [
     ...mine.map((p) => ({
       key: `m${p.id}`,
       main: p.name,
-      rest: p.real_name && p.real_name !== p.name ? p.real_name : "Your place",
+      rest: p.real_name && p.real_name !== p.name ? p.real_name : (p.real_address ?? "Your place"),
       yours: true,
       pick: () => onPick({ kind: "mine", id: p.id, label: p.name, detail: p.real_name ?? null }),
     })),
-    ...(q.length >= 2 ? google : [])
+    ...(q.length >= 2 && !mineOnly ? google : [])
       .filter((g) => !mine.some((m) => (m.real_name ?? m.name).toLowerCase() === g.main.toLowerCase()))
       .map((g) => ({
         key: g.id,

@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition, type ReactNode } from "react";
-import { deleteCategory, deleteJob, jobEntryCount, saveCategory, saveJob, type JobPrefs } from "@/app/mbm/actions";
+import { deleteCategory, deleteJob, jobEntryCount, placeIdFor, saveCategory, saveJob, type JobPrefs } from "@/app/mbm/actions";
+import PlaceSearch from "./PlaceSearch";
 import { PALETTE } from "@/mbm/colors";
 
 // Jobs and categories. Each job's settings are written as what will actually happen ("Work starts
@@ -362,7 +363,28 @@ function CategoryCard({ category, jobs, places, open, onToggle, onDone }: { cate
 // ---------- The settings ----------
 
 // A job's (parent: its category, which unset settings follow) or a category's.
-function Prefs({ name, value, onChange, parent = null, places, group = false }: { name: string; value: JobPrefs; onChange: (v: Partial<JobPrefs>) => void; parent?: Category | null; places: Place[]; group?: boolean }) {
+function Prefs({
+  name,
+  value,
+  onChange: change,
+  parent = null,
+  places: known,
+  group = false,
+}: {
+  name: string;
+  value: JobPrefs;
+  onChange: (v: Partial<JobPrefs>) => void;
+  parent?: Category | null;
+  places: Place[];
+  group?: boolean;
+}) {
+  // (A place found in the search that wasn't yours yet: shown by name until the page reloads.)
+  const [added, setAdded] = useState<Place[]>([]);
+  const places = [...known, ...added.filter((a) => !known.some((k) => k.id === a.id))];
+  const onChange = (v: Partial<JobPrefs>, place?: Place) => {
+    if (place) setAdded((a) => [...a, place]);
+    change(v);
+  };
   const e = effective(value, parent);
   const following = !group && value.places === null && !!parent?.places?.length;
   const myPlaces = value.places ?? (following ? parent!.places! : []);
@@ -387,24 +409,8 @@ function Prefs({ name, value, onChange, parent = null, places, group = false }: 
               )}
             </span>
           ))}
-          {!following && (
-            <select
-              value=""
-              onChange={(ev) => ev.target.value && onChange({ places: [...myPlaces, ev.target.value] })}
-              className="select-field rounded-full border border-dashed border-line bg-paper py-1 pl-3 text-sm text-muted"
-              aria-label="Add a place"
-            >
-              <option value="">Add a place…</option>
-              {places
-                .filter((p) => !myPlaces.includes(p.id))
-                .map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name}
-                  </option>
-                ))}
-            </select>
-          )}
         </div>
+        {!following && <AddPlace places={places.filter((p) => !myPlaces.includes(p.id))} onAdd={(id, place) => onChange({ places: [...myPlaces, id] }, place)} />}
         {parent?.places?.length ? (
           <button type="button" onClick={() => onChange({ places: following ? [...parent.places!] : null })} className="mt-2 text-sm font-semibold text-muted underline underline-offset-2 hover:text-ink">
             {following ? "Use different places" : `Use ${parent.name}'s places instead`}
@@ -538,6 +544,42 @@ function Buttons({ pending, onSave, onCancel, onDelete, deleteLabel, message }: 
           {message}
         </p>
       )}
+    </div>
+  );
+}
+
+// Adding a place to a job: a search (your places, then actual places, which become yours).
+function AddPlace({ places, onAdd }: { places: Place[]; onAdd: (id: string, place: Place) => void }) {
+  const [open, setOpen] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+  const [pending, start] = useTransition();
+  if (!open)
+    return (
+      <button type="button" onClick={() => setOpen(true)} className="mt-2 rounded-full border border-dashed border-line px-3 py-1 text-sm text-muted hover:border-ink/40 hover:text-ink">
+        + Add a place
+      </button>
+    );
+  return (
+    <div className="mt-2 max-w-md">
+      <PlaceSearch
+        places={places.map((p) => ({ ...p, lat: 0, lng: 0 }))}
+        autoFocus
+        busy={pending}
+        placeholder="Search your places, or anywhere"
+        onPick={(p) =>
+          start(async () => {
+            const res = await placeIdFor(p);
+            if (!res.ok || !res.id) return setMessage(res.ok ? "Couldn't add that." : res.message);
+            onAdd(res.id, { id: res.id, name: p.label });
+            setOpen(false);
+            setMessage(null);
+          })
+        }
+      />
+      <button type="button" onClick={() => setOpen(false)} className="mt-1.5 text-xs text-muted underline underline-offset-2">
+        Cancel
+      </button>
+      {message && <p className="mt-1 text-xs text-danger">{message}</p>}
     </div>
   );
 }
