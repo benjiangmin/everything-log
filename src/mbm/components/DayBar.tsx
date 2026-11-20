@@ -386,7 +386,7 @@ export default function DayBar({
   const below = slim || !!hover?.phone;
   // Where the line meets what you're pointing at: right at its top edge (bubble above) or its
   // bottom edge (below), measured from the thing itself. (Keyboard focus: the bar's edge.)
-  const LINE = 28;
+  const LINE = 40; // (the bubble's stalk: it sits a little way out from the bar)
   const pos = anchor
     ? below
       ? { bubble: { top: anchor.bottom + LINE }, line: { top: anchor.bottom, height: LINE }, dot: { top: anchor.bottom } }
@@ -400,9 +400,13 @@ export default function DayBar({
       onMouseOver={(e) => {
         const w = wrapRef.current;
         if (!w) return;
-        // (The ↓ on a sandwiched entry isn't something to point the bubble at: it stays put.)
-        if ((e.target as HTMLElement).closest("[data-tuck]")) return;
-        const r = (e.target as HTMLElement).getBoundingClientRect();
+        // Only something you can point at moves the bubble (an entry, untracked time, a plan, the
+        // apps line): not the space around them, and not the ↓/↑, so it stays put.
+        const t = e.target as HTMLElement;
+        if (t.closest("[data-tuck]")) return;
+        const el = t.closest<HTMLElement>("button, [data-anchor]");
+        if (!el) return;
+        const r = el.getBoundingClientRect();
         const box = w.getBoundingClientRect();
         setAnchor({ top: r.top - box.top, bottom: r.bottom - box.top, h: box.height });
       }}
@@ -704,6 +708,7 @@ export default function DayBar({
             <div
               key={u.id}
               aria-label={`${u.kind === "app" ? (u.app ?? "An app") : "On your phone"}, ${clock(new Date(u.start), tz)} to ${u.ended_at ? clock(new Date(u.end), tz) : "now"}`}
+              data-anchor
               onMouseEnter={() => setHoverState({ start: u.start, end: u.end, phone: u })}
               className={`absolute inset-y-0 rounded-full bg-ink/50 ${
                 hover?.phone?.id === u.id ? "brightness-75" : ""
