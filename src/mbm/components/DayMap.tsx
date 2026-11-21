@@ -71,7 +71,8 @@ export default function DayMap({
             <span>
               {day.visits.length} {day.visits.length === 1 ? "stop" : "stops"}
             </span>
-            {day.points.length > 0 && (
+            {/* (Always there, so you can tell "no dots came in" from "the button's gone".) */}
+            {day.points.length > 0 ? (
               <button
                 type="button"
                 onClick={() => setShowDots((d) => !d)}
@@ -80,8 +81,15 @@ export default function DayMap({
                   showDots ? "border-accent bg-accent text-accent-ink" : "border-line hover:border-ink/40 hover:text-ink"
                 }`}
               >
-                {showDots ? `Hide dots (${day.points.length})` : "Show dots"}
+                {showDots ? `Hide dots (${day.points.length})` : `Show dots (${day.points.length})`}
               </button>
+            ) : (
+              <span
+                title="The phone hasn't sent any location dots for this day yet. It records few or none while you stay in one place."
+                className="rounded-full border border-dashed border-line px-2.5 py-0.5 text-xs"
+              >
+                No dots yet
+              </span>
             )}
           </div>
         )}
