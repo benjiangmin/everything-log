@@ -156,7 +156,9 @@ export default function DayMapInner({
       +new Date(p.at) > +new Date(open!.arrived_at) &&
       p.accuracy_m != null &&
       !nearOutline(open!.outline, p.lat, p.lng, 0) &&
-      metres(open!, p) > 2 * p.accuracy_m;
+      // (Against where the phone has the stop, not the place's pin it's drawn at: Home!'s pin is
+      // on Theory's Lake St side, you're often well inside.)
+      metres(open!.gps ?? open!, p) > 2 * p.accuracy_m;
     const left = open && points.length >= 2 && away(points[points.length - 1]) && away(points[points.length - 2]);
     if (open && !left) return { at: { lat: open.lat, lng: open.lng }, when: null };
     return last ? { at: { lat: last.lat, lng: last.lng }, when: last.at } : null;
