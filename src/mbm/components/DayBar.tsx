@@ -563,13 +563,15 @@ export default function DayBar({
             <>
               <p className="flex items-center gap-2 font-display text-base font-semibold">
                 <span className="size-2.5 shrink-0 rounded-full ring-1 ring-accent-ink/40" style={{ background: nameOf(hover.block)?.color ?? "#a98467" }} />
-                {nameOf(hover.block)?.name ?? "Something"}
+                <span className="min-w-0">
+                  {nameOf(hover.block)?.name ?? "Something"}
+                  {hover.block.note && <span className="ml-2 font-sans text-sm font-normal italic text-[#e9c89b]">{hover.block.note}</span>}
+                </span>
               </p>
               <p className="num mt-0.5 text-sm opacity-80">
                 {clock(hover.block.started_at, tz)} – {hover.block.ended_at ? clock(hover.block.ended_at, tz) : "now"} ·{" "}
                 {span((hover.block.ended_at ? +new Date(hover.block.ended_at) : now) - +new Date(hover.block.started_at))}
               </p>
-              {hover.block.note && <p className="mt-1 line-clamp-3 text-sm opacity-80">{hover.block.note}</p>}
               {onLift && under.has(hover.block.id) && (
                 <p className="mt-1 text-xs opacity-70">↑ Back up: split {nameOf(under.get(hover.block.id)!)?.name} around it</p>
               )}

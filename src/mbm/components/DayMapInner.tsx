@@ -145,7 +145,14 @@ export default function DayMapInner({
     if (!liveColor) return null;
     const last = points.length ? points[points.length - 1] : null;
     const open = [...visits].reverse().find((v) => !v.departed_at);
-    if (open && (!last || +new Date(open.arrived_at) >= +new Date(last.at) - 5 * 60000)) return { at: { lat: open.lat, lng: open.lng }, when: null };
+    // (Indoors the phone's dots drift a block or two away while you sit still, so a newer dot
+    // only moves you off the stop once the last two are both clearly away from it.)
+    const away = (p: RoutePoint) =>
+      +new Date(p.at) > +new Date(open!.arrived_at) &&
+      !nearOutline(open!.outline, p.lat, p.lng, 0) &&
+      metres(open!, p) > Math.max(200, 2 * (p.accuracy_m ?? 0));
+    const left = open && points.length >= 2 && away(points[points.length - 1]) && away(points[points.length - 2]);
+    if (open && !left) return { at: { lat: open.lat, lng: open.lng }, when: null };
     return last ? { at: { lat: last.lat, lng: last.lng }, when: last.at } : null;
   }, [liveColor, points, visits]);
   const nothingLit = !pointed && lit !== null && lit.stops.size === 0 && lit.trip.size === 0;
