@@ -143,7 +143,7 @@ export default function DayMapInner({
     return r ? { x: e.clientX - r.left, y: e.clientY - r.top } : { x: 0, y: 0 };
   };
   // Where you are now (today only): the stop you haven't left, if it's the latest thing the phone
-  // knows; otherwise the last dot.
+  // knows (or the last stop, while your newest dot is still in its building); otherwise the last dot.
   const here = useMemo(() => {
     if (!liveColor) return null;
     const last = points.length ? points[points.length - 1] : null;
@@ -161,6 +161,13 @@ export default function DayMapInner({
       metres(open!.gps ?? open!, p) > 2 * p.accuracy_m;
     const left = open && points.length >= 2 && away(points[points.length - 1]) && away(points[points.length - 2]);
     if (open && !left) return { at: { lat: open.lat, lng: open.lng }, when: null };
+    // No stop open (the phone hasn't sent the one you're in yet, or closed the last a bit early),
+    // but your newest dot is inside the last stop's building: you're there, so it's that stop
+    // (Home!), not a loose dot in the middle of it.
+    const prev = visits.length ? visits[visits.length - 1] : null;
+    if (!open && last && prev?.outline && nearOutline(prev.outline, last.lat, last.lng, 0)) {
+      return { at: { lat: prev.lat, lng: prev.lng }, when: null };
+    }
     return last ? { at: { lat: last.lat, lng: last.lng }, when: last.at } : null;
   }, [liveColor, points, visits]);
   const nothingLit = !pointed && lit !== null && lit.stops.size === 0 && lit.trip.size === 0;
