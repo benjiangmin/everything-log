@@ -148,12 +148,15 @@ export default function DayMapInner({
     if (!liveColor) return null;
     const last = points.length ? points[points.length - 1] : null;
     const open = [...visits].reverse().find((v) => !v.departed_at);
-    // (Indoors the phone's dots drift a block or two away while you sit still, so a newer dot
-    // only moves you off the stop once the last two are both clearly away from it.)
+    // You're where the phone's newest dots say once the last two both put you somewhere else, by
+    // more than the phone says they could be off by (twice their accuracy), and outside the
+    // stop's building. No set distance: a sharp fix across the street counts (the phone's stop
+    // can lag behind it, as at the Book Store), a fuzzy indoor one doesn't.
     const away = (p: RoutePoint) =>
       +new Date(p.at) > +new Date(open!.arrived_at) &&
+      p.accuracy_m != null &&
       !nearOutline(open!.outline, p.lat, p.lng, 0) &&
-      metres(open!, p) > Math.max(200, 2 * (p.accuracy_m ?? 0));
+      metres(open!, p) > 2 * p.accuracy_m;
     const left = open && points.length >= 2 && away(points[points.length - 1]) && away(points[points.length - 2]);
     if (open && !left) return { at: { lat: open.lat, lng: open.lng }, when: null };
     return last ? { at: { lat: last.lat, lng: last.lng }, when: last.at } : null;

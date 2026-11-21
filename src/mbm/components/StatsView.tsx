@@ -284,7 +284,7 @@ function TimeSpent({
     items.sort((x, y) => sorter(x.kind === "job" ? x.a : x, y.kind === "job" ? y.a : y));
   }
   // The circle: everything (pinned too, so the shares add up), a category as one slice. Over a
-  // month or a year, the bits under 5% go together as Other (click it for what's in it).
+  // week, a month or a year, the bits under 5% go together as Other (click it for what's in it).
   const slices: Slice[] = [];
   {
     const cats = new Map<string, Slice>();
@@ -305,7 +305,7 @@ function TimeSpent({
   }
   const pieTotal = slices.reduce((t, x) => t + x.seconds, 0);
   slices.sort((x, y) => y.seconds - x.seconds);
-  if (range === "month" || range === "year") {
+  if (range !== "day") {
     const small = slices.filter((x) => pieTotal > 0 && x.seconds / pieTotal < 0.05);
     if (small.length >= 2) {
       const other: Slice = {
@@ -559,8 +559,8 @@ function Pie({
     });
 
   // The ring (always biggest first, clockwise from the top), a hair of gap between slices.
-  const R = 80;
-  const W = 22;
+  const R = 74;
+  const W = 34;
   const C = 100;
   const gap = slices.length > 1 ? 0.012 : 0;
   const fracs = slices.map((sl) => (total > 0 ? sl.seconds / total : 0));
@@ -588,8 +588,8 @@ function Pie({
   const rows = all ? listed : listed.slice(0, LIST);
 
   return (
-    <div className="grid grid-cols-[minmax(0,1fr)] items-start gap-6 sm:grid-cols-[13rem_minmax(0,1fr)] sm:gap-10">
-      <div className="relative mx-auto aspect-square w-52 sm:sticky sm:top-6">
+    <div className="grid grid-cols-[minmax(0,1fr)] items-start gap-6 sm:grid-cols-[17rem_minmax(0,1fr)] sm:gap-10">
+      <div className="relative mx-auto aspect-square w-64 sm:sticky sm:top-6 sm:w-[17rem]">
         <svg viewBox="0 0 200 200" className="size-full" role="img" aria-label="Share of tracked time">
           <circle cx={C} cy={C} r={R} fill="none" stroke="var(--surface)" strokeWidth={W} />
           {arcs.map(({ sl, a0, a1 }) => (
@@ -598,7 +598,7 @@ function Pie({
               d={arc(a0, a1, R)}
               fill="none"
               stroke={sl.color}
-              strokeWidth={lit === sl.key ? W + 6 : W}
+              strokeWidth={lit === sl.key ? W + 8 : W}
               strokeLinecap="butt"
               opacity={lit && lit !== sl.key ? 0.3 : 1}
               className="cursor-pointer transition-[opacity,stroke-width] duration-150"
