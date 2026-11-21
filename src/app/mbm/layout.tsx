@@ -1,3 +1,4 @@
+import { connection } from "next/server";
 import { Suspense } from "react";
 import { mbm, mbmUser } from "@/mbm/supabase";
 import { isEverythingLogOwner } from "@/mbm/owner";
@@ -36,10 +37,11 @@ async function Bar() {
     const ph = await client.from("phones").select("name, last_seen").maybeSingle();
     if (!ph.error) phone = ph.data as typeof phone;
   }
-  return <MbmTopBar signedIn={Boolean(user)} email={user?.email ?? null} owner={owner} me={me} phone={phone} now={await loadedAt()} />;
+  return <MbmTopBar signedIn={Boolean(user)} email={user?.email ?? null} owner={owner} me={me} phone={phone} now={phone ? await loadedAt() : 0} />;
 }
 
 // (When this was loaded, for "seen 5 min ago": read here rather than while drawing.)
 async function loadedAt() {
+  await connection();
   return Date.now();
 }
