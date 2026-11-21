@@ -1,9 +1,9 @@
 -- Minute by Minute: indoor drift isn't a new stop.
 -- Sitting at home, the phone's dots can wander a block or two (across Lake St to the Extension
 -- Bldg), and the phone calls that a new stop. Now a "new stop" right after one at your places
--- (in its building or within 60 m of it),
--- within 250 m, at none of your places, with no real movement in between, joins back onto the
--- stop you were at. (Same as 051 otherwise. Your days are redone on the phone's next sync.)
+-- (in its building, or a stop already put there), at none of your places, with nothing showing
+-- you moved, and no further off than the phone's own fixes could be wrong by, joins back onto
+-- the stop you were at. No fixed distances. (Same as 051 otherwise. Redone on the next sync.)
 
 create or replace function sync_locokit_visits(p_from timestamptz, p_visits jsonb)
 returns void
@@ -42,16 +42,26 @@ begin
       -- (Joined when: less than 3 minutes apart, and either within 60 m, or both inside the same
       -- building of one of your places, however big. A place's 100 m radius isn't enough.)
       select *, sum(case when pdep is null then 1
-                          -- (053) Drift, not a new stop: you were at one of your places (in its
-                          -- building), the "new stop" is at none of them and within 250 m, and no dot
-                          -- in between shows you really moving (walking pace with a good fix) or
-                          -- going further. Indoors the phone's dots wander a block or two.
-                          when ppl is not null and apl is null and meters_between(lat, lng, plat, plng) <= 250
+                          -- (053) Drift, not a new stop. No fixed distances: it goes by your
+                          -- places and by what the dots themselves say.
+                          --   - You were at one of your places: inside its building, or a stop you
+                          --     (or the app) already put there.
+                          --   - The "new stop" is at none of your places.
+                          --   - Nothing shows you moved: no dot in between with a fix good enough
+                          --     to trust (better than the gap itself) going walking pace or faster.
+                          --   - The gap is within what the phone's own fixes there could be off by
+                          --     (twice the worst accuracy it reported around then, or the stop's
+                          --     own size): a sharp fix 130 m away is real, a ±80 m one isn't.
+                          when ppl is not null and apl is null
                                and arrived - pdep <= interval '16 hours'
                                and not exists (select 1 from points p where p.user_id = auth.uid() and p.source = 'locokit'
                                                and p.at > pdep and p.at < arrived
-                                               and (meters_between(p.lat, p.lng, plat, plng) > 250
-                                                    or (coalesce(p.speed_mps, 0) > 0.8 and coalesce(p.accuracy_m, 999) <= 30))) then 0
+                                               and coalesce(p.speed_mps, 0) > 0.8
+                                               and p.accuracy_m is not null and p.accuracy_m < meters_between(lat, lng, plat, plng) / 2)
+                               and meters_between(lat, lng, plat, plng) <= 2 * greatest(
+                                     coalesce(radius, 0),
+                                     coalesce((select max(p.accuracy_m) from points p where p.user_id = auth.uid() and p.source = 'locokit'
+                                                 and p.at > pdep - interval '5 minutes' and p.at < arrived + interval '5 minutes'), 0)) then 0
                           when (meters_between(lat, lng, plat, plng) > 60 and (bid is null or bid is distinct from pbid))
                           -- Apart for a while: a new stop only if the dots show you went somewhere
                           -- in between (150 m+ away). None (the phone stopped recording while it
@@ -68,11 +78,9 @@ begin
           select left(e->>'id', 64) as id, (e->>'arrived')::timestamptz as arrived, (e->>'departed')::timestamptz as departed,
                  (e->>'lat')::float8 as lat, (e->>'lng')::float8 as lng, (e->>'radius')::float8 as radius,
                  building_place((e->>'lat')::float8, (e->>'lng')::float8, greatest(15, least(40, coalesce((e->>'radius')::float8, 20)))) as bid,
-                 -- (053) At one of your places: in its building, or close to it (60 m, or its radius).
+                 -- (053) At one of your places: in its building, or a stop already put at one.
                  coalesce(building_place((e->>'lat')::float8, (e->>'lng')::float8, greatest(15, least(40, coalesce((e->>'radius')::float8, 20)))),
-                          (select pl.id from places pl where pl.user_id = auth.uid()
-                             and meters_between(pl.lat, pl.lng, (e->>'lat')::float8, (e->>'lng')::float8) <= greatest(60, coalesce(pl.radius_m, 0))
-                           order by meters_between(pl.lat, pl.lng, (e->>'lat')::float8, (e->>'lng')::float8) limit 1)) as apl
+                          (select v.place_id from visits v where v.user_id = auth.uid() and v.lk_id = left(e->>'id', 64))) as apl
           from jsonb_array_elements(coalesce(p_visits, '[]')) e
           where e->>'id' is not null and e->>'lat' is not null and e->>'lng' is not null and e->>'arrived' is not null
             and not exists (select 1 from lk_removed r where r.user_id = auth.uid() and r.lk_id = e->>'id')
