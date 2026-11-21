@@ -54,6 +54,19 @@ export default function EntryPanel({
         start: Math.max(dayStart, +new Date(b.started_at)),
         end: b.ended_at ? Math.min(+new Date(b.ended_at), dayEnd) : null,
       }));
+    // The entries right before and after this one, if they're the same job: offered to merge
+    // into one. (Right before/after: nothing else starts in between.)
+    const merges: { id: string; label: string }[] = [];
+    if (block?.activity_id) {
+      const sorted = [...day.blocks].sort((x, y) => +new Date(x.started_at) - +new Date(y.started_at));
+      const i = sorted.findIndex((b) => b.id === block.id);
+      const name = byId.get(block.activity_id)?.name ?? "entry";
+      const span = (b: typeof block) => `${clock(b.started_at, day.tz)}${b.ended_at ? `–${clock(b.ended_at, day.tz)}` : " on"}`;
+      const before = sorted[i - 1];
+      const after = sorted[i + 1];
+      if (before && before.activity_id === block.activity_id) merges.push({ id: before.id, label: `the ${name} before (${span(before)})` });
+      if (after && after.activity_id === block.activity_id) merges.push({ id: after.id, label: `the ${name} after (${span(after)})` });
+    }
     if (editing && !block) body = <p className="text-sm text-muted">That entry is gone.</p>;
     else if (block) {
       body = (
@@ -65,6 +78,7 @@ export default function EntryPanel({
           from={Math.max(dayStart, +new Date(block.started_at))}
           to={block.ended_at ? Math.min(+new Date(block.ended_at), dayEnd) : null}
           others={others}
+          merges={merges}
           onDone={onClose}
         />
       );

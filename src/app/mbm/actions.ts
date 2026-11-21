@@ -189,6 +189,33 @@ export async function deleteBlock(id: string): Promise<Result> {
   return { ok: true };
 }
 
+// Two entries of the same job, one after the other, become one: from the first one's start to
+// the last one's end (still running if either is), notes joined, the place kept (the first's,
+// else the other's). The second is deleted.
+export async function mergeBlocks(a: string, b: string): Promise<Result> {
+  if (!isUuid(a) || !isUuid(b) || a === b) return fail("Those entries are gone.");
+  const client = await mbm();
+  const { data, error } = await client.from("blocks").select("id, started_at, ended_at, activity_id, note, place_id").in("id", [a, b]);
+  if (error) return fail(error.message);
+  type B = { id: string; started_at: string; ended_at: string | null; activity_id: string | null; note: string | null; place_id: string | null };
+  const both = ((data ?? []) as B[]).sort((x, y) => +new Date(x.started_at) - +new Date(y.started_at));
+  if (both.length !== 2) return fail("One of those entries is gone.");
+  const [first, second] = both;
+  if (!first.activity_id || first.activity_id !== second.activity_id) return fail("Only entries of the same job can be merged.");
+  const end = first.ended_at === null || second.ended_at === null ? null : new Date(Math.max(+new Date(first.ended_at), +new Date(second.ended_at))).toISOString();
+  const notes = [first.note, second.note].map((n) => n?.trim()).filter((n): n is string => !!n);
+  const note = [...new Set(notes)].join(" · ") || null;
+  const { error: upErr } = await client
+    .from("blocks")
+    .update({ ended_at: end, note, place_id: first.place_id ?? second.place_id, updated_at: new Date().toISOString() })
+    .eq("id", first.id);
+  if (upErr) return fail(upErr.message);
+  const { error: delErr } = await client.from("blocks").delete().eq("id", second.id);
+  if (delErr) return fail(delErr.message);
+  refresh();
+  return { ok: true };
+}
+
 // Change an activity's color (every entry of it, everywhere: the bar, the map, the phone).
 export async function setActivityColor(id: string, color: string): Promise<Result> {
   if (!isUuid(id)) return fail("That activity is gone.");

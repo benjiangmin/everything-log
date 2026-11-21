@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { deleteBlock, saveBlock } from "@/app/mbm/actions";
+import { deleteBlock, mergeBlocks, saveBlock } from "@/app/mbm/actions";
 import type { Activity, Block } from "@/mbm/data";
 import { dayKeyOf, hhmm, zonedTime } from "@/mbm/time";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
@@ -24,8 +24,10 @@ export default function BlockEditor({
   from,
   to,
   others = [],
+  merges = [],
   onDone,
 }: {
+  merges?: { id: string; label: string }[]; // the same job right before/after: merge into one
   others?: { name: string; start: number; end: number | null }[]; // the day's other entries (handy times)
   dayKey: string;
   tz: string;
@@ -179,6 +181,35 @@ export default function BlockEditor({
       {/* Where it happened (an entry that's already saved). */}
       {block && <EntryPlace blockId={block.id} />}
 
+
+      {/* The same job right before or after: make them one entry. */}
+      {block && merges.length > 0 && (
+        <div className="flex flex-col gap-1.5">
+          {merges.map((m) => (
+            <button
+              key={m.id}
+              type="button"
+              disabled={pending}
+              onClick={() =>
+                run(async () => {
+                  setMessage(null);
+                  const res = await mergeBlocks(block.id, m.id);
+                  if (res.ok) onDone();
+                  else setMessage(res.message);
+                })
+              }
+              className="flex items-center gap-2.5 rounded-control border border-dashed border-line px-3 py-2.5 text-left text-sm text-ink transition-colors hover:border-ink/40 hover:bg-surface disabled:opacity-60"
+            >
+              <svg aria-hidden="true" viewBox="0 0 24 24" className="size-4 shrink-0 text-muted" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M4 7h6l4 5-4 5H4M20 12h-6" />
+              </svg>
+              <span>
+                Merge with {m.label}
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
 
       {message && <p className="text-sm text-danger">{message}</p>}
       {/* At the bottom of the panel (and stays there if the panel scrolls). */}
