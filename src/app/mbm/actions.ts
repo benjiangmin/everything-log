@@ -508,22 +508,54 @@ export async function reportRoute(r: {
   dots: [string, number, number, number | null, number | null][];
   legs: { mode: string; start: number; end: number }[];
   version: string;
+  stars?: number | null;
 }): Promise<Result> {
   if (!Number.isFinite(r.start) || !Number.isFinite(r.end) || r.end < r.start) return fail("That trip doesn't work.");
+  const stars = r.stars == null ? null : Math.round(r.stars);
+  if (stars !== null && !(stars >= 1 && stars <= 5)) return fail("Pick 1 to 5 stars.");
   const round = (v: number) => Math.round(v * 1e6) / 1e6;
-  const { error } = await (await mbm()).from("route_reports").insert({
+  const client = await mbm();
+  const fromVisit = r.fromId && isUuid(r.fromId) ? r.fromId : null;
+  const toVisit = r.toId && isUuid(r.toId) ? r.toId : null;
+  // Rated: which places it ran between (055), and a new rating of the same trip replaces the old.
+  let places: { from_place?: string | null; to_place?: string | null; stars?: number } = {};
+  if (stars !== null) {
+    const ids = [fromVisit, toVisit].filter((x): x is string => !!x);
+    const { data } = ids.length ? await client.from("visits").select("id, place_id").in("id", ids) : { data: [] };
+    const placeOf = (id: string | null) => (id ? ((data ?? []) as { id: string; place_id: string | null }[]).find((v) => v.id === id)?.place_id ?? null : null);
+    places = { from_place: placeOf(fromVisit), to_place: placeOf(toVisit), stars };
+    await client.from("route_reports").delete().eq("trip_start", new Date(r.start).toISOString()).eq("trip_end", new Date(r.end).toISOString()).not("stars", "is", null);
+  }
+  const { error } = await client.from("route_reports").insert({
+    ...places,
     trip_start: new Date(r.start).toISOString(),
     trip_end: new Date(r.end).toISOString(),
-    from_visit: r.fromId && isUuid(r.fromId) ? r.fromId : null,
-    to_visit: r.toId && isUuid(r.toId) ? r.toId : null,
+    from_visit: fromVisit,
+    to_visit: toVisit,
     note: r.note.trim().slice(0, 2000) || null,
     drawn: r.drawn.slice(0, 50).map((line) => line.slice(0, 5000).map((p) => [round(p.lat), round(p.lng)])),
     dots: r.dots.slice(0, 10000),
     legs: r.legs.slice(0, 200),
     version: r.version.slice(0, 40),
   });
-  if (error) return fail(/route_reports/.test(error.message) ? "Run supabase/minute-by-minute/029_route_reports.sql first." : error.message);
+  if (error) {
+    if (/stars|from_place|to_place/.test(error.message)) return fail("Run supabase/minute-by-minute/055_rate_routes.sql first.");
+    return fail(/route_reports/.test(error.message) ? "Run supabase/minute-by-minute/029_route_reports.sql first." : error.message);
+  }
   return { ok: true };
+}
+
+// Routes you gave 4-5 stars between the places of these two stops (055). reversed: drawn the
+// other way round. spread: how sure the phone was when it was recorded (metres), for the fit check.
+export async function trustedRoutes(fromId: string, toId: string): Promise<{ line: { lat: number; lng: number }[]; reversed: boolean; spread: number | null }[]> {
+  if (!isUuid(fromId) || !isUuid(toId)) return [];
+  const { data, error } = await (await mbm()).rpc("trusted_routes", { p_from: fromId, p_to: toId });
+  if (error || !Array.isArray(data)) return [];
+  return (data as { drawn: [number, number][][]; reversed: boolean; spread_m: number | null }[]).map((r) => ({
+    line: (r.drawn ?? []).flat().map(([lat, lng]) => ({ lat: Number(lat), lng: Number(lng) })),
+    reversed: !!r.reversed,
+    spread: r.spread_m == null ? null : Number(r.spread_m),
+  }));
 }
 
 // ---------- Best guesses (030_suggestions.sql) ----------

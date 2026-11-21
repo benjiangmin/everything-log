@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState, useTransition, type ReactNode } from "react";
 import { APIProvider, InfoWindow, Map, useMap, useMapsLibrary } from "@vis.gl/react-google-maps";
 import { useRouter } from "next/navigation";
-import { lockDay, lookupPlaceOutline, moveStop, myPlaces, rememberedRoute, removeStop, reportRoute, saveBlock, setPlaceOutline, setStopOutline, setStopPlace, trailCells, type PlaceLite, type PlacePick } from "@/app/mbm/actions";
+import { lockDay, lookupPlaceOutline, moveStop, myPlaces, rememberedRoute, removeStop, reportRoute, trustedRoutes, saveBlock, setPlaceOutline, setStopOutline, setStopPlace, trailCells, type PlaceLite, type PlacePick } from "@/app/mbm/actions";
 import { Search as PlaceSearch, type Found } from "./PlaceSearch";
 
 // Which version of the path engine drew a route (saved with "Route looks wrong" reports).
@@ -18,6 +18,7 @@ import { splitLegs, waitSpot, type Dot } from "@/mbm/legs";
 import { despike, makeTrails, smooth } from "@/mbm/trails";
 import { buildingAt, nearOutline } from "@/mbm/buildings";
 import { isMoving } from "@/mbm/moving";
+import { fitsTrusted } from "@/mbm/routefit";
 
 // The stretch you're hovering on the day bar. moving: light up the route (Commute); still: the
 // stop you were at (everything else); any: both (untracked time).
@@ -69,6 +70,7 @@ export default function DayMapInner({
   // A trip you clicked: "Add as Commute" (when nothing's tracked for it), and "Route looks wrong".
   const [adding, setAdding] = useState<{ trip: Trip; x: number; y: number; untracked: boolean; below?: boolean; note?: string; report?: "writing" | "sent" } | null>(null);
   const [reportText, setReportText] = useState("");
+  const [stars, setStars] = useState(0); // (rating a route: 1-5, 0 = not picked yet)
   const [addPending, runAdd] = useTransition();
   const [zoom, setZoom] = useState(15);
   // What the pointer is on: trips under it (several, where paths overlap) or a stop.
@@ -189,6 +191,7 @@ export default function DayMapInner({
             const under = pointed ? trips.filter((x) => pointed.trips.includes(x.key)) : [];
             const t = under.find((x) => tripRow(x, blocks, activities, tz).untracked) ?? under[0];
             setReportText("");
+            setStars(0);
             // (Not enough room above the click, under the bars over the map: it opens below it.)
             const below = !!pointed && pointed.y - coveredIn(box.current) < 190;
             setAdding(t && pointed ? { trip: t, x: pointed.x, y: pointed.y, below, untracked: tripRow(t, blocks, activities, tz).untracked ?? false } : null);
@@ -356,7 +359,9 @@ export default function DayMapInner({
           style={{ left: adding.x, top: adding.below ? adding.y + 14 : adding.y - 12 }}
         >
           {adding.report === "sent" ? (
-            <p className="px-3 py-1.5 text-ink">Saved. Thanks: this one&rsquo;s a test case now.</p>
+            <p className="px-3 py-1.5 text-ink">
+              {stars >= 4 ? "Saved. Trips like this one are drawn this way now, when their dots fit." : "Saved. Thanks: this one\u2019s a test case now."}
+            </p>
           ) : adding.report === "writing" ? (
             <form
               className="flex w-[min(22rem,80vw)] flex-col gap-1.5 p-1"
@@ -370,6 +375,7 @@ export default function DayMapInner({
                     fromId: t.fromId,
                     toId: t.toId,
                     note: reportText,
+                    stars,
                     drawn: t.pieces.map((p) => p.path),
                     dots: points
                       .filter((p) => +new Date(p.at) >= t.start - 60_000 && +new Date(p.at) <= t.end + 60_000)
@@ -384,8 +390,24 @@ export default function DayMapInner({
                 });
               }}
             >
+              <div className="flex items-center gap-0.5 px-0.5" role="radiogroup" aria-label="How right is this route?">
+                {[1, 2, 3, 4, 5].map((n) => (
+                  <button
+                    key={n}
+                    type="button"
+                    role="radio"
+                    aria-checked={stars === n}
+                    aria-label={`${n} star${n > 1 ? "s" : ""}`}
+                    onClick={() => setStars(n)}
+                    className={`grid size-8 place-items-center rounded-control text-xl leading-none hover:bg-surface ${n <= stars ? "text-accent" : "text-line"}`}
+                  >
+                    ★
+                  </button>
+                ))}
+                <span className="ml-2 text-xs text-muted">{["How right is this route?", "Way off", "Mostly wrong", "Close", "Right", "Exactly right"][stars]}</span>
+              </div>
               <label className="px-1 text-xs font-semibold text-muted" htmlFor="route-report">
-                What&rsquo;s wrong with this route? (optional)
+                {stars && stars <= 3 ? "What\u2019s wrong with it? (optional)" : "Anything to add? (optional)"}
               </label>
               <textarea
                 id="route-report"
@@ -400,7 +422,7 @@ export default function DayMapInner({
                 <button type="button" onClick={() => setAdding(null)} className="rounded-control px-2 py-1.5 text-muted hover:bg-surface">
                   Cancel
                 </button>
-                <button type="submit" disabled={addPending} className="rounded-control bg-accent px-3 py-1.5 font-semibold text-accent-ink disabled:opacity-60">
+                <button type="submit" disabled={addPending || !stars} className="rounded-control bg-accent px-3 py-1.5 font-semibold text-accent-ink disabled:opacity-60">
                   {addPending ? "Saving…" : "Save"}
                 </button>
               </div>
@@ -424,7 +446,7 @@ export default function DayMapInner({
                 </button>
               )}
               <button type="button" onClick={() => setAdding((a) => (a ? { ...a, report: "writing", note: undefined } : a))} className="rounded-control px-3 py-1.5 text-ink hover:bg-surface">
-                Route looks wrong
+                Rate this route
               </button>
               <button type="button" onClick={() => setAdding(null)} className="rounded-control px-2 py-1.5 text-muted hover:bg-surface">
                 Cancel
@@ -706,7 +728,15 @@ function useFilledTrips(trips: Trip[], points: RoutePoint[]): { trips: Trip[]; s
         const a = p.path[0];
         const b = p.path[p.path.length - 1];
         let path: Spot[] | null = null;
-        if (!p.missing) {
+        // A whole trip between two stops: routes you gave 4-5 stars between their places (055).
+        const whole = t.pieces.length === 1 && t.fromId && t.toId;
+        const trusted = whole
+          ? (await trustedRoutes(t.fromId!, t.toId!).catch(() => [])).map((r) => ({ ...r, line: r.reversed ? [...r.line].reverse() : r.line }))
+          : [];
+        // Your dots fit one (by their own accuracy, both ways round: routefit.ts): drawn that way.
+        const fit = !p.missing && p.dots ? trusted.find((r) => fitsTrusted(p.dots!, r.line, r.spread)) : undefined;
+        if (fit) path = [a, ...fit.line.slice(1, -1), b];
+        else if (!p.missing) {
           // Only the dots you recorded are snapped, not the stops at either end: snapping to a stop's
           // pin would route you to whatever door the map knows (the library's west entrance) instead
           // of the way you actually went in. The ends join straight from your first / last dot.
@@ -752,17 +782,16 @@ function useFilledTrips(trips: Trip[], points: RoutePoint[]): { trips: Trip[]; s
             path = [...head, ...lead, ...body, ...tail, ...(p.ends?.to ? [b] : [])];
           }
           if (thin) {
-            const whole = t.pieces.length === 1 && t.fromId && t.toId;
-            const remembered = whole ? await rememberedRoute(t.fromId!, t.toId!).catch(() => null) : null;
+            // (Too few dots to check a trusted route against: still the best guess, dashed.)
+            const remembered = trusted[0]?.line.slice(1, -1) ?? (whole ? await rememberedRoute(t.fromId!, t.toId!).catch(() => null) : null);
             const found = remembered ?? (await walkingRoute(a, b));
             if (found) {
               setGuessed((g) => new Set(g).add(key));
               path = [a, ...found, b];
             }
           }
-        } else if (metres(a, b) >= 120) {
-          const whole = t.pieces.length === 1 && t.fromId && t.toId;
-          const remembered = whole ? await rememberedRoute(t.fromId!, t.toId!).catch(() => null) : null;
+        } else if (p.missing && metres(a, b) >= 120) {
+          const remembered = trusted[0]?.line.slice(1, -1) ?? (whole ? await rememberedRoute(t.fromId!, t.toId!).catch(() => null) : null);
           // (Joined to both ends: the route found starts and ends on the nearest street, which left
           // a little gap to where your dots stop and start again.)
           const found = remembered ?? (await walkingRoute(a, b));
