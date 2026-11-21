@@ -3,7 +3,6 @@
 import { useState, useTransition, type ReactNode } from "react";
 import { setPinned } from "@/app/mbm/actions";
 import type { JobMeta, Range, Stats } from "@/mbm/stats";
-import { RANGE_COLOR } from "./RangeRail";
 
 // The numbers for a day / week / month / year: totals up top, then time per activity (with a
 // search: "time spent on …") and time per app.
@@ -56,7 +55,7 @@ export default function StatsView({
 
       <div className="flex flex-col gap-8">
         <TimeSpent activities={stats.activities} elapsed={elapsed} initial={query} savedPins={pins} meta={meta} range={range} />
-        <Apps apps={stats.apps} color={RANGE_COLOR[range]} />
+        <Apps apps={stats.apps} />
       </div>
 
       {/* (No list of unmarked stretches any more: the bar shows them, and the Day page fills them in.) */}
@@ -159,11 +158,12 @@ function PinIcon({ filled }: { filled: boolean }) {
 }
 
 // An app's icon (from the App Store, by its name), or its first letter when there isn't one.
-function AppIcon({ name }: { name: string }) {
+function AppIcon({ name, big = false }: { name: string; big?: boolean }) {
   const [failed, setFailed] = useState(false);
+  const box = big ? "size-9 rounded-[9px]" : "size-6 rounded-[7px]";
   if (failed) {
     return (
-      <span aria-hidden="true" className="grid size-6 shrink-0 place-items-center rounded-[7px] bg-surface text-[11px] font-semibold text-muted ring-1 ring-line">
+      <span aria-hidden="true" className={`grid ${box} shrink-0 place-items-center bg-surface text-[11px] font-semibold text-muted ring-1 ring-line`}>
         {name.trim().charAt(0).toUpperCase() || "?"}
       </span>
     );
@@ -173,11 +173,11 @@ function AppIcon({ name }: { name: string }) {
     <img
       src={`/mbm/app-icon?name=${encodeURIComponent(name)}`}
       alt=""
-      width={24}
-      height={24}
+      width={big ? 36 : 24}
+      height={big ? 36 : 24}
       loading="lazy"
       onError={() => setFailed(true)}
-      className="size-6 shrink-0 rounded-[7px] ring-1 ring-ink/10"
+      className={`${box} shrink-0 ring-1 ring-ink/10`}
     />
   );
 }
@@ -485,8 +485,7 @@ function TimeSpent({
   );
 }
 
-// (Its bars in the color of the day/week/month/year you're looking at.)
-function Apps({ apps, color }: { apps: Stats["apps"]; color?: string }) {
+function Apps({ apps }: { apps: Stats["apps"] }) {
   const [all, setAll] = useState(false);
   const max = apps[0]?.seconds ?? 0;
   return (
@@ -496,7 +495,20 @@ function Apps({ apps, color }: { apps: Stats["apps"]; color?: string }) {
       ) : (
         <ul>
           {(all ? apps : apps.slice(0, LIST)).map((a) => (
-            <Row key={a.app} icon={<AppIcon name={a.app} />} label={a.app} seconds={a.seconds} max={max} barColor={color} />
+            // Like the iPhone's Screen Time: the app's icon on the left; its name, time and bar
+            // stacked on the right.
+            <li key={a.app} className="flex items-center gap-3 py-2">
+              <AppIcon name={a.app} big />
+              <div className="min-w-0 flex-1">
+                <div className="flex items-baseline gap-2 text-sm">
+                  <span className="min-w-0 flex-1 truncate">{a.app}</span>
+                  <span className="num text-muted">{hm(a.seconds)}</span>
+                </div>
+                <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-surface">
+                  <div className="h-full rounded-full bg-[#b9ab9b]" style={{ width: `${max > 0 ? Math.max(2, (a.seconds / max) * 100) : 0}%` }} />
+                </div>
+              </div>
+            </li>
           ))}
         </ul>
       )}

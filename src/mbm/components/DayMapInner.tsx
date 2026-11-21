@@ -67,7 +67,7 @@ export default function DayMapInner({
   const [refit, setRefit] = useState(0); // (bumped by "Whole day": zoom back out to all of it)
   const [moving, setMoving] = useState<Visit | null>(null); // "click where it really is"
   const [moveNote, setMoveNote] = useState<string | null>(null);
-  const [, runMove] = useTransition();
+  const [movePending, runMove] = useTransition();
   // A trip you clicked: "Add as Commute" (when nothing's tracked for it), and "Route looks wrong".
   const [adding, setAdding] = useState<{ trip: Trip; x: number; y: number; untracked: boolean; below?: boolean; note?: string; report?: "writing" | "sent" } | null>(null);
   const [reportText, setReportText] = useState("");
@@ -236,7 +236,7 @@ export default function DayMapInner({
               <span
                 title={label}
                 aria-label={label}
-                className={`block size-3 cursor-default rounded-full border-2 border-[#faf6f0] bg-[#7f5539] shadow transition-opacity ${
+                className={`block size-2.5 cursor-default rounded-full border-2 border-[#9c8b7b] bg-[#faf6f0] transition-opacity ${
                   dimming && !lit?.trip.has(t.key) ? "opacity-35" : ""
                 }`}
               />
@@ -338,15 +338,32 @@ export default function DayMapInner({
           </InfoWindow>
         )}
       </Map>
+      {/* (Below whatever floats over the top of the map, the day's bar: it used to hide under it.) */}
       {moving && (
-        <div className="absolute inset-x-3 top-3 flex items-center justify-between gap-3 rounded-control bg-accent px-3 py-2 text-sm text-accent-ink shadow-lg">
+        <div
+          className="absolute inset-x-3 z-30 flex items-center justify-between gap-3 rounded-control bg-accent px-3 py-2 text-sm text-accent-ink shadow-lg"
+          style={{ top: topCover + 12 }}
+        >
           <span>Click where {moving.place ?? moving.auto_name ?? "this stop"} really is (in or next to the building your phone had you in)</span>
           <button type="button" onClick={() => setMoving(null)} className="rounded-control px-2 py-0.5 font-semibold hover:bg-accent-ink/10">
             Cancel
           </button>
         </div>
       )}
-      {moveNote && <p className="absolute inset-x-3 top-3 rounded-control bg-paper px-3 py-2 text-sm text-danger shadow">{moveNote}</p>}
+      {movePending && !moving && (
+        <p className="absolute inset-x-3 z-30 flex items-center gap-2 rounded-control bg-paper px-3 py-2 text-sm text-ink shadow" style={{ top: topCover + 12 }}>
+          <span aria-hidden="true" className="size-3.5 animate-spin rounded-full border-2 border-line border-t-ink" />
+          Checking it&rsquo;s next to where your phone had you, then moving it…
+        </p>
+      )}
+      {moveNote && !movePending && (
+        <p className="absolute inset-x-3 z-30 flex items-start justify-between gap-3 rounded-control bg-paper px-3 py-2 text-sm text-danger shadow" style={{ top: topCover + 12 }}>
+          <span>{moveNote}</span>
+          <button type="button" onClick={() => setMoveNote(null)} aria-label="Dismiss" className="shrink-0 text-muted hover:text-ink">
+            ✕
+          </button>
+        </p>
+      )}
       {pin && !pin.at && !moving && (
         <p className="pointer-events-none absolute left-3 top-3 rounded-full bg-paper/95 px-3 py-1 text-xs text-muted shadow-sm ring-1 ring-line">
           {pin.location ? `Not sure where “${pin.location.split(",")[0]}” is` : "No place set for this plan"}
