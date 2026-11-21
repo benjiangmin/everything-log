@@ -134,7 +134,7 @@ function hash(s: string) {
 }
 
 // Google-style polyline, to keep matches small in this browser's storage.
-function encodePolyline(path: Spot[], precision: number) {
+export function encodePolyline(path: Spot[], precision: number) {
   const f = 10 ** precision;
   let out = "";
   let plat = 0;

@@ -13,7 +13,7 @@ import type { Activity, Block, LockedTrip, RoutePoint, Visit } from "@/mbm/data"
 import { clock, dayRange, span } from "@/mbm/time";
 import { HtmlMarker, KEY, stylesFor } from "./mapBits";
 import { fitToEntries, buildTrips, decodePolyline, metres, type Piece, type Spot, type Trip } from "@/mbm/trips";
-import { snapLeg } from "@/mbm/snap";
+import { encodePolyline, snapLeg } from "@/mbm/snap";
 import { splitLegs, waitSpot, type Dot } from "@/mbm/legs";
 import { despike, makeTrails, smooth } from "@/mbm/trails";
 import { buildingAt, nearOutline } from "@/mbm/buildings";
@@ -384,6 +384,7 @@ export default function DayMapInner({
                     version: PATH_ENGINE,
                   });
                   if (res.ok) {
+                    forgetPieces();
                     setAdding((a) => (a ? { ...a, report: "sent", note: undefined } : a));
                     setTimeout(() => setAdding((a) => (a?.report === "sent" ? null : a)), 1600);
                   } else setAdding((a) => (a ? { ...a, note: res.message } : a));
@@ -724,10 +725,15 @@ function useFilledTrips(trips: Trip[], points: RoutePoint[]): { trips: Trip[]; s
         const key = pieceKey(t, i);
         if (asked.current.has(key)) return;
         asked.current.add(key);
+        if (keptPiece(key)) {
+          setDoneKeys((d) => new Set(d).add(key));
+          return;
+        }
         try {
         const a = p.path[0];
         const b = p.path[p.path.length - 1];
         let path: Spot[] | null = null;
+        let guessedNow = false;
         // A whole trip between two stops: routes you gave 4-5 stars between their places (055).
         const whole = t.pieces.length === 1 && t.fromId && t.toId;
         const trusted = whole
@@ -787,6 +793,7 @@ function useFilledTrips(trips: Trip[], points: RoutePoint[]): { trips: Trip[]; s
             const found = remembered ?? (await walkingRoute(a, b));
             if (found) {
               setGuessed((g) => new Set(g).add(key));
+              guessedNow = true;
               path = [a, ...found, b];
             }
           }
@@ -798,6 +805,7 @@ function useFilledTrips(trips: Trip[], points: RoutePoint[]): { trips: Trip[]; s
           path = found ? [a, ...found, b] : null;
         }
         if (path && path.length >= 2) setBetter((m) => ({ ...m, [key]: path! }));
+        keepPiece(key, path && path.length >= 2 ? path : null, guessedNow);
         } finally {
           setDoneKeys((d) => new Set(d).add(key));
         }
@@ -809,6 +817,8 @@ function useFilledTrips(trips: Trip[], points: RoutePoint[]): { trips: Trip[]; s
       trips.map((t) => {
         const pieces = t.pieces.map((p, i) => {
           const k = pieceKey(t, i);
+          const kept = better[k] ? undefined : keptPiece(k);
+          if (kept?.path) return { ...p, path: kept.path, ...(kept.guess ? { missing: true } : {}) };
           if (!better[k]) return (p.dots?.length ?? 0) < 3 && !p.missing && p.path.length >= 2 && metres(p.path[0], p.path[p.path.length - 1]) >= 120 ? { ...p, missing: true } : p;
           return { ...p, path: better[k], ...(guessed.has(k) ? { missing: true } : {}) };
         });
@@ -831,8 +841,45 @@ function useFilledTrips(trips: Trip[], points: RoutePoint[]): { trips: Trip[]; s
     [trips, better, guessed],
   );
   // Every piece worked out (for saving a finished day's routes).
-  const settled = ready && trips.every((t) => t.pieces.every((_, i) => doneKeys.has(pieceKey(t, i))));
+  const settled = trips.every((t) => t.pieces.every((_, i) => doneKeys.has(pieceKey(t, i)) || !!keptPiece(pieceKey(t, i)))) && (ready || trips.every((t) => t.pieces.every((_, i) => !!keptPiece(pieceKey(t, i)))));
   return { trips: filled, settled };
+}
+
+// A piece's finished drawing, kept in this browser: a reload draws it straight away instead of
+// wiggly dots that snap into place a moment later. Keyed by the piece (what it covers) and the
+// way routes are drawn (PATH_ENGINE): a changed trip or a new engine works it out again.
+// "none": worked out, nothing better than the dots. Rating a route clears them all (a trusted
+// route can change how other trips between those places are drawn).
+type KeptPiece = { path: Spot[] | null; guess: boolean };
+const keptId = (k: string) => `mbm-piece:${PATH_ENGINE}:${k}`;
+function keptPiece(k: string): KeptPiece | undefined {
+  try {
+    const v = localStorage.getItem(keptId(k));
+    if (!v) return undefined;
+    if (v === "none") return { path: null, guess: false };
+    const guess = v.startsWith("g:");
+    return { path: decodePolyline(guess ? v.slice(2) : v, 6), guess };
+  } catch {
+    return undefined;
+  }
+}
+function keepPiece(k: string, path: Spot[] | null, guess: boolean) {
+  try {
+    // (Finished days are saved with the day itself: these only matter for days still going. A
+    // lot of them piled up: start over rather than fill the browser's storage.)
+    let n = 0;
+    for (let i = 0; i < localStorage.length; i++) if (localStorage.key(i)?.startsWith("mbm-piece:")) n++;
+    if (n > 1500) forgetPieces();
+    localStorage.setItem(keptId(k), path ? (guess ? "g:" : "") + encodePolyline(path, 6) : "none");
+  } catch {}
+}
+function forgetPieces() {
+  try {
+    for (let i = localStorage.length - 1; i >= 0; i--) {
+      const k = localStorage.key(i);
+      if (k?.startsWith("mbm-piece:")) localStorage.removeItem(k);
+    }
+  } catch {}
 }
 
 // A piece, by what it covers (so a changed trip asks again only for pieces that changed).
