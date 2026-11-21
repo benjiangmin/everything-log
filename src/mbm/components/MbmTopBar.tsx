@@ -23,11 +23,15 @@ export default function MbmTopBar({
   email,
   owner,
   me = null,
+  phone = null,
+  now = 0,
 }: {
   signedIn: boolean;
   email: string | null;
   owner: boolean;
   me?: { name: string | null; avatar: string | null } | null;
+  phone?: { name: string | null; last_seen: string } | null;
+  now?: number;
 }) {
   const pathname = usePathname();
   const active = (href: string) => (href === "/mbm" ? pathname === "/mbm" : pathname.startsWith(href));
@@ -83,7 +87,7 @@ export default function MbmTopBar({
               <span className="sr-only sm:hidden">everything-log</span>
             </Link>
           )}
-          {signedIn && <ProfileMenu email={email} me={me} />}
+          {signedIn && <ProfileMenu email={email} me={me} phone={phone} now={now} />}
         </div>
       </div>
     </header>
@@ -91,7 +95,17 @@ export default function MbmTopBar({
 }
 
 // You: your picture (or initial). Click for your account, About you, and signing out.
-function ProfileMenu({ email, me }: { email: string | null; me: { name: string | null; avatar: string | null } | null }) {
+function ProfileMenu({
+  email,
+  me,
+  phone,
+  now,
+}: {
+  email: string | null;
+  me: { name: string | null; avatar: string | null } | null;
+  phone: { name: string | null; last_seen: string } | null;
+  now: number;
+}) {
   const [open, setOpen] = useState(false);
   const box = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -126,6 +140,23 @@ function ProfileMenu({ email, me }: { email: string | null; me: { name: string |
               <p className="truncate text-xs text-muted">{email}</p>
             </div>
           </div>
+          {/* The phone linked to your account (one at a time: signing in on another takes over). */}
+          <div className="mx-1 mb-2 flex items-center gap-2.5 rounded-control bg-surface px-3 py-2">
+            <svg aria-hidden="true" viewBox="0 0 24 24" className="size-4 shrink-0 text-muted" fill="none" stroke="currentColor" strokeWidth="2">
+              <rect x="6" y="2.5" width="12" height="19" rx="2.5" />
+              <path d="M10.5 18.5h3" strokeLinecap="round" />
+            </svg>
+            <div className="min-w-0 text-xs">
+              {phone ? (
+                <>
+                  <p className="truncate font-semibold text-ink">{phone.name || "Your phone"}</p>
+                  <p className="text-muted">Linked · seen {ago(now - +new Date(phone.last_seen))}</p>
+                </>
+              ) : (
+                <p className="text-muted">No phone linked yet: sign in on the app.</p>
+              )}
+            </div>
+          </div>
           <div className="h-px bg-line" />
           <div className="py-1">
             <Link href="/mbm/account" onClick={() => setOpen(false)} className={item} role="menuitem">
@@ -151,4 +182,14 @@ function ProfileMenu({ email, me }: { email: string | null; me: { name: string |
       )}
     </div>
   );
+}
+
+// "just now", "5 min ago", "3 h ago", "2 days ago".
+function ago(ms: number) {
+  const m = Math.round(ms / 60000);
+  if (m < 2) return "just now";
+  if (m < 60) return `${m} min ago`;
+  const h = Math.round(m / 60);
+  if (h < 36) return `${h} h ago`;
+  return `${Math.round(h / 24)} days ago`;
 }
