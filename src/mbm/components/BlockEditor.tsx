@@ -11,6 +11,9 @@ import ColorRow from "./ColorRow";
 import EntryPlace from "./EntryPlace";
 import TimeRange, { type Pick } from "./TimeRange";
 
+// The same job right before or after this entry, offered to merge into one.
+export type Merge = { id: string; name: string; color: string; side: "before" | "after"; time: string };
+
 const field = "rounded-control border border-line bg-paper px-3 py-2.5 text-ink focus:border-ink";
 
 // Add a missed entry, or change one: what (its color is the dot in the name box), when, where,
@@ -28,7 +31,7 @@ export default function BlockEditor({
   merges = [],
   onDone,
 }: {
-  merges?: { id: string; label: string }[]; // the same job right before/after: merge into one
+  merges?: Merge[]; // the same job right before/after: merge into one
   others?: { name: string; start: number; end: number | null }[]; // the day's other entries (handy times)
   dayKey: string;
   tz: string;
@@ -201,13 +204,29 @@ export default function BlockEditor({
                   else setMessage(res.message);
                 })
               }
-              className="flex items-center gap-2.5 rounded-control border border-dashed border-line px-3 py-2.5 text-left text-sm text-ink transition-colors hover:border-ink/40 hover:bg-surface disabled:opacity-60"
+              className="group flex items-center gap-3.5 rounded-card border border-dashed border-line px-4 py-3 text-left transition-colors hover:border-ink/40 hover:bg-surface disabled:opacity-60"
             >
-              <svg aria-hidden="true" viewBox="0 0 24 24" className="size-4 shrink-0 text-muted" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M4 7h6l4 5-4 5H4M20 12h-6" />
-              </svg>
-              <span>
-                Merge with {m.label}
+              <span className="grid size-9 shrink-0 place-items-center rounded-full bg-surface text-muted transition-colors group-hover:bg-paper group-hover:text-ink">
+                <svg aria-hidden="true" viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M4 7h6l4 5-4 5H4M20 12h-6" />
+                </svg>
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-xs text-muted">Merge with the one {m.side}</span>
+                <span className="mt-0.5 flex items-center gap-2">
+                  <span aria-hidden="true" className="size-2.5 shrink-0 rounded-full" style={{ background: m.color }} />
+                  <span className="truncate font-semibold text-ink">{m.name}</span>
+                </span>
+                <span className="num mt-0.5 block text-xs text-muted">{m.time}</span>
+              </span>
+              {/* Two pieces → one. */}
+              <span aria-hidden="true" className="flex shrink-0 items-center gap-1.5">
+                <span className="flex gap-0.5">
+                  <span className="h-3 w-4 rounded-sm" style={{ background: m.color }} />
+                  <span className="h-3 w-4 rounded-sm" style={{ background: m.color }} />
+                </span>
+                <span className="text-xs text-muted">→</span>
+                <span className="h-3 w-[2.125rem] rounded-sm" style={{ background: m.color }} />
               </span>
             </button>
           ))}

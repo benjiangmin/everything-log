@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { dayData } from "@/app/mbm/actions";
 import type { Day } from "@/mbm/data";
 import { clock, dayTitle } from "@/mbm/time";
-import BlockEditor from "./BlockEditor";
+import BlockEditor, { type Merge } from "./BlockEditor";
 import SidePanel from "./SidePanel";
 
 // Add a missed entry (on the day you're looking at, or for the untracked stretch you clicked), or
@@ -56,16 +56,17 @@ export default function EntryPanel({
       }));
     // The entries right before and after this one, if they're the same job: offered to merge
     // into one. (Right before/after: nothing else starts in between.)
-    const merges: { id: string; label: string }[] = [];
+    const merges: Merge[] = [];
     if (block?.activity_id) {
       const sorted = [...day.blocks].sort((x, y) => +new Date(x.started_at) - +new Date(y.started_at));
       const i = sorted.findIndex((b) => b.id === block.id);
-      const name = byId.get(block.activity_id)?.name ?? "entry";
-      const span = (b: typeof block) => `${clock(b.started_at, day.tz)}${b.ended_at ? `–${clock(b.ended_at, day.tz)}` : " on"}`;
+      const job = byId.get(block.activity_id);
+      const span = (b: typeof block) => `${clock(b.started_at, day.tz)} – ${b.ended_at ? clock(b.ended_at, day.tz) : "now"}`;
       const before = sorted[i - 1];
       const after = sorted[i + 1];
-      if (before && before.activity_id === block.activity_id) merges.push({ id: before.id, label: `the ${name} before (${span(before)})` });
-      if (after && after.activity_id === block.activity_id) merges.push({ id: after.id, label: `the ${name} after (${span(after)})` });
+      const base = { name: job?.name ?? "Entry", color: job?.color ?? "#a98467" };
+      if (before && before.activity_id === block.activity_id) merges.push({ ...base, id: before.id, side: "before", time: span(before) });
+      if (after && after.activity_id === block.activity_id) merges.push({ ...base, id: after.id, side: "after", time: span(after) });
     }
     if (editing && !block) body = <p className="text-sm text-muted">That entry is gone.</p>;
     else if (block) {
