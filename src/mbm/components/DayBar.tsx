@@ -6,6 +6,7 @@ import type { Activity, Block, PhoneUse } from "@/mbm/data";
 import { clock, span, zonedTime } from "@/mbm/time";
 import type { Placed } from "./segments";
 import { retimeBlocks } from "@/app/mbm/actions";
+import { undoable } from "@/mbm/undo";
 
 // Something still planned for later today (Google Calendar, or the Plan tab): shown dashed in the
 // part of the day that hasn't happened yet. at: where it is, when known (lit up on the map).
@@ -304,7 +305,7 @@ export default function DayBar({
       next[c.id] = { start: "start" in c ? e.at : p.start, end: "end" in c ? e.at : p.end, was: `${p.start}-${p.end}` };
     }
     setMoves(next);
-    retimeBlocks(changes).then((res) => {
+    undoable(dayKey, "Move an edge", () => retimeBlocks(changes)).then((res) => {
       if (res.ok) return;
       setMoves((m) => {
         const back = { ...m };

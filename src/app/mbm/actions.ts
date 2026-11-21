@@ -189,6 +189,39 @@ export async function deleteBlock(id: string): Promise<Result> {
   return { ok: true };
 }
 
+// ---- Undo / redo on the Day page (undo.ts): a day's entries, as they are, and put back.
+
+// Every entry around this day (a day or so either side: a change can reach past midnight), whole.
+export async function blocksAround(dayKey: string): Promise<Record<string, unknown>[] | null> {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dayKey)) return null;
+  // (Wide enough for any time zone: midnight UTC that day, a day and a half either way.)
+  const mid = Date.parse(`${dayKey}T12:00:00Z`);
+  const from = new Date(mid - 2 * 86_400_000).toISOString();
+  const to = new Date(mid + 2 * 86_400_000).toISOString();
+  const { data, error } = await (await mbm())
+    .from("blocks")
+    .select("*")
+    .lt("started_at", to)
+    .or(`ended_at.is.null,ended_at.gt.${from}`);
+  return error ? null : ((data ?? []) as Record<string, unknown>[]);
+}
+
+// Put entries back as they were: these rows exactly (made again if deleted), and these ids gone.
+export async function restoreBlocks(rows: Record<string, unknown>[], remove: string[]): Promise<Result> {
+  const client = await mbm();
+  const gone = remove.filter(isUuid);
+  if (gone.length) {
+    const { error } = await client.from("blocks").delete().in("id", gone);
+    if (error) return fail(error.message);
+  }
+  if (rows.length) {
+    const { error } = await client.from("blocks").upsert(rows.map((r) => ({ ...r, updated_at: new Date().toISOString() })));
+    if (error) return fail(error.message);
+  }
+  refresh();
+  return { ok: true };
+}
+
 // Two entries of the same job, one after the other, become one: from the first one's start to
 // the last one's end (still running if either is), notes joined, the place kept (the first's,
 // else the other's). The second is deleted.

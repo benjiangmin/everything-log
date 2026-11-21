@@ -4,6 +4,8 @@ import { useEffect, useState, useSyncExternalStore, type ReactNode } from "react
 import type { Day } from "@/mbm/data";
 import { useRouter } from "next/navigation";
 import { liftOut, tuckBetween } from "@/app/mbm/actions";
+import { undoable } from "@/mbm/undo";
+import UndoButtons from "./UndoButtons";
 import DayBar, { type DayPlan } from "./DayBar";
 import DayMap from "./DayMap";
 import type { Focus } from "./DayMapInner";
@@ -69,12 +71,12 @@ export default function DayView({
       marks={marks}
       plans={plans}
       onLift={async (b) => {
-        const res = await liftOut(b.id).catch(() => ({ ok: false as const, message: "Couldn't do that. Check your connection." }));
+        const res = await undoable(day.dayKey, "Lift it out", () => liftOut(b.id)).catch(() => ({ ok: false as const, message: "Couldn't do that. Check your connection." }));
         if (res.ok) router.refresh();
         return res.ok ? null : res.message;
       }}
       onTuck={async (b) => {
-        const res = await tuckBetween(b.id).catch(() => ({ ok: false as const, message: "Couldn't do that. Check your connection." }));
+        const res = await undoable(day.dayKey, "Tuck it under", () => tuckBetween(b.id)).catch(() => ({ ok: false as const, message: "Couldn't do that. Check your connection." }));
         if (res.ok) router.refresh();
         return res.ok ? null : res.message;
       }}
@@ -147,7 +149,10 @@ export default function DayView({
       {mapMode ? null : (
         <section aria-label="The day" className="relative mb-4 shrink-0 rounded-card border-[1.5px] border-ink px-4 pb-4 pt-4 sm:px-6 sm:pb-5">
           {toggle(true)}
-          <h2 className="mb-4 font-display text-lg font-semibold">The day</h2>
+          <div className="mb-4 flex items-center gap-3">
+            <h2 className="flex-1 font-display text-lg font-semibold">The day</h2>
+            <UndoButtons />
+          </div>
           {bar}
         </section>
       )}
@@ -176,6 +181,7 @@ export default function DayView({
                   {title}
                   {subtitle && <span className="ml-2 text-sm font-normal text-muted">{subtitle}</span>}
                 </h1>
+                <UndoButtons />
                 <div ref={setZoomSlot} />
                 {nav}
                 {toggle(false)}

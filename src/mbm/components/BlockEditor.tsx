@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { deleteBlock, mergeBlocks, saveBlock } from "@/app/mbm/actions";
+import { undoable } from "@/mbm/undo";
 import type { Activity, Block } from "@/mbm/data";
 import { dayKeyOf, hhmm, zonedTime } from "@/mbm/time";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
@@ -85,7 +86,9 @@ export default function BlockEditor({
         end !== endShown ? zonedTime(dayKey, end, tz).toISOString() : endsLater ? block!.ended_at : new Date(to!).toISOString();
     }
     run(async () => {
-      const res = await saveBlock({ id: block?.id, name, start: startIso, end: endIso, note: showNote ? note : (block?.note ?? "") });
+      const res = await undoable(dayKey, block ? `Change ${name.trim()}` : `Add ${name.trim()}`, () =>
+        saveBlock({ id: block?.id, name, start: startIso, end: endIso, note: showNote ? note : (block?.note ?? "") }),
+      );
       if (res.ok) onDone();
       else setMessage(res.message);
     });
@@ -96,7 +99,7 @@ export default function BlockEditor({
     const ok = await confirm({ title: "Delete this entry?", body: "That time goes back to untracked.", confirmLabel: "Delete" });
     if (!ok) return;
     run(async () => {
-      const res = await deleteBlock(block.id);
+      const res = await undoable(dayKey, `Delete ${name.trim() || "the entry"}`, () => deleteBlock(block.id));
       if (res.ok) onDone();
       else setMessage(res.message);
     });
@@ -193,7 +196,7 @@ export default function BlockEditor({
               onClick={() =>
                 run(async () => {
                   setMessage(null);
-                  const res = await mergeBlocks(block.id, m.id);
+                  const res = await undoable(dayKey, `Merge ${name.trim()}`, () => mergeBlocks(block.id, m.id));
                   if (res.ok) onDone();
                   else setMessage(res.message);
                 })
