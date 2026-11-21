@@ -565,7 +565,7 @@ export default function DayBar({
                 <span className="size-2.5 shrink-0 rounded-full ring-1 ring-accent-ink/40" style={{ background: nameOf(hover.block)?.color ?? "#a98467" }} />
                 <span className="min-w-0">
                   {nameOf(hover.block)?.name ?? "Something"}
-                  {hover.block.note && <span className="ml-2 font-sans text-sm font-normal italic text-[#e9c89b]/70">{hover.block.note}</span>}
+                  {hover.block.note && <span className="ml-2 font-sans text-sm font-normal italic opacity-60">{hover.block.note}</span>}
                 </span>
               </p>
               <p className="num mt-0.5 text-sm opacity-80">
