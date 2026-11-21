@@ -1,6 +1,7 @@
 -- Minute by Minute: indoor drift isn't a new stop.
 -- Sitting at home, the phone's dots can wander a block or two (across Lake St to the Extension
--- Bldg), and the phone calls that a new stop. Now a "new stop" right after one at your places,
+-- Bldg), and the phone calls that a new stop. Now a "new stop" right after one at your places
+-- (in its building or within 60 m of it),
 -- within 250 m, at none of your places, with no real movement in between, joins back onto the
 -- stop you were at. (Same as 051 otherwise. Your days are redone on the phone's next sync.)
 
@@ -45,7 +46,7 @@ begin
                           -- building), the "new stop" is at none of them and within 250 m, and no dot
                           -- in between shows you really moving (walking pace with a good fix) or
                           -- going further. Indoors the phone's dots wander a block or two.
-                          when pbid is not null and bid is null and meters_between(lat, lng, plat, plng) <= 250
+                          when ppl is not null and apl is null and meters_between(lat, lng, plat, plng) <= 250
                                and arrived - pdep <= interval '16 hours'
                                and not exists (select 1 from points p where p.user_id = auth.uid() and p.source = 'locokit'
                                                and p.at > pdep and p.at < arrived
@@ -62,11 +63,16 @@ begin
                                               and meters_between(p.lat, p.lng, plat, plng) > 150))) then 1 else 0 end)
                   over (order by arrived) as grp
       from (
-        select s0.*, lag(departed) over w as pdep, lag(lat) over w as plat, lag(lng) over w as plng, lag(bid) over w as pbid
+        select s0.*, lag(departed) over w as pdep, lag(lat) over w as plat, lag(lng) over w as plng, lag(bid) over w as pbid, lag(apl) over w as ppl
         from (
           select left(e->>'id', 64) as id, (e->>'arrived')::timestamptz as arrived, (e->>'departed')::timestamptz as departed,
                  (e->>'lat')::float8 as lat, (e->>'lng')::float8 as lng, (e->>'radius')::float8 as radius,
-                 building_place((e->>'lat')::float8, (e->>'lng')::float8, greatest(15, least(40, coalesce((e->>'radius')::float8, 20)))) as bid
+                 building_place((e->>'lat')::float8, (e->>'lng')::float8, greatest(15, least(40, coalesce((e->>'radius')::float8, 20)))) as bid,
+                 -- (053) At one of your places: in its building, or close to it (60 m, or its radius).
+                 coalesce(building_place((e->>'lat')::float8, (e->>'lng')::float8, greatest(15, least(40, coalesce((e->>'radius')::float8, 20)))),
+                          (select pl.id from places pl where pl.user_id = auth.uid()
+                             and meters_between(pl.lat, pl.lng, (e->>'lat')::float8, (e->>'lng')::float8) <= greatest(60, coalesce(pl.radius_m, 0))
+                           order by meters_between(pl.lat, pl.lng, (e->>'lat')::float8, (e->>'lng')::float8) limit 1)) as apl
           from jsonb_array_elements(coalesce(p_visits, '[]')) e
           where e->>'id' is not null and e->>'lat' is not null and e->>'lng' is not null and e->>'arrived' is not null
             and not exists (select 1 from lk_removed r where r.user_id = auth.uid() and r.lk_id = e->>'id')
