@@ -354,6 +354,12 @@ export async function removeStop(visitId: string): Promise<Result> {
   return { ok: true };
 }
 
+// You said where a stop really was: if the phone had you somewhere else, that spot is learned
+// as the phone misreading this place (054_learned_misreads.sql; fine if that's not run yet).
+async function learnMisread(visitId: string) {
+  await (await mbm()).rpc("learn_misread", { p_visit: visitId }).then(() => undefined, () => undefined);
+}
+
 // Name a stop on the map ("Home", "Theory"). Later stops there get the name by themselves.
 export async function namePlace(visitId: string, name: string): Promise<Result> {
   if (!isUuid(visitId)) return fail("That stop is gone.");
@@ -362,6 +368,7 @@ export async function namePlace(visitId: string, name: string): Promise<Result> 
   await unlockDaysOf(await mbm(), visitId);
   const { error } = await (await mbm()).rpc("name_place", { p_visit_id: visitId, p_name: clean });
   if (error) return fail(/name_place/.test(error.message) ? "Run supabase/minute-by-minute/005_location.sql first." : error.message);
+  await learnMisread(visitId);
   refresh();
   return { ok: true };
 }
@@ -868,6 +875,7 @@ export async function setStopPlace(visitId: string, own: string | null, pick: Pl
   await unlockDaysOf(client, visitId);
   const { error } = await client.rpc("set_stop_place", { p_visit: visitId, p_own: name, p_place: pick.kind === "mine" ? pick.id : null, p_real: real });
   if (error) return fail(/set_stop_place|place_for_real/.test(error.message) ? NEEDS_047 : error.message);
+  await learnMisread(visitId);
   refresh();
   return { ok: true };
 }
