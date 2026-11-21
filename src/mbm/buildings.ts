@@ -121,3 +121,46 @@ function area(o: Outline) {
   }
   return Math.abs(s / 2);
 }
+
+// The closest point of a building's outline to a spot (the spot itself when it's inside).
+export function closestOnOutline(o: Outline, lat: number, lng: number): [number, number] {
+  if (contains(o, lat, lng)) return [lat, lng];
+  let best: [number, number] = o[0];
+  let bestM = Infinity;
+  for (let i = 0, j = o.length - 1; i < o.length; j = i++) {
+    const a = xy(o[i], lat, lng);
+    const b = xy(o[j], lat, lng);
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    const l = dx * dx + dy * dy;
+    const u = l ? Math.max(0, Math.min(1, -(a.x * dx + a.y * dy) / l)) : 0;
+    const m = Math.hypot(a.x + u * dx, a.y + u * dy);
+    if (m < bestM) {
+      bestM = m;
+      best = [o[i][0] + u * (o[j][0] - o[i][0]), o[i][1] + u * (o[j][1] - o[i][1])];
+    }
+  }
+  return best;
+}
+
+// Next to each other, judged by buildings rather than a distance: nothing but open ground
+// (streets, sidewalks, lawns) between a and b, other than the buildings they're in. Across Lake
+// St from the Extension Bldg to Theory: yes. Across campus: no, buildings in the way.
+// (Asks OpenStreetMap for the buildings the straight line touches. true / false; undefined:
+// couldn't ask right now.)
+export async function nothingBetween(a: [number, number], b: [number, number]): Promise<boolean | undefined> {
+  const f = (s: [number, number]) => `${s[0].toFixed(6)},${s[1].toFixed(6)}`;
+  // (3 is plenty: the two ends' own buildings, and one more means something's in the way.)
+  const q = `[out:json][timeout:8];(way(around:1,${f(a)},${f(b)})[building];relation(around:1,${f(a)},${f(b)})[building];);out geom 3;`;
+  for (const server of SERVERS) {
+    try {
+      const res = await fetch(`${server}?data=${encodeURIComponent(q)}`, { signal: AbortSignal.timeout(9000), cache: "no-store" });
+      if (!res.ok) continue;
+      const body = (await res.json()) as { remark?: string; elements?: Element[] };
+      if (body.remark || !Array.isArray(body.elements)) continue;
+      const own = (s: [number, number]) => (o: Outline) => contains(o, s[0], s[1]) || edgeDistance(o, s[0], s[1]) <= 1;
+      return body.elements.every((e) => shapesOf(e).some((o) => o.length >= 4 && (own(a)(o) || own(b)(o))));
+    } catch {}
+  }
+  return undefined;
+}

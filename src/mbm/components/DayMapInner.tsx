@@ -19,6 +19,7 @@ import { despike, makeTrails, smooth } from "@/mbm/trails";
 import { buildingAt, nearOutline } from "@/mbm/buildings";
 import { isMoving } from "@/mbm/moving";
 import { fitsTrusted } from "@/mbm/routefit";
+import { cantMoveTo, pickIsNear } from "@/mbm/nearcheck";
 
 // The stretch you're hovering on the day bar. moving: light up the route (Commute); still: the
 // stop you were at (everything else); any: both (untracked time).
@@ -201,6 +202,8 @@ export default function DayMapInner({
           const v = moving;
           setMoving(null);
           runMove(async () => {
+            const no = await cantMoveTo(v.id, at.lat, at.lng);
+            if (no) return setMoveNote(no);
             const res = await moveStop(v.id, at.lat, at.lng);
             setMoveNote(res.ok ? null : res.message);
             if (res.ok && v.placeId) lookedUp.delete(v.placeId); // (its building is looked up again at the new spot)
@@ -334,7 +337,7 @@ export default function DayMapInner({
       </Map>
       {moving && (
         <div className="absolute inset-x-3 top-3 flex items-center justify-between gap-3 rounded-control bg-accent px-3 py-2 text-sm text-accent-ink shadow-lg">
-          <span>Click where {moving.place ?? moving.auto_name ?? "this stop"} really is</span>
+          <span>Click where {moving.place ?? moving.auto_name ?? "this stop"} really is (in or next to the building your phone had you in)</span>
           <button type="button" onClick={() => setMoving(null)} className="rounded-control px-2 py-0.5 font-semibold hover:bg-accent-ink/10">
             Cancel
           </button>
@@ -1167,6 +1170,9 @@ function NameStop({ visit, onDone, onMove }: { visit: Visit; onDone: () => void;
     setMessage(null);
     run(async () => {
       const pick: PlacePick | null = real ?? (visit.placeId ? { kind: "mine", id: visit.placeId } : null);
+      // (A newly picked place: only one next to where the phone had you.)
+      const far = real ? await pickIsNear({ visitId: visit.id }, real) : null;
+      if (far) return setMessage(far);
       const res = await setStopPlace(visit.id, own.trim() !== startOwn.trim() || real ? own : null, pick);
       if (res.ok) onDone();
       else setMessage(res.message);

@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { pickIsNear } from "@/mbm/nearcheck";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useTransition } from "react";
 import {
@@ -579,15 +580,11 @@ function NameStopRow({
           type="button"
           disabled={pending || (!pick && !own.trim())}
           onClick={() =>
-            start(async () =>
-              done(
-                await setStopPlace(
-                  stop.id,
-                  own.trim() ? own : null,
-                  pick as PlacePick | null,
-                ),
-              ),
-            )
+            start(async () => {
+              // (Only a place next to where the phone had you.)
+              const far = await pickIsNear({ visitId: stop.id }, pick as PlacePick | null);
+              done(far ? { ok: false, message: far } : await setStopPlace(stop.id, own.trim() ? own : null, pick as PlacePick | null));
+            })
           }
           className="h-11 rounded-control bg-accent px-6 font-semibold text-accent-ink disabled:opacity-50"
         >

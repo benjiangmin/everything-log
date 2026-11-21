@@ -1,7 +1,7 @@
 "use server";
 
 import { googleStatus, syncCalendar } from "@/mbm/google";
-import { buildingAt } from "@/mbm/buildings";
+import { buildingAt, contains } from "@/mbm/buildings";
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
@@ -291,8 +291,71 @@ export async function setEntryPlace(blockId: string, placeId: string | null): Pr
   if (error) return fail(/set_entry_place/.test(error.message) ? "Run supabase/minute-by-minute/009_entry_places.sql first." : error.message);
   // The walk to / from the stops next to it becomes a Commute (010; skipped if not run yet).
   if (placeId) await client.rpc("link_entry_stops", { p_block_id: blockId });
+  if (placeId) {
+    // Your choice stays: the phone's next sync doesn't work these stops out again (it used to put
+    // the Extension Bldg's Book Store back). And a spot the phone misread is learned (054).
+    const { data: b } = await client.from("blocks").select("started_at, ended_at").eq("id", blockId).maybeSingle();
+    if (b) {
+      const blk = b as { started_at: string; ended_at: string | null };
+      let q = client.from("visits").select("id").eq("place_id", placeId).gt("departed_at", blk.started_at);
+      if (blk.ended_at) q = q.lt("arrived_at", blk.ended_at);
+      const { data: vs } = await q;
+      const { data: open } = await client.from("visits").select("id").eq("place_id", placeId).is("departed_at", null).lt("arrived_at", blk.ended_at ?? "infinity");
+      const ids = [...new Set([...(vs ?? []), ...(open ?? [])].map((v) => (v as { id: string }).id))];
+      if (ids.length) {
+        await client.from("visits").update({ pinned: true }).in("id", ids);
+        for (const id of ids) await learnMisread(id);
+      }
+    }
+  }
   refresh();
   return { ok: true };
+}
+
+// Where your phone really had you for a stop, or for the stops during an entry: the middle of
+// its still dots (a stop set to a place shows the place's spot, not the phone's). For checking
+// a place you pick is next to it (nearcheck.ts). The place: its spot and building.
+export async function nearCheckInfo(
+  of: { visitId?: string; blockId?: string },
+  place: { placeId?: string; lat?: number; lng?: number },
+): Promise<{ spots: [number, number][]; target: { lat: number; lng: number; outline: [number, number][] | null } | null }> {
+  const client = await mbm();
+  let target: { lat: number; lng: number; outline: [number, number][] | null } | null = null;
+  if (place.placeId && isUuid(place.placeId)) {
+    const { data } = await client.from("places").select("lat, lng, outline").eq("id", place.placeId).maybeSingle();
+    if (data) target = data as { lat: number; lng: number; outline: [number, number][] | null };
+  } else if ([place.lat, place.lng].every((v) => typeof v === "number" && Number.isFinite(v))) {
+    target = { lat: place.lat!, lng: place.lng!, outline: null };
+  }
+  type V = { id: string; arrived_at: string; departed_at: string | null; lat: number; lng: number; place_id: string | null };
+  let stops: V[] = [];
+  if (of.visitId && isUuid(of.visitId)) {
+    const { data } = await client.from("visits").select("id, arrived_at, departed_at, lat, lng, place_id").eq("id", of.visitId);
+    stops = (data ?? []) as V[];
+  } else if (of.blockId && isUuid(of.blockId)) {
+    const { data: b } = await client.from("blocks").select("started_at, ended_at").eq("id", of.blockId).maybeSingle();
+    if (b) {
+      const blk = b as { started_at: string; ended_at: string | null };
+      let q = client.from("visits").select("id, arrived_at, departed_at, lat, lng, place_id").or(`departed_at.is.null,departed_at.gt.${blk.started_at}`);
+      if (blk.ended_at) q = q.lt("arrived_at", blk.ended_at);
+      stops = ((await q).data ?? []) as V[];
+    }
+  }
+  const spots: [number, number][] = [];
+  for (const v of stops) {
+    const { data: dots } = await client
+      .from("points")
+      .select("lat, lng")
+      .gte("at", v.arrived_at)
+      .lte("at", v.departed_at ?? new Date().toISOString())
+      .lte("speed_mps", 0.8)
+      .limit(2000);
+    const d = (dots ?? []) as { lat: number; lng: number }[];
+    const mid = (xs: number[]) => [...xs].sort((a, b) => a - b)[Math.floor(xs.length / 2)];
+    if (d.length >= 3) spots.push([mid(d.map((p) => p.lat)), mid(d.map((p) => p.lng))]);
+    else if (!v.place_id) spots.push([v.lat, v.lng]); // (no dots: where the phone put it, unless that's a place's spot)
+  }
+  return { spots, target };
 }
 
 // A new place (picked on the map), set on the entry.
@@ -305,8 +368,9 @@ export async function newPlaceForEntry(blockId: string, name: string, lat: numbe
   return setEntryPlace(blockId, data as string);
 }
 
-// Move a stop to where it really was. If it's one of your named places, the place moves too (and
-// every stop there), so it's right everywhere.
+// Move a stop to where it really was: only this stop, never the place (its other stops stay).
+// Only next to where the phone had you (checked before this, in nearcheck.ts), like dragging a
+// pickup spot. Dropped outside its place's building: it's not that place any more.
 export async function moveStop(visitId: string, lat: number, lng: number): Promise<Result> {
   if (!isUuid(visitId)) return fail("That stop is gone.");
   if (![lat, lng].every(Number.isFinite) || Math.abs(lat) > 90 || Math.abs(lng) > 180) return fail("Click a spot on the map.");
@@ -316,22 +380,20 @@ export async function moveStop(visitId: string, lat: number, lng: number): Promi
   if (error) return fail(error.message);
   if (!v) return fail("That stop is gone.");
   const placeId = (v as { place_id: string | null }).place_id;
-  const moved = placeId
-    ? await Promise.all([
-        client.from("places").update({ lat, lng }).eq("id", placeId),
-        client.from("visits").update({ lat, lng }).eq("place_id", placeId),
-      ]).then((rs) => rs.find((r) => r.error)?.error ?? null)
-    : (await client.from("visits").update({ lat, lng }).eq("id", visitId)).error;
-  if (moved) return fail(moved.message);
-  // So the phone's next update doesn't move it back (016_locokit.sql; fine if that's not run yet).
-  await client.from("visits").update({ pinned: true }).eq("id", visitId);
-  // Moved: its building is looked up again at the new spot (021_buildings.sql; fine if not run).
+  let stays = false;
   if (placeId) {
-    await client.from("places").update({ outline: null, outline_checked: false }).eq("id", placeId);
-    await client.from("visits").update({ outline: null, outline_checked: false }).eq("place_id", placeId);
-  } else {
-    await client.from("visits").update({ outline: null, outline_checked: false }).eq("id", visitId);
+    const { data: pl } = await client.from("places").select("outline").eq("id", placeId).maybeSingle();
+    const o = (pl as { outline: [number, number][] | null } | null)?.outline;
+    stays = !!o && o.length >= 3 && contains(o, lat, lng);
   }
+  // (Pinned: so the phone's next update doesn't move it back. Its building is looked up again.)
+  const moved = (
+    await client
+      .from("visits")
+      .update({ lat, lng, pinned: true, outline: null, outline_checked: false, ...(placeId && !stays ? { place_id: null, auto_name: null } : {}) })
+      .eq("id", visitId)
+  ).error;
+  if (moved) return fail(moved.message);
   refresh();
   return { ok: true };
 }

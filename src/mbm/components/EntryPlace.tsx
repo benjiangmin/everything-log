@@ -4,6 +4,7 @@ import dynamic from "next/dynamic";
 import { useEffect, useState, useTransition } from "react";
 import { entryPlaceInfo, newPlaceForEntry, setEntryPlace, setEntryPlacePick, type EntryPlaceInfo, type PlaceLite } from "@/app/mbm/actions";
 import PlaceSearch, { type Found } from "./PlaceSearch";
+import { notNextTo, pickIsNear } from "@/mbm/nearcheck";
 import { metres } from "@/mbm/trips";
 
 const PickOnMap = dynamic(() => import("./PlacePickerMap"), {
@@ -44,6 +45,9 @@ export default function EntryPlace({ blockId }: { blockId: string }) {
   function choose(placeId: string | null) {
     setMessage(null);
     run(async () => {
+      // (Only a place next to where the phone had you then: it's what the stops become.)
+      const far = placeId ? await notNextTo({ blockId }, { placeId }) : null;
+      if (far) return setMessage(far);
       const res = await setEntryPlace(blockId, placeId);
       if (res.ok) await saved();
       else setMessage(res.message);
@@ -53,6 +57,8 @@ export default function EntryPlace({ blockId }: { blockId: string }) {
   function pick(p: Found) {
     setMessage(null);
     run(async () => {
+      const far = await pickIsNear({ blockId }, p);
+      if (far) return setMessage(far);
       const res = await setEntryPlacePick(blockId, p);
       if (res.ok) await saved();
       else setMessage(res.message);
@@ -62,6 +68,8 @@ export default function EntryPlace({ blockId }: { blockId: string }) {
   function create(name: string, lat: number, lng: number) {
     setMessage(null);
     run(async () => {
+      const far = await notNextTo({ blockId }, { lat, lng }, name);
+      if (far) return setMessage(far);
       const res = await newPlaceForEntry(blockId, name, lat, lng);
       if (res.ok) await saved();
       else setMessage(res.message);
