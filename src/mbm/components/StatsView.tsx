@@ -54,7 +54,7 @@ export default function StatsView({
         <Tile label="Distance" value={miles(stats.distance_m)} note="from your route dots" />
       </section>
 
-      <div className="grid gap-8 lg:grid-cols-2">
+      <div className="flex flex-col gap-8">
         <TimeSpent activities={stats.activities} elapsed={elapsed} initial={query} savedPins={pins} meta={meta} range={range} />
         <Apps apps={stats.apps} color={RANGE_COLOR[range]} />
       </div>
@@ -224,7 +224,6 @@ function TimeSpent({
     return `${Math.round((seconds / 60 / target) * 100)}% of ${t} goal`;
   };
   const [q, setQ] = useState(initial);
-  const [all, setAll] = useState(false);
   const [sort, setSort] = useState<Sort>("most");
   const [pins, setPins] = useState<string[]>(savedPins ?? []);
   const [problem, setProblem] = useState<string | null>(null);
@@ -284,7 +283,45 @@ function TimeSpent({
     items.push(...cats.values());
     items.sort((x, y) => sorter(x.kind === "job" ? x.a : x, y.kind === "job" ? y.a : y));
   }
-  const shownRest = query || all ? items : items.slice(0, Math.max(0, LIST - pinned.length));
+  // The circle: everything (pinned too, so the shares add up), a category as one slice. Over a
+  // month or a year, the bits under 5% go together as Other (click it for what's in it).
+  const slices: Slice[] = [];
+  {
+    const cats = new Map<string, Slice>();
+    for (const a of activities) {
+      if (a.seconds <= 0) continue;
+      const id = metaOf(a.name)?.category;
+      const c = id ? meta.categories[id] : undefined;
+      if (!id || !c) {
+        slices.push({ key: `job:${key(a.name)}`, name: a.name, color: a.color ?? "#cdbca9", seconds: a.seconds, kind: "job", note: goalNote(a.seconds, metaOf(a.name)?.goal, metaOf(a.name)?.per) });
+        continue;
+      }
+      let g = cats.get(id);
+      if (!g) cats.set(id, (g = { key: `cat:${id}`, name: c.name, color: c.color, seconds: 0, kind: "cat", jobs: [], goal: c.goal, per: c.per }));
+      g.seconds += a.seconds;
+      g.jobs!.push({ name: a.name, color: a.color ?? c.color, seconds: a.seconds });
+    }
+    for (const g of cats.values()) slices.push({ ...g, note: goalNote(g.seconds, g.goal, g.per) });
+  }
+  const pieTotal = slices.reduce((t, x) => t + x.seconds, 0);
+  slices.sort((x, y) => y.seconds - x.seconds);
+  if (range === "month" || range === "year") {
+    const small = slices.filter((x) => pieTotal > 0 && x.seconds / pieTotal < 0.05);
+    if (small.length >= 2) {
+      const other: Slice = {
+        key: "other",
+        name: "Other",
+        color: "#b9ab9b",
+        seconds: small.reduce((t, x) => t + x.seconds, 0),
+        kind: "other",
+        jobs: small.flatMap((x) => (x.kind === "cat" ? x.jobs!.map((j) => ({ ...j, from: x.name })) : [{ name: x.name, color: x.color, seconds: x.seconds }])).sort((a, b) => b.seconds - a.seconds),
+      };
+      const big = slices.filter((x) => !small.includes(x));
+      slices.length = 0;
+      slices.push(...big, other);
+    }
+  }
+  const shownRest = items; // (only listed like this while searching: otherwise the circle)
   const max = Math.max(0, ...pinned.map((a) => a.seconds), ...items.map((i) => (i.kind === "job" ? i.a.seconds : i.seconds)));
   const total = found.reduce((s, a) => s + a.seconds, 0);
   const share = (s: number) => (elapsed > 0 ? ` · ${Math.round((s / elapsed) * 100)}% of the time` : "");
@@ -376,7 +413,22 @@ function TimeSpent({
           )}
         </p>
       )}
-      {found.length === 0 && !query ? (
+      {!query && (pinned.length > 0 || slices.length > 0) ? (
+        <>
+          {pinned.length > 0 && (
+            <ul className="mb-5">
+              {pinned.map((a) => (
+                <Row key={`pin-${a.name}`} color={a.color} label={a.name} seconds={a.seconds} max={max} pin={pinFor(a.name)} note={goalNote(a.seconds, metaOf(a.name)?.goal, metaOf(a.name)?.per)} />
+              ))}
+            </ul>
+          )}
+          {slices.length > 0 ? (
+            <Pie slices={slices} total={pieTotal} sort={sort} pinFor={pinFor} />
+          ) : (
+            <p className="text-sm text-muted">Nothing else tracked yet.</p>
+          )}
+        </>
+      ) : found.length === 0 && !query ? (
         <p className="text-sm text-muted">Nothing tracked yet.</p>
       ) : (
         <ul>
@@ -420,16 +472,6 @@ function TimeSpent({
           )}
         </ul>
       )}
-      {!query && !all && items.length > shownRest.length && (
-        <button type="button" onClick={() => setAll(true)} className="mt-2 text-sm text-muted underline-offset-4 hover:text-ink hover:underline">
-          Show all {found.length}
-        </button>
-      )}
-      {!query && all && items.length > LIST && (
-        <button type="button" onClick={() => setAll(false)} className="mt-2 text-sm text-muted underline-offset-4 hover:text-ink hover:underline">
-          Show fewer
-        </button>
-      )}
       {hidden.length > 0 && !query && (
         <p className="mt-3 text-xs text-muted">
           Not shown: {hidden.map((a) => a.name).join(", ")} (
@@ -472,4 +514,191 @@ function sharedStart(a: string, b: string) {
   let i = 0;
   while (i < a.length && i < b.length && a[i] === b[i]) i++;
   return i;
+}
+
+// ---------- The circle ----------
+type Slice = {
+  key: string;
+  name: string;
+  color: string;
+  seconds: number;
+  kind: "job" | "cat" | "other";
+  note?: string;
+  jobs?: { name: string; color: string; seconds: number; from?: string }[]; // (a category's, or what's in Other)
+  goal?: number | null;
+  per?: "day" | "week";
+};
+
+const pctOf = (s: number, total: number) => {
+  const p = total > 0 ? (s / total) * 100 : 0;
+  return p > 0 && p < 1 ? "<1%" : `${Math.round(p)}%`;
+};
+
+// A ring of everything tracked, each slice its share, with the list beside it. Pointing at a
+// slice or a row lights up both; a category or Other opens to show what's in it.
+function Pie({
+  slices,
+  total,
+  sort,
+  pinFor,
+}: {
+  slices: Slice[];
+  total: number;
+  sort: Sort;
+  pinFor: (name: string) => { pinned: boolean; onToggle: () => void } | undefined;
+}) {
+  const [lit, setLit] = useState<string | null>(null);
+  const [open, setOpen] = useState<Set<string>>(new Set());
+  const [all, setAll] = useState(false);
+  const toggle = (k: string) =>
+    setOpen((set) => {
+      const next = new Set(set);
+      if (next.has(k)) next.delete(k);
+      else next.add(k);
+      return next;
+    });
+
+  // The ring (always biggest first, clockwise from the top), a hair of gap between slices.
+  const R = 80;
+  const W = 22;
+  const C = 100;
+  const gap = slices.length > 1 ? 0.012 : 0;
+  const fracs = slices.map((sl) => (total > 0 ? sl.seconds / total : 0));
+  const starts = fracs.map((_, i) => fracs.slice(0, i).reduce((t, f) => t + f, 0));
+  const arcs = slices.map((sl, i) => {
+    const a0 = starts[i] + gap / 2;
+    const a1 = Math.max(starts[i] + fracs[i] - gap / 2, a0 + 0.002);
+    return { sl, a0, a1 };
+  });
+  const point = (f: number, r: number) => [C + r * Math.sin(f * 2 * Math.PI), C - r * Math.cos(f * 2 * Math.PI)];
+  const arc = (a0: number, a1: number, r: number) => {
+    if (a1 - a0 >= 0.999) return `M ${C} ${C - r} A ${r} ${r} 0 1 1 ${C - 0.01} ${C - r}`;
+    const [x0, y0] = point(a0, r);
+    const [x1, y1] = point(a1, r);
+    return `M ${x0} ${y0} A ${r} ${r} 0 ${a1 - a0 > 0.5 ? 1 : 0} 1 ${x1} ${y1}`;
+  };
+  const shown = lit ? slices.find((x) => x.key === lit) : undefined;
+
+  // The list: in the order picked up top (Other always last).
+  const other = slices.find((x) => x.kind === "other");
+  const listed = slices
+    .filter((x) => x.kind !== "other")
+    .sort((a, b) => (sort === "az" ? a.name.localeCompare(b.name) : sort === "least" ? a.seconds - b.seconds : b.seconds - a.seconds));
+  if (other) listed.push(other);
+  const rows = all ? listed : listed.slice(0, LIST);
+
+  return (
+    <div className="grid grid-cols-[minmax(0,1fr)] items-start gap-6 sm:grid-cols-[13rem_minmax(0,1fr)] sm:gap-10">
+      <div className="relative mx-auto aspect-square w-52 sm:sticky sm:top-6">
+        <svg viewBox="0 0 200 200" className="size-full" role="img" aria-label="Share of tracked time">
+          <circle cx={C} cy={C} r={R} fill="none" stroke="var(--surface)" strokeWidth={W} />
+          {arcs.map(({ sl, a0, a1 }) => (
+            <path
+              key={sl.key}
+              d={arc(a0, a1, R)}
+              fill="none"
+              stroke={sl.color}
+              strokeWidth={lit === sl.key ? W + 6 : W}
+              strokeLinecap="butt"
+              opacity={lit && lit !== sl.key ? 0.3 : 1}
+              className="cursor-pointer transition-[opacity,stroke-width] duration-150"
+              onPointerEnter={() => setLit(sl.key)}
+              onPointerLeave={() => setLit(null)}
+              onClick={() => sl.kind !== "job" && toggle(sl.key)}
+            >
+              <title>{`${sl.name}: ${hm(sl.seconds)} (${pctOf(sl.seconds, total)})`}</title>
+            </path>
+          ))}
+        </svg>
+        <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center px-10 text-center">
+          {shown ? (
+            <>
+              <span className="line-clamp-2 text-xs leading-tight text-muted">{shown.name}</span>
+              <span className="num mt-0.5 font-display text-xl font-semibold tracking-tight">{hm(shown.seconds)}</span>
+              <span className="num text-xs text-muted">{pctOf(shown.seconds, total)}</span>
+            </>
+          ) : (
+            <>
+              <span className="num font-display text-2xl font-semibold tracking-tight">{hm(total)}</span>
+              <span className="text-xs text-muted">tracked</span>
+            </>
+          )}
+        </div>
+      </div>
+
+      <div className="min-w-0">
+        <ul className="flex flex-col">
+          {rows.map((sl) => {
+            const opens = sl.kind !== "job";
+            const isOpen = open.has(sl.key);
+            const pin = sl.kind === "job" ? pinFor(sl.name) : undefined;
+            const body = (
+              <span className="flex items-baseline gap-2.5 text-sm">
+                <span aria-hidden="true" className="size-2.5 shrink-0 translate-y-[-1px] self-center rounded-full" style={{ background: sl.color }} />
+                <span className="min-w-0 flex-1 truncate">
+                  {sl.name}
+                  {opens && (
+                    <span className="ml-1.5 text-xs text-muted">
+                      {sl.jobs!.length} {sl.jobs!.length === 1 ? "job" : "jobs"} {isOpen ? "▾" : "▸"}
+                    </span>
+                  )}
+                </span>
+                {sl.note && <span className="hidden text-xs text-muted sm:inline">{sl.note}</span>}
+                <span className="num w-10 text-right text-xs text-muted">{pctOf(sl.seconds, total)}</span>
+                <span className="num w-[4.75rem] whitespace-nowrap text-right font-semibold">{hm(sl.seconds)}</span>
+              </span>
+            );
+            return (
+              <li key={sl.key} onPointerEnter={() => setLit(sl.key)} onPointerLeave={() => setLit(null)} className="group">
+                <div className={`-mx-2 flex items-center rounded-control transition-colors ${lit === sl.key ? "bg-surface/80" : ""}`}>
+                  {opens ? (
+                    <button type="button" onClick={() => toggle(sl.key)} aria-expanded={isOpen} className="min-w-0 flex-1 px-2 py-2 text-left">
+                      {body}
+                    </button>
+                  ) : (
+                    <div className="min-w-0 flex-1 px-2 py-2">{body}</div>
+                  )}
+                  {pin ? (
+                    <button
+                      type="button"
+                      onClick={pin.onToggle}
+                      aria-label={pin.pinned ? `Unpin ${sl.name}` : `Pin ${sl.name} to the top`}
+                      title={pin.pinned ? "Unpin" : "Pin to the top"}
+                      className={`grid size-8 shrink-0 place-items-center rounded-full transition hover:bg-surface hover:text-ink focus-visible:opacity-100 ${
+                        pin.pinned ? "text-ink" : "text-muted opacity-0 group-hover:opacity-100"
+                      }`}
+                    >
+                      <PinIcon filled={pin.pinned} />
+                    </button>
+                  ) : (
+                    <span className="size-8 shrink-0" />
+                  )}
+                </div>
+                {opens && isOpen && (
+                  <ul className="mb-1 ml-1 border-l border-line pl-4">
+                    {sl.jobs!.map((j) => (
+                      <li key={`${j.from ?? ""}${j.name}`} className="flex items-baseline gap-2.5 py-1 pr-10 text-sm">
+                        <span aria-hidden="true" className="size-2 shrink-0 self-center rounded-full" style={{ background: j.color }} />
+                        <span className="min-w-0 flex-1 truncate">
+                          {j.name}
+                          {j.from && <span className="ml-1.5 text-xs text-muted">in {j.from}</span>}
+                        </span>
+                        <span className="num w-10 text-right text-xs text-muted">{pctOf(j.seconds, total)}</span>
+                        <span className="num w-[4.75rem] whitespace-nowrap text-right text-muted">{hm(j.seconds)}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+        {listed.length > LIST && (
+          <button type="button" onClick={() => setAll((v) => !v)} className="mt-2 text-sm text-muted underline-offset-4 hover:text-ink hover:underline">
+            {all ? "Show fewer" : `Show all ${listed.length}`}
+          </button>
+        )}
+      </div>
+    </div>
+  );
 }
