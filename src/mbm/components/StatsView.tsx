@@ -215,10 +215,10 @@ function TimeSpent({
   const hidden = everything.filter((a) => metaOf(a.name)?.hidden);
   const activities = everything.filter((a) => !metaOf(a.name)?.hidden);
   const [openCats, setOpenCats] = useState<Set<string>>(new Set());
-  // A goal per day shows on a day (and ×7 on a week); per week, on a week.
+  // A goal shows only for its own span: a per-day goal on a day, a per-week goal on a week.
   const goalNote = (seconds: number, goal: number | null | undefined, per: "day" | "week" = "week") => {
     if (!goal) return undefined;
-    const target = range === "day" ? (per === "day" ? goal : null) : range === "week" ? (per === "day" ? goal * 7 : goal) : null;
+    const target = (range === "day" && per === "day") || (range === "week" && per === "week") ? goal : null;
     if (!target) return undefined;
     const t = target < 60 ? `${target}m` : target % 60 ? `${(target / 60).toFixed(1)}h` : `${target / 60}h`;
     return `${Math.round((seconds / 60 / target) * 100)}% of ${t} goal`;
