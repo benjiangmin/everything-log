@@ -13,10 +13,10 @@ type Since = "last" | "now" | "custom";
 //   + Start / the sidebar: what's already running keeps going (stop each one from the page).
 //   Switch (switching): what's running stops, and the new thing takes over from that moment.
 // By default it starts "since last entry": when the last entry ended (switching: now).
-export default function NowPanel({ switching = false, onClose }: { switching?: boolean; onClose: () => void }) {
+export default function NowPanel({ switching = false, initial = "", onClose }: { switching?: boolean; initial?: string; onClose: () => void }) {
   const [info, setInfo] = useState<NowInfo | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [text, setText] = useState("");
+  const [text, setText] = useState(initial);
   const [since, setSince] = useState<Since>("last");
   const [custom, setCustom] = useState("");
   const [pending, run] = useTransition();

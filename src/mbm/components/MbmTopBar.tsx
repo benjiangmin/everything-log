@@ -7,6 +7,7 @@ import { signOut } from "@/app/mbm/actions";
 import TopSearch from "./TopSearch";
 import Avatar from "./Avatar";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { atLabel, useReflectOpen } from "@/mbm/reflectAt";
 
 // Minute by Minute's top bar: its name, the three pages, and signing out. `owner`: you (signed in
 // to the everything-log on this browser) also get a link back to it; nobody else does.
@@ -62,6 +63,7 @@ export default function MbmTopBar({
                 {t.label}
               </Link>
             ))}
+            <ReflectTab active={active("/mbm/reflect")} />
           </nav>
         )}
         {signedIn && (
@@ -92,6 +94,32 @@ export default function MbmTopBar({
         </div>
       </div>
     </header>
+  );
+}
+
+// Reflect: a walk back through today. Greyed out (not a link) until the evening, at the time set
+// on Your account (11 PM unless you change it).
+function ReflectTab({ active }: { active: boolean }) {
+  const { open, at } = useReflectOpen();
+  const look = "flex items-center gap-1.5 rounded-control px-3 py-2 text-sm font-semibold transition-colors";
+  const moon = (
+    <svg aria-hidden="true" width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
+      <path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5Z" />
+    </svg>
+  );
+  if (!open && !active) {
+    return (
+      <span aria-disabled="true" title={`Reflect opens at ${atLabel(at)}`} className={`${look} cursor-not-allowed text-muted opacity-45`}>
+        {moon}
+        Reflect
+      </span>
+    );
+  }
+  return (
+    <Link href="/mbm/reflect" aria-current={active ? "page" : undefined} className={`${look} ${active ? "bg-accent text-accent-ink" : "reflect-glow text-ink hover:bg-surface"}`}>
+      {moon}
+      Reflect
+    </Link>
   );
 }
 

@@ -48,7 +48,11 @@ export default function DayMapInner({
   dayKey,
   finished = false,
   locked = null,
+  walk = null,
+  follow = null,
 }: {
+  walk?: { start: number; end: number; t: number; color: string } | null; // (Reflect) someone walking the route: where they are at time t
+  follow?: { top: number; bottom: number } | null; // (Reflect) the camera goes to what's lit up, clear of what covers the map
   dayKey?: string;
   finished?: boolean; // the day's over: once drawn, its routes are saved (034_locked_days.sql)
   locked?: LockedTrip[] | null; // its saved routes: drawn as they are, nothing worked out again
@@ -197,7 +201,7 @@ export default function DayMapInner({
 
   return (
     <div ref={box} className="relative size-full" onMouseLeave={() => pointed && point(null)}>
-    {all.length > 0 && <WholeDay onClick={() => setRefit((n) => n + 1)} />}
+    {all.length > 0 && !follow && <WholeDay onClick={() => setRefit((n) => n + 1)} />}
     <APIProvider apiKey={KEY}>
       <Map
         styles={stylesFor(zoom, dark)}
@@ -234,7 +238,9 @@ export default function DayMapInner({
         }}
         className="size-full"
       >
-        <FitTo spots={all} top={topCover} again={refit} />
+        {!follow && <FitTo spots={all} top={topCover} again={refit} />}
+        {follow && <Follow spots={followSpots(lit, visits, trips, all)} cover={follow} />}
+        {walk && <Walker trips={trips} walk={walk} />}
         <PointerTrack trips={trips} onHit={(hit, e) => point(hit.length ? { trips: hit, stops: [], ...where(e) } : null)} />
         {showDots && <Dots points={outdoorDots} tz={tz} />}
         {/* The building you were in, lit up while you hover the stop (here or on the day bar). */}
@@ -371,7 +377,7 @@ export default function DayMapInner({
         </p>
       )}
       {nothingLit && !moving && !pin && (
-        <p className="pointer-events-none absolute left-3 top-3 rounded-full bg-paper/95 px-3 py-1 text-xs text-muted shadow-sm ring-1 ring-line">
+        <p style={follow ? { top: follow.top } : undefined} className="pointer-events-none absolute left-3 top-3 rounded-full bg-paper/95 px-3 py-1 text-xs text-muted shadow-sm ring-1 ring-line">
           {focus?.kind === "moving" ? "No route recorded then" : "No location recorded then"}
         </p>
       )}
@@ -1256,6 +1262,92 @@ function ShowSpot({ at }: { at: Spot }) {
     if (b && !b.contains(at)) map.panTo(at);
   }, [map, at]);
   return null;
+}
+
+// (Reflect) What the camera should show: what's lit up (the stops, the routes), else the whole day.
+function followSpots(lit: { trip: Set<string>; stops: Set<string> } | null, visits: Visit[], trips: Trip[], all: Spot[]): Spot[] {
+  if (!lit) return all;
+  const out: Spot[] = [];
+  for (const v of visits) if (lit.stops.has(v.id)) out.push({ lat: v.lat, lng: v.lng });
+  for (const t of trips) if (lit.trip.has(t.key)) for (const p of t.pieces) for (const s of p.path) out.push(s);
+  return out.length ? out : all;
+}
+
+// (Reflect) The camera glides to the spots: one place, close in (a block or so around it); several,
+// all of them, clear of the bubbles over the top and bottom of the map.
+function Follow({ spots, cover }: { spots: Spot[]; cover: { top: number; bottom: number } }) {
+  const map = useMap();
+  const core = useMapsLibrary("core");
+  const key = spots.length ? `${spots.length}:${spots[0].lat.toFixed(5)},${spots[0].lng.toFixed(5)}:${spots.at(-1)!.lat.toFixed(5)}` : "";
+  useEffect(() => {
+    if (!map || !core || !spots.length) return;
+    const pad = { top: cover.top + 40, bottom: cover.bottom + 40, left: 60, right: 60 };
+    const bounds = new core.LatLngBounds();
+    for (const s of spots) bounds.extend(s);
+    const ne = bounds.getNorthEast();
+    const sw = bounds.getSouthWest();
+    const small = metres({ lat: ne.lat(), lng: ne.lng() }, { lat: sw.lat(), lng: sw.lng() }) < 120;
+    if (small) {
+      // One place: centred in the clear part of the map, at building-and-neighbours zoom.
+      const c = bounds.getCenter();
+      if (Math.abs((map.getZoom() ?? 17) - 17) > 0.5) map.setZoom(17);
+      // (The map's middle sits a little south of it, by half of how much more the bottom is covered.)
+      const perPx = (156543.03 * Math.cos((c.lat() * Math.PI) / 180)) / 2 ** 17;
+      map.panTo({ lat: c.lat() - (((cover.bottom - cover.top) / 2) * perPx) / 111_320, lng: c.lng() });
+      return;
+    }
+    map.fitBounds(bounds, pad);
+    const once = core.event.addListenerOnce(map, "idle", () => {
+      if ((map.getZoom() ?? 0) > 18) map.setZoom(18);
+    });
+    return () => once.remove();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only when what's shown changes
+  }, [map, core, key, cover.top, cover.bottom]);
+  return null;
+}
+
+// (Reflect) Someone walking a route: a glowing dot at time t, with a fading trail behind it.
+function Walker({ trips, walk }: { trips: Trip[]; walk: { start: number; end: number; t: number; color: string } }) {
+  const on = trips.filter((x) => x.end > walk.start && x.start < walk.end).sort((a, b) => a.start - b.start);
+  if (!on.length) return null;
+  const at = (t: number) => {
+    const trip = on.find((x) => t <= x.end) ?? on.at(-1)!;
+    const path = trip.pieces.flatMap((p) => p.path);
+    if (path.length < 2) return path[0] ?? null;
+    const frac = Math.min(1, Math.max(0, (t - trip.start) / Math.max(1, trip.end - trip.start)));
+    const steps = path.slice(1).map((p, i) => metres(path[i], p));
+    let left = frac * steps.reduce((a, b) => a + b, 0);
+    for (let i = 0; i < steps.length; i++) {
+      if (left <= steps[i] || i === steps.length - 1) {
+        const k = steps[i] ? Math.min(1, left / steps[i]) : 0;
+        return { lat: path[i].lat + (path[i + 1].lat - path[i].lat) * k, lng: path[i].lng + (path[i + 1].lng - path[i].lng) * k };
+      }
+      left -= steps[i];
+    }
+    return path.at(-1)!;
+  };
+  const span = walk.end - walk.start;
+  const here = at(walk.t);
+  if (!here) return null;
+  const trail = [1, 2, 3, 4, 5].map((i) => at(Math.max(walk.start, walk.t - (span * i) / 60))).filter((p): p is Spot => !!p);
+  return (
+    <>
+      {trail.map((p, i) => (
+        <HtmlMarker key={`trail-${i}`} position={p} zIndex={7} passive>
+          <span
+            className="pointer-events-none block rounded-full"
+            style={{ width: 10 - i * 1.4, height: 10 - i * 1.4, background: walk.color, opacity: 0.55 - i * 0.1, boxShadow: `0 0 8px ${walk.color}` }}
+          />
+        </HtmlMarker>
+      ))}
+      <HtmlMarker position={here} zIndex={8} passive>
+        <span className="pointer-events-none relative grid size-7 place-items-center">
+          <span className="absolute inset-0 animate-ping rounded-full opacity-50" style={{ background: walk.color }} />
+          <span className="relative size-4 rounded-full border-[3px] border-[#faf6f0] shadow-lg" style={{ background: walk.color, boxShadow: `0 0 14px 4px ${walk.color}` }} />
+        </span>
+      </HtmlMarker>
+    </>
+  );
 }
 
 // Back to the whole day (in the corner where the zoom buttons were).

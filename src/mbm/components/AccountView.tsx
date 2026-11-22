@@ -6,6 +6,7 @@ import { changeEmail, changePassword, deleteMine, saveAvatar, signOut } from "@/
 import type { Profile } from "@/mbm/life";
 import AboutYouForm from "./AboutYouForm";
 import Avatar from "./Avatar";
+import { REFLECT_DEFAULT, atLabel, setReflectAt, useReflectAt } from "@/mbm/reflectAt";
 
 const field = "w-full rounded-control border border-line bg-paper px-3 py-2.5 text-ink focus:border-ink";
 
@@ -30,6 +31,9 @@ export default function AccountView({
           <div className="-m-1 [&>*]:mt-0">{connections}</div>
         </Section>
       )}
+      <Section id="reflect" title="Reflect" note="The Reflect tab walks you back through today. It opens in the evening, at this time (on this browser).">
+        <ReflectTime />
+      </Section>
       <Section title="Sign-in">
         <EmailForm email={email} />
         <div className="my-6 h-px bg-line" />
@@ -83,6 +87,23 @@ function Header({ email, profile, onChange }: { email: string | null; profile: (
         {message && <p role="alert" className="mt-1 text-sm text-danger">{message}</p>}
       </div>
     </header>
+  );
+}
+
+function ReflectTime() {
+  const at = useReflectAt();
+  return (
+    <div className="flex flex-wrap items-center gap-3">
+      <label htmlFor="reflect-at" className="text-sm font-semibold">
+        Opens at
+      </label>
+      <input id="reflect-at" type="time" value={at} onChange={(e) => e.target.value && setReflectAt(e.target.value)} className={`${field} num w-36`} />
+      {at !== REFLECT_DEFAULT && (
+        <button type="button" onClick={() => setReflectAt(REFLECT_DEFAULT)} className="text-sm text-muted underline-offset-2 hover:text-ink hover:underline">
+          Back to {atLabel(REFLECT_DEFAULT)}
+        </button>
+      )}
+    </div>
   );
 }
 

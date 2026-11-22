@@ -21,7 +21,13 @@ export default function DayMap({
   onPointer,
   gestures = "cooperative",
   bare = false,
+  walk = null,
+  follow = null,
+  chrome = true,
 }: {
+  walk?: { start: number; end: number; t: number; color: string } | null; // (Reflect: see DayMapInner)
+  follow?: { top: number; bottom: number } | null;
+  chrome?: boolean; // false: no border or rounded box (Reflect: the map is the whole screen)
   bare?: boolean; // just the map (the day page's map layout puts its own things on top)
   gestures?: "cooperative" | "greedy"; // greedy: scroll / pinch zooms the map (when it's the screen you're on)
   day: Day;
@@ -37,7 +43,7 @@ export default function DayMap({
     // On the "Map" screen it fills the window under the day bar (see DayView).
     <section
       aria-label="Map"
-      className={`overflow-hidden rounded-card border-[1.5px] border-ink ${empty ? "" : "flex min-h-0 flex-1 flex-col"}`}
+      className={`overflow-hidden ${chrome ? "rounded-card border-[1.5px] border-ink" : ""} ${empty ? "" : "flex min-h-0 flex-1 flex-col"}`}
     >
       <div className={`flex items-baseline justify-between gap-3 px-4 pb-3 pt-4 sm:px-6 ${bare && !empty ? "hidden" : ""}`}>
         <div className="min-w-0">
@@ -120,6 +126,8 @@ export default function DayMap({
               dayKey={day.dayKey}
               finished={day.finished}
               locked={day.locked}
+              walk={walk}
+              follow={follow}
             />
           </div>
         </div>
