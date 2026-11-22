@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, useTransition, type ReactNode } from "react";
+import { readDark, readDarkServer, subscribeDark } from "@/components/ui/theme";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore, useTransition, type ReactNode } from "react";
 import { APIProvider, InfoWindow, Map, useMap, useMapsLibrary } from "@vis.gl/react-google-maps";
 import { useRouter } from "next/navigation";
 import { lockDay, lookupPlaceOutline, moveStop, myPlaces, pastDrawings, rememberedRoute, removeStop, reportRoute, saveDrawing, savedDrawings, trustedRoutes, saveBlock, setPlaceOutline, setStopOutline, setStopPlace, trailCells, type PlaceLite, type PlacePick } from "@/app/mbm/actions";
@@ -74,6 +75,7 @@ export default function DayMapInner({
   const [stars, setStars] = useState(0); // (rating a route: 1-5, 0 = not picked yet)
   const [addPending, runAdd] = useTransition();
   const [zoom, setZoom] = useState(15);
+  const dark = useSyncExternalStore(subscribeDark, readDark, readDarkServer); // (night mode: the map too)
   // What the pointer is on: trips under it (several, where paths overlap) or a stop.
   const [pointed, setPointed] = useState<{ trips: string[]; stops: string[]; x: number; y: number; cover?: number } | null>(null);
   const box = useRef<HTMLDivElement>(null);
@@ -189,7 +191,7 @@ export default function DayMapInner({
     {all.length > 0 && <WholeDay onClick={() => setRefit((n) => n + 1)} />}
     <APIProvider apiKey={KEY}>
       <Map
-        styles={stylesFor(zoom)}
+        styles={stylesFor(zoom, dark)}
         onZoomChanged={(e) => setZoom(e.detail.zoom)}
         defaultCenter={all[0] ?? { lat: 43.0731, lng: -89.4012 }}
         defaultZoom={15}

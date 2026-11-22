@@ -26,6 +26,10 @@ html[data-theme="dark"] {
   --color-black: var(--ink); /* (hover icons that turn "black") */
   color-scheme: dark;
 }
+/* Shadows stay shadows at night (they're tinted with the text color, which is light now). */
+html[data-theme="dark"] [class*="shadow-ink"] {
+  --tw-shadow-color: rgb(0 0 0 / 0.45) !important;
+}
 
 @theme inline {
   --color-paper: var(--paper);

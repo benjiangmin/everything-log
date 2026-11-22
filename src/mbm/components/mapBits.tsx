@@ -37,7 +37,26 @@ const NEAR: google.maps.MapTypeStyle[] = [
 ];
 const MID = [...CALM, { featureType: "poi", elementType: "labels", stylers: [{ visibility: "off" }] }, { featureType: "transit", stylers: [{ visibility: "off" }] }];
 const FAR = [...QUIET, { featureType: "road.arterial", elementType: "labels", stylers: [{ visibility: "off" }] }];
-export const stylesFor = (zoom: number) => (zoom < 16 ? FAR : zoom < 18 ? MID : NEAR); // (the same arrays each time, so the map isn't restyled on every render)
+// Night mode (profile menu): the same map in the site's dark greys and muted browns.
+const NIGHT: google.maps.MapTypeStyle[] = [
+  { elementType: "geometry", stylers: [{ color: "#24211f" }] },
+  { elementType: "labels.text.fill", stylers: [{ color: "#a8998a" }] },
+  { elementType: "labels.text.stroke", stylers: [{ color: "#1f1c1a" }] },
+  { featureType: "landscape.man_made", elementType: "geometry", stylers: [{ color: "#2e2a27" }] },
+  { featureType: "poi", elementType: "geometry", stylers: [{ color: "#2a2623" }] },
+  { featureType: "poi.park", elementType: "geometry", stylers: [{ color: "#263127" }] },
+  { featureType: "road", elementType: "geometry.fill", stylers: [{ color: "#3a3531" }] },
+  { featureType: "road", elementType: "geometry.stroke", stylers: [{ color: "#2b2724" }] },
+  { featureType: "road.highway", elementType: "geometry.fill", stylers: [{ color: "#46403a" }] },
+  { featureType: "road", elementType: "labels.text.fill", stylers: [{ color: "#bfb0a0" }] },
+  { featureType: "transit", elementType: "geometry", stylers: [{ color: "#2b2724" }] },
+  { featureType: "water", elementType: "geometry", stylers: [{ color: "#172024" }] },
+  { featureType: "water", elementType: "labels.text.fill", stylers: [{ color: "#6f7f86" }] },
+  { featureType: "administrative", elementType: "geometry.stroke", stylers: [{ color: "#3b3531" }] },
+];
+const [FAR_N, MID_N, NEAR_N] = [FAR, MID, NEAR].map((s) => [...NIGHT, ...s]);
+export const stylesFor = (zoom: number, dark = false) =>
+  dark ? (zoom < 16 ? FAR_N : zoom < 18 ? MID_N : NEAR_N) : zoom < 16 ? FAR : zoom < 18 ? MID : NEAR; // (the same arrays each time, so the map isn't restyled on every render)
 
 // A bit of the page pinned to a spot on the map (its bottom-middle sits on the spot). `passive`:
 // just a picture (like the you-are-here dot): the pointer goes straight through to the map, so

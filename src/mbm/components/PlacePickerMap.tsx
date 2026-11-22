@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { readDark, readDarkServer, subscribeDark } from "@/components/ui/theme";
+import { useState, useSyncExternalStore } from "react";
 import { APIProvider, Map } from "@vis.gl/react-google-maps";
 import type { PlaceLite } from "@/app/mbm/actions";
 import type { Spot } from "@/mbm/trips";
@@ -23,6 +24,7 @@ export default function PlacePickerMap({
   const [pin, setPin] = useState<Spot | null>(null);
   const [name, setName] = useState("");
   const [zoom, setZoom] = useState(17);
+  const dark = useSyncExternalStore(subscribeDark, readDark, readDarkServer); // (night mode: the map too)
   if (!KEY) return <p className="text-xs text-muted">Add NEXT_PUBLIC_GOOGLE_MAPS_KEY to pick on the map.</p>;
 
   return (
@@ -30,7 +32,7 @@ export default function PlacePickerMap({
       <div className="isolate h-56 overflow-hidden rounded-control ring-1 ring-line">
         <APIProvider apiKey={KEY}>
           <Map
-            styles={stylesFor(zoom)}
+            styles={stylesFor(zoom, dark)}
             onZoomChanged={(e) => setZoom(e.detail.zoom)}
             defaultCenter={center ?? { lat: 43.0731, lng: -89.4012 }}
             defaultZoom={17}
