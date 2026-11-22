@@ -4,7 +4,7 @@ import { readDark, readDarkServer, subscribeDark } from "@/components/ui/theme";
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore, useTransition, type ReactNode } from "react";
 import { APIProvider, InfoWindow, Map, useMap, useMapsLibrary } from "@vis.gl/react-google-maps";
 import { useRouter } from "next/navigation";
-import { lockDay, lookupPlaceOutline, moveStop, myPlaces, pastDrawings, rememberedRoute, removeStop, reportRoute, saveDrawing, savedDrawings, trustedRoutes, saveBlock, setPlaceOutline, setStopOutline, setStopPlace, trailCells, type PlaceLite, type PlacePick } from "@/app/mbm/actions";
+import { forgetDrawings, lockDay, lookupPlaceOutline, moveStop, myPlaces, pastDrawings, rememberedRoute, removeStop, reportRoute, saveDrawing, savedDrawings, trustedRoutes, saveBlock, setPlaceOutline, setStopOutline, setStopPlace, trailCells, type PlaceLite, type PlacePick } from "@/app/mbm/actions";
 import { Search as PlaceSearch, type Found } from "./PlaceSearch";
 
 // Which version of the path engine drew a route (saved with "Route looks wrong" reports).
@@ -13,7 +13,7 @@ import { useConfirm } from "@/components/ui/ConfirmDialog";
 import type { Activity, Block, LockedTrip, RoutePoint, Visit } from "@/mbm/data";
 import { clock, dayRange, span } from "@/mbm/time";
 import { HtmlMarker, KEY, stylesFor } from "./mapBits";
-import { fitToEntries, buildTrips, decodePolyline, metres, type Piece, type Spot, type Trip } from "@/mbm/trips";
+import { fitToEntries, buildTrips, decodePolyline, joinSameBuilding, metres, type Piece, type Spot, type Trip } from "@/mbm/trips";
 import { encodePolyline, snapLeg } from "@/mbm/snap";
 import { splitLegs, waitSpot, type Dot } from "@/mbm/legs";
 import { despike, makeTrails, smooth } from "@/mbm/trails";
@@ -86,7 +86,11 @@ export default function DayMapInner({
   const box = useRef<HTMLDivElement>(null);
   // A stop whose building is known but whose spot is out on the street (GPS wanders indoors): it's
   // drawn in the middle of the building, and its routes go there.
-  const visits = useMemo(() => phoneVisits.map((v) => (v.outline && !nearOutline(v.outline, v.lat, v.lng, 0) ? { ...v, ...middleOf(v.outline) } : v)), [phoneVisits]);
+  // Back-to-back stops in one building that you never left: one stop (trips.ts).
+  const visits = useMemo(
+    () => joinSameBuilding(phoneVisits, points).map((v) => (v.outline && !nearOutline(v.outline, v.lat, v.lng, 0) ? { ...v, ...middleOf(v.outline) } : v)),
+    [phoneVisits, points],
+  );
   const day = useMemo(() => {
     if (!dayKey) return null;
     const r = dayRange(dayKey, tz);
@@ -415,6 +419,9 @@ export default function DayMapInner({
                   });
                   if (res.ok) {
                     forgetPieces();
+                    // Way off: drawn again with the latest rules (your report keeps the old line).
+                    const orig = built.find((b) => b.key === t.key);
+                    if (stars <= 2 && orig) void filled.redraw(orig);
                     setAdding((a) => (a ? { ...a, report: "sent", note: undefined } : a));
                     setTimeout(() => setAdding((a) => (a?.report === "sent" ? null : a)), 1600);
                   } else setAdding((a) => (a ? { ...a, note: res.message } : a));
@@ -726,7 +733,8 @@ function PointerTrack({ trips, onHit }: { trips: Trip[]; onHit: (keys: string[],
 // snapped onto the real paths and roads (solid; see snap.ts). Bits it missed are filled in and
 // stay dashed: a whole missed trip uses a walk you recorded before between the same two places,
 // otherwise Google's walking route. Answers are kept in this browser.
-function useFilledTrips(trips: Trip[], points: RoutePoint[]): { trips: Trip[]; settled: boolean } {
+function useFilledTrips(trips: Trip[], points: RoutePoint[]): { trips: Trip[]; settled: boolean; redraw: (t: Trip) => Promise<void> } {
+  const [again, setAgain] = useState(0); // (bumped by redraw: work out the forgotten pieces)
   const [better, setBetter] = useState<Record<string, Spot[]>>({});
   const [doneKeys, setDoneKeys] = useState<Set<string>>(() => new Set()); // (pieces worked out, drawn better or not)
   const [guessed, setGuessed] = useState<Set<string>>(() => new Set()); // (recorded pieces with too few dots: filled in, so a guess)
@@ -837,10 +845,10 @@ function useFilledTrips(trips: Trip[], points: RoutePoint[]): { trips: Trip[]; s
           const drawn = await Promise.all(
             legs.map(async (l) => {
               if (l.mode === "wait") return [waitSpot(l)];
-              const asDots = () => l.dots.map((d) => ({ lat: d.lat, lng: d.lng }));
               const matched = await snapLeg(l.dots, l.mode);
               if (matched) return matched;
-              return l.mode === "walk" && (l.known >= 0.6 || trustworthy(l.dots)) ? smooth(asDots()) : asDots();
+              // Not on any path the map knows: your dots, their GPS zigzags evened out, as a curve.
+              return l.mode === "walk" && (l.known >= 0.6 || trustworthy(l.dots)) ? curve(l.dots, true) : curve(l.dots);
             }),
           );
           const body = despike(drawn.flat());
@@ -889,7 +897,24 @@ function useFilledTrips(trips: Trip[], points: RoutePoint[]): { trips: Trip[]; s
         }
       });
     }
-  }, [trips, ready, trails]);
+  }, [trips, ready, trails, again]);
+  // Rated way off: this trip's lines are forgotten (here, in this browser, and saved) and worked out again.
+  const redraw = async (t: Trip) => {
+    const keys = t.pieces.map((_, i) => pieceKey(t, i));
+    await forgetDrawings(t.pieces.map((_, i) => drawKey(t, i))).catch(() => {});
+    for (const k of keys) {
+      asked.current.delete(k);
+      forgetBefore(k);
+      try {
+        localStorage.removeItem(keptId(k));
+      } catch {}
+    }
+    const drop = <T,>(m: Record<string, T>) => Object.fromEntries(Object.entries(m).filter(([k]) => !keys.includes(k)));
+    setBetter((m) => drop(m));
+    setGuessed((g) => new Set([...g].filter((k) => !keys.includes(k))));
+    setDoneKeys((d) => new Set([...d].filter((k) => !keys.includes(k))));
+    setAgain((n) => n + 1);
+  };
   const filled = useMemo(
     () =>
       trips.map((t) => {
@@ -920,7 +945,7 @@ function useFilledTrips(trips: Trip[], points: RoutePoint[]): { trips: Trip[]; s
   );
   // Every piece worked out (for saving a finished day's routes).
   const settled = trips.every((t) => t.pieces.every((_, i) => doneKeys.has(pieceKey(t, i)) || !!keptPiece(pieceKey(t, i)))) && (ready || trips.every((t) => t.pieces.every((_, i) => !!keptPiece(pieceKey(t, i)))));
-  return { trips: filled, settled };
+  return { trips: filled, settled, redraw };
 }
 
 // A piece's finished drawing, kept in this browser: a reload draws it straight away instead of
@@ -1529,6 +1554,56 @@ function trustworthy(dots: Dot[]): boolean {
   const gaps = dots.slice(1).map((d, i) => d.t - dots[i].t).sort((a, b) => a - b);
   const accs = dots.map((d) => d.acc ?? 30).sort((a, b) => a - b);
   return gaps[Math.floor(gaps.length / 2)] <= 12_000 && accs[Math.floor(accs.length * 0.7)] <= 15;
+}
+
+// A line through dots the map couldn't match to real paths, drawn as a smooth curve: a dot that
+// juts out and comes back by no more than its own accuracy is GPS noise, not you, so it's left
+// out; then the corners are rounded off (Chaikin: each corner cut at a quarter of the way along
+// both sides, twice). good: dots you can trust (smoothed a little first, as before).
+function curve(dots: Dot[], good = false): Spot[] {
+  let pts = dots;
+  for (let pass = 0; pass < 3; pass++) {
+    const next: Dot[] = [];
+    for (let i = 0; i < pts.length; i++) {
+      const a = next[next.length - 1];
+      const b = pts[i];
+      const c = pts[i + 1];
+      if (a && c && offLine(b, a, c) <= (b.acc ?? 10) && turn(a, b, c) > 80) continue;
+      next.push(b);
+    }
+    if (next.length === pts.length) break;
+    pts = next;
+  }
+  let path: Spot[] = pts.map((d) => ({ lat: d.lat, lng: d.lng }));
+  if (good) path = smooth(path);
+  for (let n = 0; n < 2 && path.length >= 3; n++) {
+    const out: Spot[] = [path[0]];
+    for (let i = 1; i < path.length; i++) {
+      const a = path[i - 1];
+      const b = path[i];
+      if (i > 1) out.push({ lat: a.lat * 0.75 + b.lat * 0.25, lng: a.lng * 0.75 + b.lng * 0.25 });
+      if (i < path.length - 1) out.push({ lat: a.lat * 0.25 + b.lat * 0.75, lng: a.lng * 0.25 + b.lng * 0.75 });
+    }
+    out.push(path[path.length - 1]);
+    path = out;
+  }
+  return path;
+}
+// How far p is from the line a-b (metres), and how sharply a path turns at b (degrees: 0 straight on, 180 straight back).
+function offLine(p: Spot, a: Spot, b: Spot) {
+  const k = Math.cos((p.lat * Math.PI) / 180) * 111_320;
+  const ax = (a.lng - p.lng) * k, ay = (a.lat - p.lat) * 110_540; // prettier-ignore
+  const bx = (b.lng - p.lng) * k, by = (b.lat - p.lat) * 110_540; // prettier-ignore
+  const dx = bx - ax, dy = by - ay; // prettier-ignore
+  const len = dx * dx + dy * dy;
+  const t = len ? Math.max(0, Math.min(1, -(ax * dx + ay * dy) / len)) : 0;
+  return Math.hypot(ax + t * dx, ay + t * dy);
+}
+function turn(a: Spot, b: Spot, c: Spot) {
+  const k = Math.cos((b.lat * Math.PI) / 180);
+  const h1 = Math.atan2(b.lat - a.lat, (b.lng - a.lng) * k);
+  const h2 = Math.atan2(c.lat - b.lat, (c.lng - b.lng) * k);
+  return Math.abs((((h2 - h1) * 180) / Math.PI + 540) % 360 - 180);
 }
 
 // The middle of a building's outline (the average of its corners: fine for a building).

@@ -684,6 +684,14 @@ export async function savedDrawings(keys: string[]): Promise<Record<string, { pa
   return out;
 }
 
+// A route you rated way off (1-2 stars): its saved lines go, so it's worked out again with the
+// latest drawing (and never reused for other trips). Your report keeps the line you rated.
+export async function forgetDrawings(keys: string[]): Promise<void> {
+  const want = keys.filter((k) => typeof k === "string" && k.length <= 300).slice(0, 50);
+  if (!want.length) return;
+  await (await mbm()).from("drawn_routes").delete().in("key", want);
+}
+
 // Save a piece's line, the first time it's worked out (a line already saved for it stays).
 export async function saveDrawing(d: {
   key: string;

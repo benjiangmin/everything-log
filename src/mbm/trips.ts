@@ -29,6 +29,10 @@ export type Trip = {
 const GAP = 20 * 60000;
 const missed = (a: Spot & { t: number }, b: Spot & { t: number }) => b.t - a.t > GAP || (b.t - a.t > 3 * 60000 && metres(a, b) > 200);
 const ms = (s: string) => +new Date(s);
+// Two dots further apart than both their accuracies plus highway speed (45 m/s) for the time
+// between them: nobody went that way; the phone lost you in between.
+const jumped = (a: Spot & { t: number; acc: number | null }, b: Spot & { t: number; acc: number | null }) =>
+  metres(a, b) > (a.acc ?? 0) + (b.acc ?? 0) + Math.max(1, (b.t - a.t) / 1000) * 45;
 const spot = (s: { lat: number; lng: number }): Spot => ({ lat: s.lat, lng: s.lng });
 
 // The angle at a (degrees) between the directions to b and to c.
@@ -149,11 +153,13 @@ export function buildTrips(visits: Visit[], points: RoutePoint[]): Trip[] {
     if (!inside.length && !(from && to)) continue;
     if (!inside.length && from && to && metres(from, to) < 60) continue; // back to the same place
 
-    // Runs of dots with no long gaps.
+    // Runs of dots with no long gaps, and no jumps no one could make (2 km in 3 seconds: the
+    // phone had lost you, and the dots before it were its stale guesses). Either way the bit in
+    // between is drawn as missed (dashed, along the streets), never as a straight line.
     const runs: (typeof inside)[] = [];
     for (const p of inside) {
       const run = runs[runs.length - 1];
-      if (!run || missed(run[run.length - 1], p)) runs.push([p]);
+      if (!run || missed(run[run.length - 1], p) || jumped(run[run.length - 1], p)) runs.push([p]);
       else run.push(p);
     }
     // A single dot cut off from the rest of the trip is too little to trust: leave it out (but
@@ -277,5 +283,49 @@ export function fitToEntries(trips: Trip[], blocks: { started_at: string; ended_
       if (b.start > start && b.start < end && b.end > end) end = b.start; // already on your next thing
     }
     return start === t.start && end === t.end ? t : { ...t, start, end };
+  });
+}
+
+// Back-to-back stops in the same building, with nothing between them that left it (the GPS
+// jumping around while you sat inside made the phone think you'd gone and come back): one stop.
+// "Left it": a dot outside the building and further from both stops than twice its own accuracy.
+export function joinSameBuilding(visits: Visit[], points: RoutePoint[]): Visit[] {
+  const vs = [...visits].sort((a, b) => ms(a.arrived_at) - ms(b.arrived_at));
+  const inOutline = (o: Visit["outline"], q: { lat: number; lng: number }) => !!o && o.length >= 3 && contains(o, q.lat, q.lng);
+  const sameBuilding = (a: Visit, b: Visit) =>
+    (!!a.placeId && a.placeId === b.placeId) ||
+    inOutline(a.outline, b) ||
+    (!!b.gps && inOutline(a.outline, b.gps)) ||
+    inOutline(b.outline, a) ||
+    (!!a.gps && inOutline(b.outline, a.gps)) ||
+    (!a.placeId && !b.placeId && !!a.auto_name && a.auto_name === b.auto_name);
+  const out: (Visit & { len: number })[] = [];
+  for (const v of vs) {
+    const len = v.departed_at ? ms(v.departed_at) - ms(v.arrived_at) : 1e12; // (still there: the longest)
+    const prev = out[out.length - 1];
+    if (prev && prev.departed_at && sameBuilding(prev, v)) {
+      const from = ms(prev.departed_at);
+      const to = ms(v.arrived_at);
+      const near = (q: RoutePoint, s: Visit) => {
+        const acc = q.accuracy_m ?? 20;
+        return metres(q, s) <= 2 * acc || (!!s.gps && metres(q, s.gps) <= 2 * acc);
+      };
+      const left = points.some((q) => {
+        const t = ms(q.at);
+        return t > from && t < to && !inOutline(prev.outline, q) && !inOutline(v.outline, q) && !near(q, prev) && !near(q, v);
+      });
+      if (!left) {
+        // (Drawn where the longer one was: more of the time, more readings.)
+        const main = len > prev.len ? v : prev;
+        out[out.length - 1] = { ...main, outline: main.outline ?? prev.outline ?? v.outline, arrived_at: prev.arrived_at, departed_at: v.departed_at, len: prev.len + len };
+        continue;
+      }
+    }
+    out.push({ ...v, len });
+  }
+  return out.map((v) => {
+    const { len, ...rest } = v;
+    void len;
+    return rest;
   });
 }
