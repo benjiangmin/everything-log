@@ -77,7 +77,7 @@ export default function DayMapInner({
   const [zoom, setZoom] = useState(15);
   const dark = useSyncExternalStore(subscribeDark, readDark, readDarkServer); // (night mode: the map too)
   // What the pointer is on: trips under it (several, where paths overlap) or a stop.
-  const [pointed, setPointed] = useState<{ trips: string[]; stops: string[]; x: number; y: number; cover?: number } | null>(null);
+  const [pointed, setPointed] = useState<{ trips: string[]; stops: string[]; x: number; y: number; cover?: number; under?: number; gap?: number } | null>(null);
   const box = useRef<HTMLDivElement>(null);
   // A stop whose building is known but whose spot is out on the street (GPS wanders indoors): it's
   // drawn in the middle of the building, and its routes go there.
@@ -128,7 +128,7 @@ export default function DayMapInner({
   const lit = pointed ? { trip: new Set(pointed.trips), stops: new Set(pointed.stops) } : barLit;
 
   // Pointing at something on the map: light it up here, and tell the day bar its times.
-  const point = (p: { trips: string[]; stops: string[]; x: number; y: number } | null) => {
+  const point = (p: { trips: string[]; stops: string[]; x: number; y: number; under?: number; gap?: number } | null) => {
     setPointed(p && { ...p, cover: coveredIn(box.current) });
     if (!onPointer) return;
     if (!p) return onPointer(null);
@@ -143,6 +143,13 @@ export default function DayMapInner({
   const where = (e: { clientX: number; clientY: number }) => {
     const r = box.current?.getBoundingClientRect();
     return r ? { x: e.clientX - r.left, y: e.clientY - r.top } : { x: 0, y: 0 };
+  };
+  // A stop's bubble: always in the same place, centered over its marker (not wherever the
+  // pointer came in), with room between them (gap).
+  const overStop = (el: HTMLElement) => {
+    const r = box.current?.getBoundingClientRect();
+    const m = el.getBoundingClientRect();
+    return r ? { x: m.left + m.width / 2 - r.left, y: m.top - r.top, under: m.bottom - r.top, gap: 22 } : { x: 0, y: 0 };
   };
   // Where you are now (today only): the stop you haven't left, if it's the latest thing the phone
   // knows (or the last stop, while your newest dot is still in its building); otherwise the last dot.
@@ -290,7 +297,7 @@ export default function DayMapInner({
                   point(null);
                   setOpen(v);
                 }}
-                onMouseEnter={(e) => open?.id !== v.id && point({ trips: [], stops: samePlace(visits, v).map((x) => x.id), ...where(e) })}
+                onMouseEnter={(e) => open?.id !== v.id && point({ trips: [], stops: samePlace(visits, v).map((x) => x.id), ...overStop(e.currentTarget) })}
                 onMouseLeave={() => point(null)}
                 aria-label={name ?? "Unnamed stop"}
                 className={`flex cursor-pointer flex-col items-center transition-[opacity,transform] duration-150 ${dim ? "opacity-35" : ""} ${on ? "scale-125" : ""}`}
@@ -476,6 +483,8 @@ export default function DayMapInner({
         <Tip
           x={pointed.x}
           y={pointed.y}
+          under={pointed.under}
+          gap={pointed.gap}
           cover={pointed.cover ?? 0}
           heading={!pointed.stops.length && pointed.trips.length > 1 ? `${pointed.trips.length} trips here` : undefined}
           rows={[
@@ -613,14 +622,16 @@ function samePlace(visits: Visit[], v: Visit): Visit[] {
 }
 
 // The little speech bubble by the pointer: everything under it (overlapping paths all listed).
-function Tip({ x, y, rows, heading, cover = 0 }: { x: number; y: number; rows: Row[]; heading?: string; cover?: number }) {
+// (under: where the thing pointed at ends, if it's below the pointer spot, like a stop's dot;
+// gap: the space between them.)
+function Tip({ x, y, rows, heading, cover = 0, under, gap = 14 }: { x: number; y: number; rows: Row[]; heading?: string; cover?: number; under?: number; gap?: number }) {
   if (!rows.length) return null;
-  const below = y - cover < 40 + rows.length * 40; // near the top of what you can see of the map: show it under the pointer instead
+  const below = y - cover < gap + 26 + rows.length * 40; // near the top of what you can see of the map: show it under instead
   return (
     <div
       role="tooltip"
       className={`pointer-events-none absolute z-30 w-max max-w-64 -translate-x-1/2 rounded-card bg-ink px-3 py-2 text-paper shadow-lg ${below ? "" : "-translate-y-full"}`}
-      style={{ left: x, top: below ? y + 18 : y - 14 }}
+      style={{ left: x, top: below ? (under ?? y) + gap + 4 : y - gap }}
     >
       {heading && <p className="mb-1 text-[11px] text-paper/60">{heading}</p>}
       <ul className="flex flex-col gap-1">
