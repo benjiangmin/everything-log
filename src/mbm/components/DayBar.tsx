@@ -753,7 +753,11 @@ export default function DayBar({
               key={i}
               aria-hidden="true"
               className="pointer-events-none absolute inset-y-0 z-10 rounded-[9px] bg-ink/10 ring-2 ring-inset ring-ink"
-              style={{ left: `calc(${left}% + 1px)`, width: `max(calc(${right - left}% - 2px), 3px)` }}
+              // (A short one, a 3-minute Commute, is still a box you can see: at least 12 px, centered on it.)
+              style={{
+                left: `min(calc(${left}% + 1px), calc(${(left + right) / 2}% - 6px))`,
+                width: `max(calc(${right - left}% - 2px), 12px)`,
+              }}
             />
           );
         })}

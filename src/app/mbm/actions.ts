@@ -693,6 +693,7 @@ export async function saveDrawing(d: {
   toId?: string | null;
   dots: number;
   spread: number | null;
+  replace?: boolean; // (the line you'd seen before: replaces one saved since)
 }): Promise<void> {
   if (typeof d.key !== "string" || d.key.length > 300 || !Array.isArray(d.path) || d.path.length < 2 || d.path.length > 5000) return;
   const client = await mbm();
@@ -716,7 +717,7 @@ export async function saveDrawing(d: {
       dots: Math.max(0, Math.round(d.dots) || 0),
       spread_m: d.spread == null || !Number.isFinite(d.spread) ? null : d.spread,
     },
-    { onConflict: "user_id,key", ignoreDuplicates: true },
+    { onConflict: "user_id,key", ignoreDuplicates: !d.replace },
   );
 }
 

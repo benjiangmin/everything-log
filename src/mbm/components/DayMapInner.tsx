@@ -87,7 +87,7 @@ export default function DayMapInner({
   }, [dayKey, tz]);
   const built = useMemo(() => (locked ? [] : fitToEntries(buildTrips(visits, points), blocks)), [visits, points, blocks, locked]);
   const filled = useFilledTrips(built, points);
-  const trips: Trip[] = useMemo(() => (locked ? reattach(locked as unknown as Trip[], visits) : filled.trips), [locked, filled.trips, visits]);
+  const trips: Trip[] = useMemo(() => toStops(locked ? reattach(locked as unknown as Trip[], visits) : filled.trips, visits), [locked, filled.trips, visits]);
   // A finished day, all drawn: save its routes, so it's never redrawn differently later.
   const saved = useRef(false);
   useEffect(() => {
@@ -743,6 +743,20 @@ function useFilledTrips(trips: Trip[], points: RoutePoint[]): { trips: Trip[]; s
         if (asked.current.has(key)) return;
         asked.current.add(key);
         const dk = drawKey(t, i);
+        // Drawn in this browser before the 2026-11-22 change, for a piece whose ends haven't
+        // changed: that's the line you saw (the Spring St one with its divot). It wins, and
+        // replaces whatever was saved for it since.
+        const before = keptPieceBefore(key);
+        if (before?.path) {
+          setBetter((m) => ({ ...m, [key]: before.path! }));
+          if (before.guess) setGuessed((g) => new Set(g).add(key));
+          keepPiece(key, before.path, before.guess);
+          void saveDrawing({ key: dk, path: before.path, guess: before.guess, fromId: t.fromId, toId: t.toId, dots: p.dots?.length ?? 0, spread: spreadOf(p.dots), replace: true })
+            .then(() => forgetBefore(key)) // (once saved for everywhere, its old copy's done)
+            .catch(() => {});
+          setDoneKeys((d) => new Set(d).add(key));
+          return;
+        }
         const saved = savedP ? (await savedP)[dk] : undefined;
         if (saved && saved.path.length >= 2) {
           setBetter((m) => ({ ...m, [key]: saved.path }));
@@ -751,9 +765,16 @@ function useFilledTrips(trips: Trip[], points: RoutePoint[]): { trips: Trip[]; s
           setDoneKeys((d) => new Set(d).add(key));
           return;
         }
+        // (Drawn in this browser by the way before, for a piece whose ends haven't changed: kept,
+        // rather than worked out again and maybe drawn worse.)
         const local = keptPiece(key);
         if (local) {
           // (Worked out in this browser before 061: saved for everywhere else too.)
+          if (local.path) {
+            setBetter((m) => ({ ...m, [key]: local.path! }));
+            if (local.guess) setGuessed((g) => new Set(g).add(key));
+            keepPiece(key, local.path, local.guess);
+          }
           if (local.path) void saveDrawing({ key: dk, path: local.path, guess: local.guess, fromId: t.fromId, toId: t.toId, dots: p.dots?.length ?? 0, spread: spreadOf(p.dots) }).catch(() => {});
           setDoneKeys((d) => new Set(d).add(key));
           return;
@@ -899,6 +920,26 @@ function keptPiece(k: string): KeptPiece | undefined {
     return undefined;
   }
 }
+// The way routes were drawn before (only the ends into buildings changed since): its copies
+// still count for pieces whose ends are the same.
+const ENGINE_BEFORE = "legs+trails+match-v2 (2026-11-18: your dots win on your own paths)";
+function keptPieceBefore(k: string): KeptPiece | undefined {
+  try {
+    const v = localStorage.getItem(`mbm-piece:${ENGINE_BEFORE}:${k}`);
+    if (!v || v === "none") return undefined;
+    const guess = v.startsWith("g:");
+    return { path: decodePolyline(guess ? v.slice(2) : v, 6), guess };
+  } catch {
+    return undefined;
+  }
+}
+
+function forgetBefore(k: string) {
+  try {
+    localStorage.removeItem(`mbm-piece:${ENGINE_BEFORE}:${k}`);
+  } catch {}
+}
+
 function keepPiece(k: string, path: Spot[] | null, guess: boolean) {
   try {
     // (Finished days are saved with the day itself: these only matter for days still going. A
@@ -919,6 +960,24 @@ function forgetPieces() {
 }
 
 // A piece, by what it covers (so a changed trip asks again only for pieces that changed).
+// A route that goes into a building ends at its wall, the way you went in (trips.ts); from there
+// it's carried straight on to the stop's dot inside, so the line meets the stop. (Only drawn
+// here: what's saved and matched is the way to the building.)
+function toStops(trips: Trip[], visits: Visit[]): Trip[] {
+  const byId = new globalThis.Map(visits.map((v) => [v.id, v]));
+  return trips.map((t) => {
+    const from = t.fromId ? byId.get(t.fromId) : undefined;
+    const to = t.toId ? byId.get(t.toId) : undefined;
+    if (!t.pieces.length || (!from && !to)) return t;
+    const pieces = t.pieces.map((p) => ({ ...p, path: [...p.path] }));
+    const first = pieces[0].path;
+    const last = pieces[pieces.length - 1].path;
+    if (from && first.length && metres(first[0], from) > 2) first.unshift({ lat: from.lat, lng: from.lng });
+    if (to && last.length && metres(last[last.length - 1], to) > 2) last.push({ lat: to.lat, lng: to.lng });
+    return { ...t, pieces };
+  });
+}
+
 // A piece as saved (061): the way routes are drawn, and its own dots (first, last, how many),
 // or for a piece with none, its trip and times; plus its ends to ~10 m. Steady across reloads:
 // it only changes when the trip's dots do.
