@@ -32,8 +32,10 @@ export default function DayView({
   subtitle,
   nav,
   show = null,
+  showAt,
 }: {
   show?: "unmarked" | "commutes" | null; // (from a stats tile: zoom to these, light them up a moment)
+  showAt?: string; // (which click that was)
   day: Day;
   plans?: DayPlan[]; // still planned for later today
   today: boolean;
@@ -58,29 +60,34 @@ export default function DayView({
   useNoPageZoom();
 
   // Arriving from a stats tile: what it's about, flashed on the bar and lit on the map, then gone
-  // (unmarked time: 5 seconds; commutes: 2).
-  const [spotlight, setSpotlight] = useState(() => {
-    if (!show) return null;
+  // (unmarked time: 5 seconds; commutes: 2). Each click carries its own time (showAt), so it plays
+  // again even when this page was kept from before (the app keeps visited tabs alive).
+  type Spot = { spans: { start: number; end: number }[]; ms: number; kind: Focus["kind"]; bar: { spans: { start: number; end: number }[]; ms: number } };
+  const showKey = show ? `${show}@${showAt ?? ""}` : null;
+  const [played, setPlayed] = useState<string | null>(null);
+  const [spotlight, setSpotlight] = useState<Spot | null>(null);
+  if (showKey && showKey !== played) {
+    setPlayed(showKey);
     const spans =
       show === "unmarked"
         ? gaps.filter((g) => g.end - g.start >= 60_000).map((g) => ({ start: g.start, end: g.end }))
         : placed.filter((p) => isMoving(p.block.activity_id ? byId.get(p.block.activity_id)?.name : null)).map((p) => ({ start: p.start, end: p.end }));
-    if (!spans.length) return null;
     const ms = show === "unmarked" ? 5000 : 2000;
     // (bar: kept as one object, so the bar zooms to it once.)
-    return { spans, ms, kind: (show === "unmarked" ? "still" : "moving") as Focus["kind"], bar: { spans, ms: ms + 400 } };
-  });
+    setSpotlight(spans.length ? { spans, ms, kind: show === "unmarked" ? "still" : "moving", bar: { spans, ms: ms + 400 } } : null);
+  }
   useEffect(() => {
-    if (!show) return;
+    if (!spotlight) return;
     // (Not again on a reload.)
     const url = new URL(window.location.href);
-    url.searchParams.delete("show");
-    window.history.replaceState(window.history.state, "", url);
-    if (!spotlight) return;
+    if (url.searchParams.has("show")) {
+      url.searchParams.delete("show");
+      url.searchParams.delete("at");
+      window.history.replaceState(window.history.state, "", url);
+    }
     const id = setTimeout(() => setSpotlight(null), spotlight.ms + 400); // (+ the bar's glide)
     return () => clearTimeout(id);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- once, on arrival
-  }, []);
+  }, [spotlight]);
   const spotFocus: Focus | null = spotlight ? { start: spotlight.spans[0].start, end: spotlight.spans.at(-1)!.end, kind: spotlight.kind, spans: spotlight.spans } : null;
 
   const bar = (

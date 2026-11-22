@@ -3,6 +3,7 @@
 import { useState, useTransition, type ReactNode } from "react";
 import { preload } from "react-dom";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { setPinned } from "@/app/mbm/actions";
 import type { JobMeta, Range, Stats } from "@/mbm/stats";
 
@@ -80,6 +81,7 @@ export default function StatsView({
 }
 
 function Tile({ label, value, note, href }: { label: string; value: string; note: string; href?: string }) {
+  const router = useRouter();
   const body = (
     <>
       <p className="flex items-center justify-between gap-2 text-sm text-muted">
@@ -95,7 +97,15 @@ function Tile({ label, value, note, href }: { label: string; value: string; note
     </>
   );
   return href ? (
-    <Link href={href} className="group rounded-card bg-surface px-5 py-4 transition-colors hover:bg-line/70">
+    // (Each click gets its own time, so the day plays it again even if that page was open before.)
+    <Link
+      href={href}
+      onClick={(e) => {
+        e.preventDefault();
+        router.push(`${href}&at=${Date.now()}`);
+      }}
+      className="group rounded-card bg-surface px-5 py-4 transition-colors hover:bg-line/70"
+    >
       {body}
     </Link>
   ) : (
