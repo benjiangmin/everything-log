@@ -586,7 +586,7 @@ export default function DayBar({
         <div
           ref={bubbleRef}
           role="tooltip"
-          className={`pointer-events-none absolute z-30 w-max min-w-[11rem] max-w-[20rem] ${pos ? "" : below ? "top-full mt-7" : "bottom-full mb-7"} rounded-card bg-accent px-4 py-3 text-accent-ink shadow-xl shadow-ink/30`}
+          className={`pointer-events-none absolute z-30 w-max min-w-[11rem] ${hover.plan || hover.phone || hover.block ? "max-w-[20rem]" : ""} ${pos ? "" : below ? "top-full mt-7" : "bottom-full mb-7"} rounded-card bg-accent px-4 py-3 text-accent-ink shadow-xl shadow-ink/30`}
           style={{ left: `${hoverMid}%`, transform: `translateX(-${slide}%)`, ...pos?.bubble }}
         >
           {hover.plan ? (
@@ -636,15 +636,11 @@ export default function DayBar({
                 const s = part ?? hover;
                 return (
                   <>
-                    <p className="font-display text-base font-semibold">Untracked{part ? <span className="font-normal opacity-80"> · {part.where}</span> : null}</p>
+                    {/* (One line, however long the place's name; then the times.) */}
+                    <p className="whitespace-nowrap font-display text-base font-semibold">Untracked{part ? <span className="font-normal opacity-80"> · {part.where}</span> : null}</p>
                     <p className="num mt-0.5 text-sm opacity-80">
                       {clock(new Date(s.start), tz)} – {clock(new Date(s.end), tz)} · {span(s.end - s.start)}
                     </p>
-                    {onSelectGap && (
-                      <p className="mt-1 text-xs opacity-70">
-                        {s.end >= now - 60_000 ? "Click to say what you're doing" : part ? "Click to fill in this part" : "Click to fill it in"}
-                      </p>
-                    )}
                   </>
                 );
               })()}

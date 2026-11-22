@@ -8,6 +8,7 @@ import { mbmReady, mbmUser } from "@/mbm/supabase";
 import { isDayKey } from "@/mbm/time";
 import { getPins, getStats, isRange, periodOf, todayKey, type Range, getJobMeta } from "@/mbm/stats";
 import StatsView from "@/mbm/components/StatsView";
+import ReflectButton from "@/mbm/components/ReflectButton";
 import { iconsFor } from "@/mbm/appIcons";
 import RangeRail, { RANGE_COLOR } from "@/mbm/components/RangeRail";
 import JumpTo from "@/mbm/components/JumpTo";
@@ -88,7 +89,10 @@ async function StatsFor({ range, day: asked, q }: { range: Range; day?: string; 
           </Link>
         </div>
       </div>
-      <h1 className="mt-2 font-display text-3xl font-semibold tracking-tight sm:text-4xl">{period.title}</h1>
+      <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
+        <h1 className="font-display text-3xl font-semibold tracking-tight sm:text-4xl">{period.title}</h1>
+        {range === "day" && <ReflectButton dayKey={period.first} today={isNow} />}
+      </div>
       </div>
       {stats instanceof Error ? (
         <p className="mt-6 rounded-card bg-surface px-5 py-4 text-sm text-danger">{stats.message}</p>
