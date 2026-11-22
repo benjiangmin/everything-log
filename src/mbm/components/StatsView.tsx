@@ -70,7 +70,7 @@ export default function StatsView({
       </section>
 
       <div className="flex flex-col gap-8">
-        <TimeSpent activities={stats.activities} elapsed={elapsed} initial={query} savedPins={pins} meta={meta} range={range} />
+        <TimeSpent activities={stats.activities} tracked={stats.tracked_seconds} elapsed={elapsed} initial={query} savedPins={pins} meta={meta} range={range} />
         <Apps apps={stats.apps} icons={icons} />
       </div>
 
@@ -232,6 +232,7 @@ const SORTS: { id: Sort; label: string }[] = [
 // called that yet), then the rest, sorted. Search to narrow it down, or to pin something new.
 function TimeSpent({
   activities: everything,
+  tracked,
   elapsed,
   initial,
   savedPins,
@@ -239,6 +240,7 @@ function TimeSpent({
   range,
 }: {
   activities: Stats["activities"];
+  tracked: number; // all tracked time (pinned ones too)
   elapsed: number;
   initial: string;
   savedPins: string[] | null;
@@ -458,7 +460,7 @@ function TimeSpent({
             </ul>
           )}
           {slices.length > 0 ? (
-            <Pie slices={slices} total={pieTotal} sort={sort} pinFor={pinFor} elapsed={elapsed} range={range} />
+            <Pie slices={slices} total={pieTotal} sort={sort} pinFor={pinFor} tracked={tracked} elapsed={elapsed} range={range} />
           ) : (
             <p className="text-sm text-muted">Nothing else tracked yet.</p>
           )}
@@ -588,9 +590,11 @@ function Pie({
   total,
   sort,
   pinFor,
+  tracked,
   elapsed,
   range,
 }: {
+  tracked: number; // all of it, pinned ones too (the circle leaves those out)
   elapsed: number; // how much of the day / week / … has gone by so far
   range: Range;
   slices: Slice[];
@@ -673,7 +677,7 @@ function Pie({
             <>
               {/* Tracked out of the time gone by: hours for a day or week, days for a month or year. */}
               <span className="num font-display text-2xl font-semibold tracking-tight">
-                {amount(total, range)}
+                {amount(tracked, range)}
                 <span className="text-base font-medium text-muted">/{amount(elapsed, range)}</span>
               </span>
               <span className="text-xs text-muted">{range === "day" || range === "week" ? "hours tracked" : "days tracked"}</span>
