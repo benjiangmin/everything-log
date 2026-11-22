@@ -1,4 +1,5 @@
 import { Suspense } from "react";
+import Loading from "@/mbm/components/Loading";
 import { connection } from "next/server";
 import { redirect } from "next/navigation";
 import { mbm, mbmReady, mbmUser } from "@/mbm/supabase";
@@ -11,7 +12,7 @@ export const metadata = { title: "Jobs" };
 export default function JobsPage() {
   return (
     <main className="mx-auto w-full max-w-4xl px-4 pb-24 pt-10 sm:pt-14">
-      <Suspense fallback={<div aria-busy="true" className="h-96 animate-pulse rounded-card bg-line" />}>
+      <Suspense fallback={<Loading tall />}>
         <Jobs />
       </Suspense>
     </main>

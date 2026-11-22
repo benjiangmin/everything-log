@@ -78,8 +78,6 @@ export default function NowPanel({ switching = false, onClose }: { switching?: b
     });
   }
 
-  const seg = (on: boolean) => `rounded-[9px] px-3 py-1.5 text-sm font-semibold transition-colors ${on ? "bg-accent text-accent-ink" : "text-muted hover:text-ink"}`;
-
   return (
     <SidePanel
       title={switching && running.length ? "Switch to…" : "What are you doing?"}
@@ -127,19 +125,15 @@ export default function NowPanel({ switching = false, onClose }: { switching?: b
           )}
           <ActivityInput activities={info.activities} value={text} onChange={setText} onEnter={go} placeholder={guesses.length ? "Or type something else…" : "Cooking, Class, Gaming…"} autoFocus />
 
-          {/* Started when */}
+          {/* Started when: stacked rows, like the phone */}
           <div>
             <p className="mb-1.5 text-sm font-semibold text-ink">Started</p>
-            <div role="radiogroup" aria-label="Started" className="inline-flex flex-wrap rounded-control bg-surface p-1 ring-1 ring-line">
-              <button type="button" role="radio" aria-checked={since === "last"} onClick={() => setSince("last")} className={seg(since === "last")}>
-                Since last entry{lastLabel && <span className="font-normal opacity-75"> · {lastLabel}</span>}
-              </button>
-              <button type="button" role="radio" aria-checked={since === "now"} onClick={() => setSince("now")} className={seg(since === "now")}>
-                Now
-              </button>
-              <button type="button" role="radio" aria-checked={since === "custom"} onClick={() => setSince("custom")} className={seg(since === "custom")}>
-                Custom
-              </button>
+            <div role="radiogroup" aria-label="Started" className="flex flex-col gap-2">
+              {lastLabel !== "now" && (
+                <WhenRow icon="back" title="Since last entry" time={lastLabel} on={since === "last"} onPick={() => setSince("last")} />
+              )}
+              <WhenRow icon="bolt" title="Now" time={info ? clock(new Date(info.loadedAt), tz) : ""} on={since === "now" || (since === "last" && lastLabel === "now")} onPick={() => setSince("now")} />
+              <WhenRow icon="clock" title="Pick a time" on={since === "custom"} onPick={() => setSince("custom")} open={since === "custom"} />
             </div>
             {since === "custom" && (
               <input
@@ -148,7 +142,7 @@ export default function NowPanel({ switching = false, onClose }: { switching?: b
                 onChange={(e) => setCustom(e.target.value)}
                 aria-label="Started at"
                 autoFocus
-                className="num mt-2 block rounded-control border border-line bg-paper px-3 py-2 text-ink focus:border-ink"
+                className="num mt-2 block w-full rounded-[14px] border border-line bg-paper px-4 py-2.5 text-ink focus:border-ink"
                 style={{ outline: "none" }}
               />
             )}
@@ -165,5 +159,38 @@ export default function NowPanel({ switching = false, onClose }: { switching?: b
       )}
       {error && <p className="mt-3 text-sm text-danger">{error}</p>}
     </SidePanel>
+  );
+}
+
+const ICONS = {
+  back: "M9 14 4 9l5-5M4 9h10.5a5.5 5.5 0 0 1 0 11H11",
+  bolt: "M13 2 3 14h9l-1 8 10-12h-9l1-8z",
+  clock: "M12 7v5l3 2M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z",
+};
+
+// One "started" choice: icon, name, time on the right; the chosen one is filled, like the phone.
+function WhenRow({ icon, title, time, on, open, onPick }: { icon: keyof typeof ICONS; title: string; time?: string; on: boolean; open?: boolean; onPick: () => void }) {
+  return (
+    <button
+      type="button"
+      role="radio"
+      aria-checked={on}
+      onClick={onPick}
+      className={`flex min-h-12 items-center gap-3.5 rounded-[14px] px-4 text-left font-semibold transition-colors active:scale-[0.99] ${
+        on ? "bg-accent text-accent-ink" : "bg-surface text-ink ring-1 ring-line hover:bg-line/60"
+      }`}
+    >
+      <svg aria-hidden="true" viewBox="0 0 24 24" className="size-[18px] shrink-0" fill={icon === "bolt" ? "currentColor" : "none"} stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
+        <path d={ICONS[icon]} />
+      </svg>
+      <span className="flex-1">{title}</span>
+      {time ? (
+        <span className="num font-normal opacity-80">{time}</span>
+      ) : (
+        <svg aria-hidden="true" viewBox="0 0 24 24" className={`size-3.5 opacity-60 transition-transform ${open ? "rotate-180" : ""}`} fill="none" stroke="currentColor" strokeWidth={3} strokeLinecap="round">
+          <path d="m6 9 6 6 6-6" />
+        </svg>
+      )}
+    </button>
   );
 }

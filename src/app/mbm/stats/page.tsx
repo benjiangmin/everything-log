@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Suspense } from "react";
+import Loading from "@/mbm/components/Loading";
 import { connection } from "next/server";
 import { redirect } from "next/navigation";
 import { mbmTz } from "@/mbm/data";
@@ -7,6 +8,7 @@ import { mbmReady, mbmUser } from "@/mbm/supabase";
 import { isDayKey } from "@/mbm/time";
 import { getPins, getStats, isRange, periodOf, todayKey, type Range, getJobMeta } from "@/mbm/stats";
 import StatsView from "@/mbm/components/StatsView";
+import { iconsFor } from "@/mbm/appIcons";
 import RangeRail, { RANGE_COLOR } from "@/mbm/components/RangeRail";
 import JumpTo from "@/mbm/components/JumpTo";
 
@@ -17,7 +19,7 @@ export const metadata = { title: "Stats" };
 export default function MbmStatsPage(props: PageProps<"/mbm/stats">) {
   return (
     <main className="mx-auto w-full max-w-6xl px-4 pb-24 pt-6 sm:pt-8">
-      <Suspense fallback={<div aria-busy="true" className="h-96 animate-pulse rounded-card bg-line" />}>
+      <Suspense fallback={<Loading tall />}>
         {props.searchParams.then((sp) => (
           <StatsFor
             range={isRange(sp.range) ? sp.range : "day"}
@@ -43,6 +45,8 @@ async function StatsFor({ range, day: asked, q }: { range: Range; day?: string; 
   const dayKey = isDayKey(asked) && asked <= today ? asked : today;
   const period = periodOf(range, dayKey, today);
   const [stats, pins, meta] = await Promise.all([getStats(period, tz).catch((e: Error) => e), getPins().catch(() => null), getJobMeta().catch(() => ({ jobs: {}, categories: {} }))]);
+  // The apps' icons come with the page (it waits for them), so they don't pop in one by one.
+  const icons = stats instanceof Error ? {} : await iconsFor(stats.apps.map((a) => a.app));
   const isNow = period.first <= today && today < period.next;
   const arrow = "grid size-10 place-items-center rounded-control transition-colors hover:bg-surface";
 
@@ -89,7 +93,7 @@ async function StatsFor({ range, day: asked, q }: { range: Range; day?: string; 
       {stats instanceof Error ? (
         <p className="mt-6 rounded-card bg-surface px-5 py-4 text-sm text-danger">{stats.message}</p>
       ) : (
-        <StatsView key={`${period.first}-${range}-${q}`} stats={stats} range={range} tz={tz} dayKey={period.first} isNow={isNow} query={q} pins={pins} meta={meta} />
+        <StatsView key={`${period.first}-${range}-${q}`} stats={stats} range={range} tz={tz} dayKey={period.first} isNow={isNow} query={q} pins={pins} meta={meta} icons={icons} />
       )}
       </div>
     </div>

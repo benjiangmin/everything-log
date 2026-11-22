@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { Suspense } from "react";
+import Loading from "@/mbm/components/Loading";
 import { connection } from "next/server";
 import { redirect } from "next/navigation";
 import { getDay, mbmTz } from "@/mbm/data";
@@ -18,7 +19,7 @@ export const metadata = { title: "Minute by Minute" };
 export default function MbmHomePage(props: PageProps<"/mbm">) {
   return (
     <main className="mx-auto w-full max-w-3xl px-4 pb-24 pt-10 sm:pt-14">
-      <Suspense fallback={<div aria-busy="true" className="h-64 animate-pulse rounded-card bg-line" />}>
+      <Suspense fallback={<Loading />}>
         {props.searchParams.then((sp) => (
           <Home day={typeof sp.day === "string" ? sp.day : undefined} google={typeof sp.google === "string" ? sp.google : undefined} />
         ))}

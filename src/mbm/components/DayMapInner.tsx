@@ -24,7 +24,8 @@ import { cantMoveTo, pickIsNear } from "@/mbm/nearcheck";
 
 // The stretch you're hovering on the day bar. moving: light up the route (Commute); still: the
 // stop you were at (everything else); any: both (untracked time).
-export type Focus = { start: number; end: number; kind: "moving" | "still" | "any" };
+// spans: several stretches at once (arriving from a stats tile: every commute, every unmarked bit).
+export type Focus = { start: number; end: number; kind: "moving" | "still" | "any"; spans?: { start: number; end: number }[] };
 // A plan you're hovering on the day bar: where it'll be (at: null when it has no place).
 type Pin = { title: string; location: string | null; at: { lat: number; lng: number } | null };
 
@@ -116,7 +117,8 @@ export default function DayMapInner({
     if (!focus) return null;
     // (Overlapping by more than a moment: a trip that ends just as an untracked stretch begins
     // isn't part of it.)
-    const overlaps = (a: number, b: number) => Math.min(b, focus.end) - Math.max(a, focus.start) > Math.min(60_000, (focus.end - focus.start) / 2);
+    const overlaps = (a: number, b: number) =>
+      (focus.spans ?? [focus]).some((f) => Math.min(b, f.end) - Math.max(a, f.start) > Math.min(60_000, (f.end - f.start) / 2));
     const trip = new Set(focus.kind === "still" ? [] : trips.filter((t) => overlaps(t.start, t.end)).map((t) => t.key));
     const stops = new Set(
       focus.kind === "moving"
@@ -1233,6 +1235,12 @@ function FitTo({ spots, top = 0, again = 0 }: { spots: Spot[]; top?: number; aga
     const bounds = new core.LatLngBounds();
     for (const s of spots) bounds.extend(s);
     map.fitBounds(bounds, top ? { top: top + 32, right: 48, bottom: 48, left: 48 } : 48);
+    // Stops all in one place (the same building all day): don't zoom in past the building and
+    // its neighbours.
+    const once = core.event.addListenerOnce(map, "idle", () => {
+      if ((map.getZoom() ?? 0) > 17) map.setZoom(17);
+    });
+    return () => once.remove();
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only for a new day (or a new cover)
   }, [map, core, key, top, again]);
   return null;

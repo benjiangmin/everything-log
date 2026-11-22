@@ -1,4 +1,5 @@
 import { Suspense } from "react";
+import Loading from "@/mbm/components/Loading";
 import { connection } from "next/server";
 import { redirect } from "next/navigation";
 import { mbm, mbmReady, mbmUser } from "@/mbm/supabase";
@@ -13,7 +14,7 @@ export const metadata = { title: "Your account" };
 export default function AccountPage() {
   return (
     <main className="mx-auto w-full max-w-3xl px-4 pb-24 pt-10 sm:pt-14">
-      <Suspense fallback={<div aria-busy="true" className="h-96 animate-pulse rounded-card bg-line" />}>
+      <Suspense fallback={<Loading tall />}>
         <Account />
       </Suspense>
     </main>

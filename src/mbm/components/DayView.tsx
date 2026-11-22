@@ -31,7 +31,9 @@ export default function DayView({
   title,
   subtitle,
   nav,
+  show = null,
 }: {
+  show?: "unmarked" | "commutes" | null; // (from a stats tile: zoom to these, light them up a moment)
   day: Day;
   plans?: DayPlan[]; // still planned for later today
   today: boolean;
@@ -55,6 +57,32 @@ export default function DayView({
   const setMapMode = (f: (v: boolean) => boolean) => writeMapMode(f(mapMode));
   useNoPageZoom();
 
+  // Arriving from a stats tile: what it's about, flashed on the bar and lit on the map, then gone
+  // (unmarked time: 5 seconds; commutes: 2).
+  const [spotlight, setSpotlight] = useState(() => {
+    if (!show) return null;
+    const spans =
+      show === "unmarked"
+        ? gaps.filter((g) => g.end - g.start >= 60_000).map((g) => ({ start: g.start, end: g.end }))
+        : placed.filter((p) => isMoving(p.block.activity_id ? byId.get(p.block.activity_id)?.name : null)).map((p) => ({ start: p.start, end: p.end }));
+    if (!spans.length) return null;
+    const ms = show === "unmarked" ? 5000 : 2000;
+    // (bar: kept as one object, so the bar zooms to it once.)
+    return { spans, ms, kind: (show === "unmarked" ? "still" : "moving") as Focus["kind"], bar: { spans, ms: ms + 400 } };
+  });
+  useEffect(() => {
+    if (!show) return;
+    // (Not again on a reload.)
+    const url = new URL(window.location.href);
+    url.searchParams.delete("show");
+    window.history.replaceState(window.history.state, "", url);
+    if (!spotlight) return;
+    const id = setTimeout(() => setSpotlight(null), spotlight.ms + 400); // (+ the bar's glide)
+    return () => clearTimeout(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once, on arrival
+  }, []);
+  const spotFocus: Focus | null = spotlight ? { start: spotlight.spans[0].start, end: spotlight.spans.at(-1)!.end, kind: spotlight.kind, spans: spotlight.spans } : null;
+
   const bar = (
     <DayBar
       key={day.dayKey}
@@ -69,6 +97,7 @@ export default function DayView({
       byId={byId}
       onSelect={(b) => openMbm({ kind: "edit", dayKey: day.dayKey, blockId: b.id })}
       marks={marks}
+      spotlight={spotlight?.bar ?? null}
       plans={plans}
       onLift={async (b) => {
         const res = await undoable(day.dayKey, "Lift it out", () => liftOut(b.id)).catch(() => ({ ok: false as const, message: "Couldn't do that. Check your connection." }));
@@ -160,7 +189,7 @@ export default function DayView({
       <div className={`relative flex flex-1 flex-col ${mapMode ? "min-h-[calc(100dvh-6rem)]" : "min-h-[26rem]"}`}>
         <DayMap
           day={day}
-          focus={focus}
+          focus={focus ?? spotFocus}
           pin={pin}
           onPointer={setMarks}
           gestures="greedy"

@@ -42,13 +42,16 @@ export default function NowChip({ activities, running, tz, renderedAt }: { activ
   }, [open]);
 
   return (
-    <div ref={box} onMouseEnter={enter} onMouseLeave={leave} className="fixed bottom-5 left-5 z-40 flex flex-col items-start gap-2">
+    // Only the chip and the open box react to the mouse; the empty space around them doesn't.
+    <div ref={box} className="pointer-events-none fixed bottom-5 left-5 z-40 flex flex-col items-start gap-2">
       {/* The box fades in, and out (kept on the page so it can fade both ways). */}
       <div
           aria-hidden={!open}
           inert={!open}
+          onMouseEnter={open ? enter : undefined}
+          onMouseLeave={open ? leave : undefined}
           className={`w-[min(30rem,calc(100vw-2.5rem))] rounded-card shadow-2xl shadow-ink/25 ring-1 ring-line transition-[opacity,visibility] ease-out motion-reduce:transition-none ${
-            open ? "visible opacity-100 duration-200" : "invisible opacity-0 duration-300"
+            open ? "pointer-events-auto visible opacity-100 duration-200" : "invisible opacity-0 duration-300"
           }`}
         >
           <NowStatus activities={activities} running={running} tz={tz} renderedAt={renderedAt} compact />
@@ -62,7 +65,9 @@ export default function NowChip({ activities, running, tz, renderedAt }: { activ
           openMbm({ kind: "edit", dayKey: dayKeyOf(new Date(first.started_at), tz), blockId: first.id, side: "left" });
         }}
         aria-expanded={running.length ? open : undefined}
-        className="flex max-w-[calc(100vw-2.5rem)] items-center gap-2.5 rounded-full bg-accent py-2.5 pl-3.5 pr-4 text-sm font-semibold text-accent-ink shadow-xl shadow-ink/25 transition-transform hover:scale-[1.02]"
+        onMouseEnter={enter}
+        onMouseLeave={leave}
+        className="pointer-events-auto flex max-w-[calc(100vw-2.5rem)] items-center gap-2.5 rounded-full bg-accent py-2.5 pl-3.5 pr-4 text-sm font-semibold text-accent-ink shadow-xl shadow-ink/25 transition-transform hover:scale-[1.02]"
       >
         {first ? (
           <>

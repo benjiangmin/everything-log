@@ -32,6 +32,7 @@ export default function DayBar({
   splitGap,
   onHover,
   marks = null,
+  spotlight = null,
   phone = [],
   compact = false,
   slim = false,
@@ -64,6 +65,7 @@ export default function DayBar({
   splitGap?: (t: number, gap: { start: number; end: number }) => { start: number; end: number; where: string } | null;
   onHover?: (span: { start: number; end: number; block?: Block; at?: number } | null) => void; // at: the time under the pointer
   marks?: { start: number; end: number }[] | null; // outlined (what you're hovering on the map) // what's hovered (the map lights it up)
+  spotlight?: { spans: { start: number; end: number }[]; ms: number } | null; // (from a stats tile: zoomed to fit, flashed, then fades)
   phone?: PhoneUse[]; // apps you used (a thin line under the bar)
   compact?: boolean; // the home page's smaller version
   slim?: boolean; // the day page with the map opened up: a shorter bar, no zoom row
@@ -166,12 +168,26 @@ export default function DayBar({
     });
   };
 
+  // Arriving from a stats tile: glide out (or in) to fit everything it's about, with a little room.
+  useEffect(() => {
+    if (!spotlight?.spans.length || !zoomable) return;
+    const a = Math.min(...spotlight.spans.map((x) => x.start));
+    const b = Math.max(...spotlight.spans.map((x) => x.end));
+    const pad = Math.max(10 * 60_000, (b - a) * 0.08);
+    const id = setTimeout(() => glideTo(fit(a - pad, b + pad)), 150);
+    return () => clearTimeout(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once, on arrival
+  }, [spotlight]);
+
   // Pinch / Ctrl+scroll zooms around the pointer; sideways scroll pans. A plain scroll still
   // scrolls the page. (Needs a non-passive listener so the browser doesn't zoom the page too.)
   const barRef = useRef<HTMLDivElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
   // The edges of what the pointer is over (in the bar's box), for the bubble's line.
-  const [anchor, setAnchor] = useState<{ top: number; bottom: number; h: number } | null>(null);
+  // (up/down: room on screen above and below it, past the top bar, so the bubble picks a side it fits.)
+  const [anchor, setAnchor] = useState<{ top: number; bottom: number; h: number; up: number; down: number } | null>(null);
+  const bubbleRef = useRef<HTMLDivElement>(null);
+  const bubbleH = useRef(110); // (the last bubble's height: a fair guess for the next)
   const [barWidth, setBarWidth] = useState(1000); // in px (for chips: see pill)
   useEffect(() => {
     const el = barRef.current;
@@ -455,7 +471,12 @@ export default function DayBar({
   const slide = Math.min(90, Math.max(10, hoverMid));
   // Over the map (slim) the bar is near the top of the screen, and the apps line is under the
   // bar: there the bubble goes below instead of above.
-  const below = slim || !!hover?.phone;
+  // Either way, it goes to the other side if it wouldn't fit on screen (and the other side would).
+  const below = anchor
+    ? slim || !!hover?.phone
+      ? anchor.down >= 0 || anchor.down >= anchor.up
+      : anchor.up < 0 && anchor.down > anchor.up
+    : slim || !!hover?.phone;
   // Where the line meets what you're pointing at: right at its top edge (bubble above) or its
   // bottom edge (below), measured from the thing itself. (Keyboard focus: the bar's edge.)
   const LINE = 40; // (the bubble's stalk: it sits a little way out from the bar)
@@ -519,7 +540,10 @@ export default function DayBar({
         if (!el) return;
         const r = el.getBoundingClientRect();
         const box = w.getBoundingClientRect();
-        setAnchor({ top: r.top - box.top, bottom: r.bottom - box.top, h: box.height });
+        if (bubbleRef.current) bubbleH.current = bubbleRef.current.offsetHeight;
+        const cover = document.querySelector("header[data-covers-map]")?.getBoundingClientRect().bottom ?? 0;
+        const need = bubbleH.current + 40 + 8;
+        setAnchor({ top: r.top - box.top, bottom: r.bottom - box.top, h: box.height, up: r.top - Math.max(0, cover) - need, down: window.innerHeight - r.bottom - need });
       }}
     >
       {/* Dragging an edge: the time it'll be. */}
@@ -537,6 +561,7 @@ export default function DayBar({
           (over the box's top edge), joined to the entry by a line. */}
       {hover && !edge && (
         <div
+          ref={bubbleRef}
           role="tooltip"
           className={`pointer-events-none absolute z-30 w-max min-w-[11rem] max-w-[20rem] ${pos ? "" : below ? "top-full mt-7" : "bottom-full mb-7"} rounded-card bg-accent px-4 py-3 text-accent-ink shadow-xl shadow-ink/30`}
           style={{ left: `${hoverMid}%`, transform: `translateX(-${slide}%)`, ...pos?.bubble }}
@@ -744,9 +769,28 @@ export default function DayBar({
             <div key={t} aria-hidden="true" className="pointer-events-none absolute inset-y-0 z-10 w-px bg-paper/25 mix-blend-overlay" style={{ left: `${at(t)}%` }} />
           ))}
         {/* What you're pointing at on the map (each a hair apart, so things back to back get their own outline). */}
+        {/* Arriving from a stats tile: each one flashed, held, then faded out. */}
+        {spotlight?.spans.map((m, i) => {
+          const left = at(Math.max(m.start, dayStart));
+          const right = at(Math.min(m.end, dayEnd));
+          if (right <= 0 || left >= 100) return null;
+          return (
+            <div
+              key={`spot-${i}`}
+              aria-hidden="true"
+              className="bar-spotlight pointer-events-none absolute inset-y-0 z-10 rounded-[9px] opacity-0 ring-2 ring-inset ring-ink"
+              style={{
+                left: `min(calc(${left}% + 1px), calc(${(left + right) / 2}% - 6px))`,
+                width: `max(calc(${right - left}% - 2px), 12px)`,
+                animation: `bar-spotlight ${spotlight.ms}ms ease-out forwards`,
+              }}
+            />
+          );
+        })}
         {marks?.map((m, i) => {
-          const left = Math.max(0, at(Math.max(m.start, from)));
-          const right = Math.min(100, at(Math.min(m.end, to)));
+          // (Not stopped at the bar's ends: zoomed in, it's cut off where the entry under it is.)
+          const left = at(Math.max(m.start, dayStart));
+          const right = at(Math.min(m.end, dayEnd));
           if (right <= 0 || left >= 100) return null;
           return (
             <div

@@ -359,3 +359,16 @@ select.select-field {
   .env-shake, .env-in, .seal-pop, .flap-open, .paper-rise, .env-away, .letter-reveal, .letter-glow { animation: none; }
 }
 
+
+/* The day bar's highlight when you arrive from a stats tile (Unmarked, Distance): a bright flash,
+   held, then it fades out. The length is set where it's used. */
+@keyframes bar-spotlight {
+  0% { opacity: 0; background-color: rgb(212 163 115 / 0.9); }
+  6% { opacity: 1; background-color: rgb(212 163 115 / 0.9); }
+  22% { background-color: rgb(212 163 115 / 0.35); }
+  80% { opacity: 1; }
+  100% { opacity: 0; background-color: rgb(212 163 115 / 0.35); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .bar-spotlight { animation: none !important; opacity: 1 !important; background-color: rgb(212 163 115 / 0.35); }
+}

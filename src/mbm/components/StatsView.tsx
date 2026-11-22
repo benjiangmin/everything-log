@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useTransition, type ReactNode } from "react";
+import { preload } from "react-dom";
+import Link from "next/link";
 import { setPinned } from "@/app/mbm/actions";
 import type { JobMeta, Range, Stats } from "@/mbm/stats";
 
@@ -19,6 +21,11 @@ const miles = (m: number) => {
   return mi >= 10 ? `${Math.round(mi).toLocaleString()} mi` : `${mi.toFixed(1)} mi`;
 };
 const LIST = 8; // shown before "Show all"
+// Hours (a day, a week) or days (a month, a year): one decimal under 100, whole past that.
+const amount = (seconds: number, range: Range) => {
+  const v = seconds / (range === "day" || range === "week" ? 3600 : 86400);
+  return v >= 100 ? Math.round(v).toLocaleString() : String(Math.round(v * 10) / 10);
+};
 
 export default function StatsView({
   stats,
@@ -26,8 +33,11 @@ export default function StatsView({
   query = "",
   pins = null,
   range,
+  dayKey,
   meta = { jobs: {}, categories: {} },
+  icons,
 }: {
+  icons?: Record<string, string | null>; // each app's icon, looked up with the page
   meta?: JobMeta; // categories, goals, hidden jobs (043)
   pins?: string[] | null; // pinned activities (null: 023_pins.sql not run yet)
   stats: Stats;
@@ -48,14 +58,20 @@ export default function StatsView({
       {/* ---------- Totals ---------- */}
       <section aria-label="Totals" className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Tile label={`Tracked${sofar}`} value={hm(stats.tracked_seconds)} note={`${pct(stats.tracked_seconds)}% of the time`} />
-        <Tile label="Unmarked" value={hm(unmarked)} note={`${stats.gaps.length} stretch${stats.gaps.length === 1 ? "" : "es"} of 10m+`} />
+        {/* A day's Unmarked / Distance: click for that day, zoomed to them and lit up a moment. */}
+        <Tile
+          label="Unmarked"
+          value={hm(unmarked)}
+          note={`${stats.gaps.length} stretch${stats.gaps.length === 1 ? "" : "es"} of 10m+`}
+          href={range === "day" && unmarked >= 60 ? `/mbm/day?day=${dayKey}&show=unmarked` : undefined}
+        />
         <Tile label="Screen time" value={hm(screen)} note={`${stats.apps.length} app${stats.apps.length === 1 ? "" : "s"}`} />
-        <Tile label="Distance" value={miles(stats.distance_m)} note="from your route dots" />
+        <Tile label="Distance" value={miles(stats.distance_m)} note="from your route dots" href={range === "day" ? `/mbm/day?day=${dayKey}&show=commutes` : undefined} />
       </section>
 
       <div className="flex flex-col gap-8">
         <TimeSpent activities={stats.activities} elapsed={elapsed} initial={query} savedPins={pins} meta={meta} range={range} />
-        <Apps apps={stats.apps} />
+        <Apps apps={stats.apps} icons={icons} />
       </div>
 
       {/* (No list of unmarked stretches any more: the bar shows them, and the Day page fills them in.) */}
@@ -63,13 +79,27 @@ export default function StatsView({
   );
 }
 
-function Tile({ label, value, note }: { label: string; value: string; note: string }) {
-  return (
-    <div className="rounded-card bg-surface px-5 py-4">
-      <p className="text-sm text-muted">{label}</p>
+function Tile({ label, value, note, href }: { label: string; value: string; note: string; href?: string }) {
+  const body = (
+    <>
+      <p className="flex items-center justify-between gap-2 text-sm text-muted">
+        {label}
+        {href && (
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true" className="opacity-0 transition-opacity group-hover:opacity-100">
+            <path d="M9 5l7 7-7 7" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        )}
+      </p>
       <p className="num mt-1 font-display text-2xl font-semibold tracking-tight sm:text-3xl">{value}</p>
       <p className="mt-0.5 text-xs text-muted">{note}</p>
-    </div>
+    </>
+  );
+  return href ? (
+    <Link href={href} className="group rounded-card bg-surface px-5 py-4 transition-colors hover:bg-line/70">
+      {body}
+    </Link>
+  ) : (
+    <div className="rounded-card bg-surface px-5 py-4">{body}</div>
   );
 }
 
@@ -158,10 +188,12 @@ function PinIcon({ filled }: { filled: boolean }) {
 }
 
 // An app's icon (from the App Store, by its name), or its first letter when there isn't one.
-function AppIcon({ name, big = false }: { name: string; big?: boolean }) {
+function AppIcon({ name, src, big = false }: { name: string; src?: string | null; big?: boolean }) {
   const [failed, setFailed] = useState(false);
   const box = big ? "size-9 rounded-[9px]" : "size-6 rounded-[7px]";
-  if (failed) {
+  // (The page looked it up already: src. null: no match, so the letter straight away.)
+  if (src) preload(src, { as: "image" });
+  if (failed || src === null) {
     return (
       <span aria-hidden="true" className={`grid ${box} shrink-0 place-items-center bg-surface text-[11px] font-semibold text-muted ring-1 ring-line`}>
         {name.trim().charAt(0).toUpperCase() || "?"}
@@ -169,16 +201,19 @@ function AppIcon({ name, big = false }: { name: string; big?: boolean }) {
     );
   }
   return (
-    // eslint-disable-next-line @next/next/no-img-element -- (a picture from the App Store, any size)
-    <img
-      src={`/mbm/app-icon?name=${encodeURIComponent(name)}`}
-      alt=""
-      width={big ? 36 : 24}
-      height={big ? 36 : 24}
-      loading="lazy"
-      onError={() => setFailed(true)}
-      className={`${box} shrink-0 ring-1 ring-ink/10`}
-    />
+    // (A soft square behind it while the picture comes in.)
+    <span className={`${box} shrink-0 overflow-hidden bg-surface ring-1 ring-ink/10`}>
+      {/* eslint-disable-next-line @next/next/no-img-element -- (a picture from the App Store, any size) */}
+      <img
+        src={src ?? `/mbm/app-icon?name=${encodeURIComponent(name)}`}
+        alt=""
+        width={big ? 36 : 24}
+        height={big ? 36 : 24}
+        decoding="async"
+        onError={() => setFailed(true)}
+        className="size-full"
+      />
+    </span>
   );
 }
 
@@ -423,7 +458,7 @@ function TimeSpent({
             </ul>
           )}
           {slices.length > 0 ? (
-            <Pie slices={slices} total={pieTotal} sort={sort} pinFor={pinFor} />
+            <Pie slices={slices} total={pieTotal} sort={sort} pinFor={pinFor} elapsed={elapsed} range={range} />
           ) : (
             <p className="text-sm text-muted">Nothing else tracked yet.</p>
           )}
@@ -485,7 +520,7 @@ function TimeSpent({
   );
 }
 
-function Apps({ apps }: { apps: Stats["apps"] }) {
+function Apps({ apps, icons }: { apps: Stats["apps"]; icons?: Record<string, string | null> }) {
   const [all, setAll] = useState(false);
   const max = apps[0]?.seconds ?? 0;
   return (
@@ -498,7 +533,7 @@ function Apps({ apps }: { apps: Stats["apps"] }) {
             // Like the iPhone's Screen Time: the app's icon on the left; its name, time and bar
             // stacked on the right.
             <li key={a.app} className="flex items-center gap-3 py-2">
-              <AppIcon name={a.app} big />
+              <AppIcon name={a.app} src={icons?.[a.app]} big />
               <div className="min-w-0 flex-1">
                 <div className="flex items-baseline gap-2 text-sm">
                   <span className="min-w-0 flex-1 truncate">{a.app}</span>
@@ -553,7 +588,11 @@ function Pie({
   total,
   sort,
   pinFor,
+  elapsed,
+  range,
 }: {
+  elapsed: number; // how much of the day / week / … has gone by so far
+  range: Range;
   slices: Slice[];
   total: number;
   sort: Sort;
@@ -622,17 +661,22 @@ function Pie({
             </path>
           ))}
         </svg>
-        <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center px-10 text-center">
+        {/* (Kept inside the hole: a long name wraps to two lines, then ends in "…".) */}
+        <div className="pointer-events-none absolute inset-y-0 left-1/2 flex w-[46%] -translate-x-1/2 flex-col items-center justify-center text-center">
           {shown ? (
             <>
-              <span className="line-clamp-2 text-xs leading-tight text-muted">{shown.name}</span>
+              <span className="line-clamp-2 break-words text-xs leading-tight text-muted">{shown.name}</span>
               <span className="num mt-0.5 font-display text-xl font-semibold tracking-tight">{hm(shown.seconds)}</span>
               <span className="num text-xs text-muted">{pctOf(shown.seconds, total)}</span>
             </>
           ) : (
             <>
-              <span className="num font-display text-2xl font-semibold tracking-tight">{hm(total)}</span>
-              <span className="text-xs text-muted">tracked</span>
+              {/* Tracked out of the time gone by: hours for a day or week, days for a month or year. */}
+              <span className="num font-display text-2xl font-semibold tracking-tight">
+                {amount(total, range)}
+                <span className="text-base font-medium text-muted">/{amount(elapsed, range)}</span>
+              </span>
+              <span className="text-xs text-muted">{range === "day" || range === "week" ? "hours tracked" : "days tracked"}</span>
             </>
           )}
         </div>

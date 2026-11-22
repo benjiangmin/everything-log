@@ -1,4 +1,5 @@
 import { Suspense } from "react";
+import Loading from "@/mbm/components/Loading";
 import { connection } from "next/server";
 import { redirect } from "next/navigation";
 import { mbmTz } from "@/mbm/data";
@@ -15,7 +16,7 @@ export const metadata = { title: "Plan" };
 export default function PlanPage(props: PageProps<"/mbm/plan">) {
   return (
     <main className="mx-auto w-full px-4 pb-24 pt-6 sm:w-[96%] sm:px-0 sm:pt-8">
-      <Suspense fallback={<div aria-busy="true" className="h-96 animate-pulse rounded-card bg-line" />}>
+      <Suspense fallback={<Loading tall />}>
         {props.searchParams.then((p) => (
           <Plan day={typeof p.day === "string" ? p.day : undefined} open={typeof p.event === "string" ? p.event : undefined} />
         ))}

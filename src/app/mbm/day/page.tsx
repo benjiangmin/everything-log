@@ -20,14 +20,14 @@ export default function MbmDayPage(props: PageProps<"/mbm/day">) {
     <main className="mx-auto flex min-h-[calc(100dvh-4rem)] w-full flex-col px-4 pb-5 pt-4 sm:w-[96%] sm:px-0">
       <Suspense fallback={<Skeleton />}>
         {props.searchParams.then((sp) => (
-          <MbmDay day={typeof sp.day === "string" ? sp.day : undefined} />
+          <MbmDay day={typeof sp.day === "string" ? sp.day : undefined} show={sp.show === "unmarked" || sp.show === "commutes" ? sp.show : null} />
         ))}
       </Suspense>
     </main>
   );
 }
 
-async function MbmDay({ day: asked }: { day?: string }) {
+async function MbmDay({ day: asked, show }: { day?: string; show: "unmarked" | "commutes" | null }) {
   await connection(); // always fresh
   if (!mbmReady()) return <NotConnected />;
   const user = await mbmUser();
@@ -53,6 +53,7 @@ async function MbmDay({ day: asked }: { day?: string }) {
         plans={plans}
         today={isToday}
         renderedAt={day.loadedAt}
+        show={show}
         title={isToday ? "Today" : dayTitle(dayKey)}
         subtitle={isToday ? dayTitle(dayKey) : undefined}
         nav={
