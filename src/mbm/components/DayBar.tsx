@@ -188,6 +188,33 @@ export default function DayBar({
   const [anchor, setAnchor] = useState<{ top: number; bottom: number; h: number; up: number; down: number } | null>(null);
   const bubbleRef = useRef<HTMLDivElement>(null);
   const bubbleH = useRef(110); // (the last bubble's height: a fair guess for the next)
+  const anchorEl = useRef<HTMLElement | null>(null); // (what it points at)
+  // Where the bubble's thing is, and the room around it on screen right now.
+  const measure = () => {
+    const w = wrapRef.current;
+    const el = anchorEl.current;
+    if (!w || !el?.isConnected) return;
+    const r = el.getBoundingClientRect();
+    const box = w.getBoundingClientRect();
+    if (bubbleRef.current) bubbleH.current = bubbleRef.current.offsetHeight;
+    const cover = document.querySelector("header[data-covers-map]")?.getBoundingClientRect().bottom ?? 0;
+    const need = bubbleH.current + 40 + 8;
+    setAnchor({ top: r.top - box.top, bottom: r.bottom - box.top, h: box.height, up: r.top - Math.max(0, cover) - need, down: window.innerHeight - r.bottom - need });
+  };
+  // While a bubble is up: measured again once it's drawn (its real height), and as the page
+  // scrolls or resizes, so it never ends up under the top bar or off the screen.
+  useEffect(() => {
+    if (!hover) return;
+    const frame = requestAnimationFrame(measure);
+    window.addEventListener("scroll", measure, { passive: true, capture: true });
+    window.addEventListener("resize", measure);
+    return () => {
+      cancelAnimationFrame(frame);
+      window.removeEventListener("scroll", measure, { capture: true });
+      window.removeEventListener("resize", measure);
+    };
+  }, [hover]);
+
   const [barWidth, setBarWidth] = useState(1000); // in px (for chips: see pill)
   useEffect(() => {
     const el = barRef.current;
@@ -538,12 +565,8 @@ export default function DayBar({
         if (t.closest("[data-tuck]")) return;
         const el = t.closest<HTMLElement>("button, [data-anchor]");
         if (!el) return;
-        const r = el.getBoundingClientRect();
-        const box = w.getBoundingClientRect();
-        if (bubbleRef.current) bubbleH.current = bubbleRef.current.offsetHeight;
-        const cover = document.querySelector("header[data-covers-map]")?.getBoundingClientRect().bottom ?? 0;
-        const need = bubbleH.current + 40 + 8;
-        setAnchor({ top: r.top - box.top, bottom: r.bottom - box.top, h: box.height, up: r.top - Math.max(0, cover) - need, down: window.innerHeight - r.bottom - need });
+        anchorEl.current = el;
+        measure();
       }}
     >
       {/* Dragging an edge: the time it'll be. */}
