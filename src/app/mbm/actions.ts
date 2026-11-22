@@ -667,6 +667,84 @@ export async function reportRoute(r: {
   return { ok: true };
 }
 
+// ---------- Routes are drawn once (061_drawn_routes.sql) ----------
+
+type Line = { lat: number; lng: number }[];
+const toLine = (path: unknown): Line =>
+  Array.isArray(path) ? (path as [number, number][]).filter((q) => Array.isArray(q) && q.length >= 2).map(([lat, lng]) => ({ lat: Number(lat), lng: Number(lng) })) : [];
+
+// The saved lines for these pieces (by key). Empty if 061 isn't run yet.
+export async function savedDrawings(keys: string[]): Promise<Record<string, { path: Line; guess: boolean }>> {
+  const want = keys.filter((k) => typeof k === "string" && k.length <= 300).slice(0, 400);
+  if (!want.length) return {};
+  const { data, error } = await (await mbm()).from("drawn_routes").select("key, path, guess").in("key", want);
+  if (error || !data) return {};
+  const out: Record<string, { path: Line; guess: boolean }> = {};
+  for (const r of data as { key: string; path: unknown; guess: boolean }[]) out[r.key] = { path: toLine(r.path), guess: !!r.guess };
+  return out;
+}
+
+// Save a piece's line, the first time it's worked out (a line already saved for it stays).
+export async function saveDrawing(d: {
+  key: string;
+  path: Line;
+  guess: boolean;
+  fromId?: string | null;
+  toId?: string | null;
+  dots: number;
+  spread: number | null;
+}): Promise<void> {
+  if (typeof d.key !== "string" || d.key.length > 300 || !Array.isArray(d.path) || d.path.length < 2 || d.path.length > 5000) return;
+  const client = await mbm();
+  let from_place: string | null = null;
+  let to_place: string | null = null;
+  const ids = [d.fromId, d.toId].filter((x): x is string => !!x && isUuid(x));
+  if (ids.length === 2) {
+    const { data } = await client.from("visits").select("id, place_id").in("id", ids);
+    const placeOf = (id: string) => ((data ?? []) as { id: string; place_id: string | null }[]).find((v) => v.id === id)?.place_id ?? null;
+    from_place = placeOf(d.fromId!);
+    to_place = placeOf(d.toId!);
+  }
+  const round = (v: number) => Math.round(v * 1e6) / 1e6;
+  await client.from("drawn_routes").upsert(
+    {
+      key: d.key,
+      path: d.path.map((q) => [round(q.lat), round(q.lng)]),
+      guess: !!d.guess,
+      from_place,
+      to_place,
+      dots: Math.max(0, Math.round(d.dots) || 0),
+      spread_m: d.spread == null || !Number.isFinite(d.spread) ? null : d.spread,
+    },
+    { onConflict: "user_id,key", ignoreDuplicates: true },
+  );
+}
+
+// Earlier trips' lines between the places of these two stops (either way round), not guesses,
+// for a new trip to be drawn the same way if its dots fit one. Most dots first (the best seen).
+export async function pastDrawings(fromId: string, toId: string): Promise<{ line: Line; reversed: boolean; spread: number | null }[]> {
+  if (!isUuid(fromId) || !isUuid(toId)) return [];
+  const client = await mbm();
+  const { data: vs } = await client.from("visits").select("id, place_id").in("id", [fromId, toId]);
+  const placeOf = (id: string) => ((vs ?? []) as { id: string; place_id: string | null }[]).find((v) => v.id === id)?.place_id ?? null;
+  const a = placeOf(fromId);
+  const b = placeOf(toId);
+  if (!a || !b || a === b) return [];
+  const { data, error } = await client
+    .from("drawn_routes")
+    .select("path, from_place, spread_m, dots")
+    .eq("guess", false)
+    .or(`and(from_place.eq.${a},to_place.eq.${b}),and(from_place.eq.${b},to_place.eq.${a})`)
+    .order("dots", { ascending: false })
+    .limit(15);
+  if (error || !data) return [];
+  return (data as { path: unknown; from_place: string; spread_m: number | null }[]).map((r) => ({
+    line: toLine(r.path),
+    reversed: r.from_place === b,
+    spread: r.spread_m == null ? null : Number(r.spread_m),
+  }));
+}
+
 // Routes you gave 4-5 stars between the places of these two stops (055). reversed: drawn the
 // other way round. spread: how sure the phone was when it was recorded (metres), for the fit check.
 export async function trustedRoutes(fromId: string, toId: string): Promise<{ line: { lat: number; lng: number }[]; reversed: boolean; spread: number | null }[]> {

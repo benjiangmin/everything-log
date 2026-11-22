@@ -15,7 +15,10 @@ const SERVERS = [
 
 // within: how far from the spot a building can be (a place's pin can sit on the pavement by its
 // door: 45 m; an unnamed stop, 25 m, so one out on the street doesn't get the building next to it).
-export async function buildingAt(lat: number, lng: number, log?: string[], within = 25): Promise<Outline | null | undefined> {
+// insideOnly: only a building the spot is actually in (a stop: one on the sidewalk outside a
+// building is outdoors, not in it). Otherwise the closest one will do (a place's pin is often
+// on its edge or by its door).
+export async function buildingAt(lat: number, lng: number, log?: string[], within = 25, insideOnly = false): Promise<Outline | null | undefined> {
   const at = `around:${within},${lat.toFixed(6)},${lng.toFixed(6)}`;
   // Buildings are simple shapes ("ways"), or for big ones (the library) a few pieces joined up
   // ("relations").
@@ -40,6 +43,7 @@ export async function buildingAt(lat: number, lng: number, log?: string[], withi
       const inside = shapes.filter((s) => contains(s, lat, lng));
       // Inside more than one (a building within a building): the smaller.
       if (inside.length) return inside.sort((a, b) => area(a) - area(b))[0];
+      if (insideOnly) return null;
       return shapes.sort((a, b) => edgeDistance(a, lat, lng) - edgeDistance(b, lat, lng))[0];
     } catch (e) {
       log?.push(`${server}: ${e instanceof Error ? e.message : "failed"}`); // next server

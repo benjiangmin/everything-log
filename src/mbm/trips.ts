@@ -1,4 +1,4 @@
-import { nearOutline } from "./buildings";
+import { closestOnOutline, contains, nearOutline } from "./buildings";
 import type { RoutePoint, Visit } from "./data";
 import { splitLegs, waitSpot, type Dot } from "./legs";
 
@@ -179,15 +179,24 @@ export function buildTrips(visits: Visit[], points: RoutePoint[]): Trip[] {
         }
         const path = run.map(spot);
         if (r === 0 && joinsFrom) {
-          // You usually leave a building the way you came in: start from that door, but only when
-          // the way you headed off is on that side (the door no further from your first dot than
-          // the stop is, and within 60° of it). Otherwise straight from the stop: one clean line
-          // inside the building, never a zigzag through it.
-          const d = door.get(from!.id);
-          if (d && metres(d, first) > 10 && metres(d, first) <= metres(from!, first) && angleAt(from!, d, first) <= 60) path.unshift(d);
-          path.unshift(spot(from!));
+          const edge = wall(from!, first);
+          if (edge) {
+            // In a building: from its wall where your dots head off (the door you used), not from
+            // its pin (SAC's is on its north side; it only has a west door).
+            path.unshift(edge);
+          } else {
+            // You usually leave a building the way you came in: start from that door, but only when
+            // the way you headed off is on that side (the door no further from your first dot than
+            // the stop is, and within 60° of it). Otherwise straight from the stop: one clean line
+            // inside the building, never a zigzag through it.
+            const d = door.get(from!.id);
+            if (d && metres(d, first) > 10 && metres(d, first) <= metres(from!, first) && angleAt(from!, d, first) <= 60) path.unshift(d);
+            path.unshift(spot(from!));
+          }
         }
-        if (r === runs.length - 1 && joinsTo) path.push(spot(to!));
+        // Into a building: to its wall where your last dot is (the door you went in by), not round
+        // to its pin.
+        if (r === runs.length - 1 && joinsTo) path.push(wall(to!, last) ?? spot(to!));
         pieces.push({ path, missing: false, ends: { from: r === 0 && !!joinsFrom, to: r === runs.length - 1 && !!joinsTo }, dots: run });
       });
       if (to && !joinsTo) pieces.push({ path: [spot(last), spot(to)], missing: true });
@@ -217,6 +226,15 @@ export function buildTrips(visits: Visit[], points: RoutePoint[]): Trip[] {
     });
   }
   return trips;
+}
+
+// Where a trip meets a stop that's in a building: the point of its wall closest to your dot
+// (the door side). Null when the stop has no building, or the dot's already inside it.
+function wall(stop: Visit, dot: Spot): Spot | null {
+  const o = stop.outline;
+  if (!o || o.length < 3 || contains(o, dot.lat, dot.lng)) return null;
+  const [lat, lng] = closestOnOutline(o, dot.lat, dot.lng);
+  return { lat, lng };
 }
 
 // An encoded polyline → spots (Google: precision 5; Valhalla: 6).

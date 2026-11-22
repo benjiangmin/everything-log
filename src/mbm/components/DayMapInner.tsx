@@ -3,11 +3,11 @@
 import { useEffect, useMemo, useRef, useState, useTransition, type ReactNode } from "react";
 import { APIProvider, InfoWindow, Map, useMap, useMapsLibrary } from "@vis.gl/react-google-maps";
 import { useRouter } from "next/navigation";
-import { lockDay, lookupPlaceOutline, moveStop, myPlaces, rememberedRoute, removeStop, reportRoute, trustedRoutes, saveBlock, setPlaceOutline, setStopOutline, setStopPlace, trailCells, type PlaceLite, type PlacePick } from "@/app/mbm/actions";
+import { lockDay, lookupPlaceOutline, moveStop, myPlaces, pastDrawings, rememberedRoute, removeStop, reportRoute, saveDrawing, savedDrawings, trustedRoutes, saveBlock, setPlaceOutline, setStopOutline, setStopPlace, trailCells, type PlaceLite, type PlacePick } from "@/app/mbm/actions";
 import { Search as PlaceSearch, type Found } from "./PlaceSearch";
 
 // Which version of the path engine drew a route (saved with "Route looks wrong" reports).
-const PATH_ENGINE = "legs+trails+match-v2 (2026-11-18: your dots win on your own paths)";
+const PATH_ENGINE = "legs+trails+match-v3 (2026-11-22: into a building at its wall; drawn once, saved)";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
 import type { Activity, Block, LockedTrip, RoutePoint, Visit } from "@/mbm/data";
 import { clock, dayRange, span } from "@/mbm/time";
@@ -252,25 +252,6 @@ export default function DayMapInner({
             </HtmlMarker>
           ));
         })}
-        {/* Where you waited for a ride (a bus stop): a small stop sign on the route. */}
-        {trips.flatMap((t) =>
-          t.waits.map((w, i) => {
-            const label = `Waited here ${span(w.end - w.start)} · ${clock(new Date(w.start), tz)} – ${clock(new Date(w.end), tz)}`;
-            return (
-              <HtmlMarker key={`${t.key}-wait-${i}`} position={w.at} zIndex={2}>
-                <span
-                  title={label}
-                  aria-label={label}
-                  className={`grid size-[18px] cursor-default place-items-center rounded-[6px] border-2 border-[#faf6f0] bg-[#3e281b] shadow transition-opacity ${
-                    dimming && !lit?.trip.has(t.key) ? "opacity-35" : ""
-                  }`}
-                >
-                  <span className="block size-1.5 rounded-full bg-[#faf6f0]" />
-                </span>
-              </HtmlMarker>
-            );
-          }),
-        )}
         {pin?.at && (
           <HtmlMarker position={pin.at} zIndex={6} passive>
             <span className="pointer-events-none flex flex-col items-center" style={{ transform: "translateY(-50%)" }}>
@@ -752,12 +733,28 @@ function useFilledTrips(trips: Trip[], points: RoutePoint[]): { trips: Trip[]; s
   useEffect(() => {
     if (!ready) return;
     const center = trails?.center ?? null;
+    // Lines already saved for these pieces (061): drawn exactly that way, on every reload and
+    // device. Asked once for the lot.
+    const fresh = trips.flatMap((t) => t.pieces.map((_, i) => ({ t, i }))).filter(({ t, i }) => !asked.current.has(pieceKey(t, i)));
+    const savedP = fresh.length ? savedDrawings(fresh.map(({ t, i }) => drawKey(t, i))).catch(() => ({}) as Awaited<ReturnType<typeof savedDrawings>>) : null;
     for (const t of trips) {
       t.pieces.forEach(async (p, i) => {
         const key = pieceKey(t, i);
         if (asked.current.has(key)) return;
         asked.current.add(key);
-        if (keptPiece(key)) {
+        const dk = drawKey(t, i);
+        const saved = savedP ? (await savedP)[dk] : undefined;
+        if (saved && saved.path.length >= 2) {
+          setBetter((m) => ({ ...m, [key]: saved.path }));
+          if (saved.guess) setGuessed((g) => new Set(g).add(key));
+          keepPiece(key, saved.path, saved.guess);
+          setDoneKeys((d) => new Set(d).add(key));
+          return;
+        }
+        const local = keptPiece(key);
+        if (local) {
+          // (Worked out in this browser before 061: saved for everywhere else too.)
+          if (local.path) void saveDrawing({ key: dk, path: local.path, guess: local.guess, fromId: t.fromId, toId: t.toId, dots: p.dots?.length ?? 0, spread: spreadOf(p.dots) }).catch(() => {});
           setDoneKeys((d) => new Set(d).add(key));
           return;
         }
@@ -768,8 +765,13 @@ function useFilledTrips(trips: Trip[], points: RoutePoint[]): { trips: Trip[]; s
         let guessedNow = false;
         // A whole trip between two stops: routes you gave 4-5 stars between their places (055).
         const whole = t.pieces.length === 1 && t.fromId && t.toId;
+        // Then earlier trips' saved lines between the same places (061): a trip you make often
+        // is drawn the same way each time, when your dots fit it.
         const trusted = whole
-          ? (await trustedRoutes(t.fromId!, t.toId!).catch(() => [])).map((r) => ({ ...r, line: r.reversed ? [...r.line].reverse() : r.line }))
+          ? [
+              ...(await trustedRoutes(t.fromId!, t.toId!).catch(() => [])),
+              ...(await pastDrawings(t.fromId!, t.toId!).catch(() => [])),
+            ].map((r) => ({ ...r, line: r.reversed ? [...r.line].reverse() : r.line }))
           : [];
         // Your dots fit one (by their own accuracy, both ways round: routefit.ts): drawn that way.
         const fit = !p.missing && p.dots ? trusted.find((r) => fitsTrusted(p.dots!, r.line, r.spread)) : undefined;
@@ -838,6 +840,8 @@ function useFilledTrips(trips: Trip[], points: RoutePoint[]): { trips: Trip[]; s
         }
         if (path && path.length >= 2) setBetter((m) => ({ ...m, [key]: path! }));
         keepPiece(key, path && path.length >= 2 ? path : null, guessedNow);
+        if (path && path.length >= 2)
+          void saveDrawing({ key: dk, path, guess: guessedNow, fromId: t.fromId, toId: t.toId, dots: p.dots?.length ?? 0, spread: spreadOf(p.dots) }).catch(() => {});
         } finally {
           setDoneKeys((d) => new Set(d).add(key));
         }
@@ -915,6 +919,24 @@ function forgetPieces() {
 }
 
 // A piece, by what it covers (so a changed trip asks again only for pieces that changed).
+// A piece as saved (061): the way routes are drawn, and its own dots (first, last, how many),
+// or for a piece with none, its trip and times; plus its ends to ~10 m. Steady across reloads:
+// it only changes when the trip's dots do.
+const drawKey = (t: Trip, i: number) => {
+  const p = t.pieces[i];
+  const f = (s: Spot) => `${s.lat.toFixed(4)},${s.lng.toFixed(4)}`;
+  const ends = `${f(p.path[0])}>${f(p.path[p.path.length - 1])}`;
+  const d = p.dots;
+  const what = d?.length ? `d:${d[0].t}:${d[d.length - 1].t}:${d.length}` : `m:${t.key}:${Math.round(t.start / 60000)}:${Math.round(t.end / 60000)}:${i}`;
+  return `${PATH_ENGINE.slice(0, 24)}|${what}|${ends}`;
+};
+
+// How sure the phone was for these dots: their median accuracy (metres).
+function spreadOf(dots?: { acc?: number | null }[]): number | null {
+  const a = (dots ?? []).map((d) => d.acc).filter((v): v is number => typeof v === "number").sort((x, y) => x - y);
+  return a.length ? a[Math.floor(a.length / 2)] : null;
+}
+
 const pieceKey = (t: Trip, i: number) => {
   const p = t.pieces[i].path;
   const f = (s: Spot) => `${s.lat.toFixed(5)},${s.lng.toFixed(5)}`;
@@ -1064,7 +1086,8 @@ function usePlaceBuildings(visits: Visit[]): BuildingStatus | null {
       (async () => {
         let saved = false;
         for (const [id, at] of stops) {
-          const outline = await buildingAt(at.lat, at.lng).catch(() => undefined);
+          // (Only a building it's in: a stop outside one, on the sidewalk, is outdoors.)
+          const outline = await buildingAt(at.lat, at.lng, undefined, 25, true).catch(() => undefined);
           if (outline === undefined) lookedUp.delete(`stop:${id}`); // (couldn't reach it: next time)
           else if ((await setStopOutline(id, outline).catch(() => ({ ok: false }))).ok && outline) saved = true;
           await new Promise((r) => setTimeout(r, 1200));
