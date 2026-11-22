@@ -229,7 +229,7 @@ function Player({ day, today, title, name, prev, next }: { day: Day; today: bool
     if (stage !== "play" || !scene) return null;
     return { start: scene.start, end: scene.end, kind: scene.moving ? "moving" : scene.kind === "gap" ? "any" : "still" };
   }, [stage, scene]);
-  const step = Math.round(p * 160) / 160; // (the walker moves in small steps: smooth, without redrawing the map every frame)
+  const step = Math.round(p * 240) / 240; // (the walker moves in small steps: smooth, without redrawing the map every frame)
   const walk = useMemo(() => {
     if (stage !== "play" || !scene || (!scene.moving && scene.kind !== "gap")) return null;
     return { start: scene.start, end: scene.end, t: scene.start + step * (scene.end - scene.start), color: scene.moving ? scene.color : "#7f5539" };
@@ -260,7 +260,7 @@ function Player({ day, today, title, name, prev, next }: { day: Day; today: bool
   return (
     <div className="reflect relative size-full" style={{ "--reflect-glow": glow } as CSSProperties}>
       {/* The map, the whole screen. */}
-      <div className={`absolute inset-0 transition-[filter] duration-700 ${stage === "play" ? "" : "blur-[2px] saturate-50"}`}>
+      <div className={`absolute inset-0 flex flex-col transition-[filter] duration-700 ${stage === "play" ? "" : "blur-[2px] saturate-50"}`}>
         {empty ? <div className="size-full bg-[radial-gradient(circle_at_50%_40%,var(--surface),var(--paper))]" /> : <DayMap day={day} focus={focus} walk={walk} follow={follow} gestures="greedy" bare chrome={false} />}
       </div>
       {/* A glow in the color of what's playing, rising from the bottom. */}

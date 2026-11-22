@@ -1,7 +1,7 @@
 "use client";
 
 import { readDark, readDarkServer, subscribeDark } from "@/components/ui/theme";
-import { useEffect, useMemo, useRef, useState, useSyncExternalStore, useTransition, type ReactNode } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState, useSyncExternalStore, useTransition, type ReactNode } from "react";
 import { APIProvider, InfoWindow, Map, useMap, useMapsLibrary } from "@vis.gl/react-google-maps";
 import { useRouter } from "next/navigation";
 import { forgetDrawings, lockDay, lookupPlaceOutline, moveStop, myPlaces, pastDrawings, rememberedRoute, removeStop, reportRoute, saveDrawing, savedDrawings, trustedRoutes, saveBlock, setPlaceOutline, setStopOutline, setStopPlace, trailCells, type PlaceLite, type PlacePick } from "@/app/mbm/actions";
@@ -252,7 +252,7 @@ export default function DayMapInner({
         {trips.map((t) => {
           const on = lit?.trip.has(t.key) ?? false;
           return (
-            <TripLine key={t.key} pieces={t.pieces} lit={on} faded={dimming && !on} />
+            <TripLine key={t.key} pieces={t.pieces} lit={on} faded={dimming && !on} hidden={!!walk && t.end > walk.start && t.start < walk.end} />
           );
         })}
         {/* Loose ends: where a trip begins or ends away from any stop (where the phone started or
@@ -874,7 +874,7 @@ function useFilledTrips(trips: Trip[], points: RoutePoint[]): { trips: Trip[]; s
           if (thin) {
             // (Too few dots to check a trusted route against: still the best guess, dashed.)
             const remembered = trusted[0]?.line.slice(1, -1) ?? (whole ? await rememberedRoute(t.fromId!, t.toId!).catch(() => null) : null);
-            const found = remembered ?? (await walkingRoute(a, b));
+            const found = remembered ?? (await walkingRoute(a, b, byCar(t) ? "DRIVE" : "WALK"));
             if (found) {
               setGuessed((g) => new Set(g).add(key));
               guessedNow = true;
@@ -885,7 +885,7 @@ function useFilledTrips(trips: Trip[], points: RoutePoint[]): { trips: Trip[]; s
           const remembered = trusted[0]?.line.slice(1, -1) ?? (whole ? await rememberedRoute(t.fromId!, t.toId!).catch(() => null) : null);
           // (Joined to both ends: the route found starts and ends on the nearest street, which left
           // a little gap to where your dots stop and start again.)
-          const found = remembered ?? (await walkingRoute(a, b));
+          const found = remembered ?? (await walkingRoute(a, b, byCar(t) ? "DRIVE" : "WALK"));
           path = found ? [a, ...found, b] : null;
         }
         if (path && path.length >= 2) setBetter((m) => ({ ...m, [key]: path! }));
@@ -1049,8 +1049,10 @@ const pieceKey = (t: Trip, i: number) => {
 };
 
 // Google's walking route between two spots (Routes API; it has to be allowed on the key).
-async function walkingRoute(a: Spot, b: Spot): Promise<Spot[] | null> {
-  const id = `mbm-walk:${a.lat.toFixed(4)},${a.lng.toFixed(4)}>${b.lat.toFixed(4)},${b.lng.toFixed(4)}`;
+// (mode DRIVE for a trip you made by car or bus: walking directions take crosswalks and paths a
+// car never would.)
+async function walkingRoute(a: Spot, b: Spot, mode: "WALK" | "DRIVE" = "WALK"): Promise<Spot[] | null> {
+  const id = `mbm-${mode === "WALK" ? "walk" : "drive"}:${a.lat.toFixed(4)},${a.lng.toFixed(4)}>${b.lat.toFixed(4)},${b.lng.toFixed(4)}`;
   try {
     const kept = localStorage.getItem(id);
     if (kept) return JSON.parse(kept) as Spot[];
@@ -1060,7 +1062,7 @@ async function walkingRoute(a: Spot, b: Spot): Promise<Spot[] | null> {
     const res = await fetch("https://routes.googleapis.com/directions/v2:computeRoutes", {
       method: "POST",
       headers: { "Content-Type": "application/json", "X-Goog-Api-Key": KEY!, "X-Goog-FieldMask": "routes.polyline.encodedPolyline" },
-      body: JSON.stringify({ origin: at(a), destination: at(b), travelMode: "WALK" }),
+      body: JSON.stringify({ origin: at(a), destination: at(b), travelMode: mode }),
     });
     if (!res.ok) return null;
     const body = (await res.json()) as { routes?: { polyline?: { encodedPolyline?: string } }[] };
@@ -1076,10 +1078,52 @@ async function walkingRoute(a: Spot, b: Spot): Promise<Spot[] | null> {
   }
 }
 
-// A trip: solid mocha where the phone recorded the way, dashed only where the way is really a
-// guess. Lit = the hovered stretch (thicker, caramel); faded = the rest of the day while hovering.
-function TripLine({ pieces, lit, faded }: { pieces: Piece[]; lit: boolean; faded: boolean }) {
-  return pieces.map((p, i) => <Route key={i} path={p.path} dashed={p.missing && !plainly(p.path)} lit={lit} faded={faded} />);
+// Made by car or bus: its dots went faster than anyone walks or runs (legs.ts calls it a ride),
+// or overall it went at more than a run.
+function byCar(t: Trip) {
+  if (t.pieces.some((p) => p.dots && splitLegs(p.dots).some((l) => l.mode === "ride"))) return true;
+  return (t.pace ?? 0) > 4;
+}
+
+// A trip: always a solid line. Where the way is really a guess (the phone missed it), a small
+// ✦ sits on that bit. Lit = the hovered stretch (thicker, caramel); faded = the rest of the day
+// while hovering. hidden: being drawn in by Reflect right now (it draws its own).
+function TripLine({ pieces, lit, faded, hidden = false }: { pieces: Piece[]; lit: boolean; faded: boolean; hidden?: boolean }) {
+  if (hidden) return null;
+  return pieces.map((p, i) => (
+    <Fragment key={i}>
+      <Route path={p.path} dashed={false} lit={lit} faded={faded} />
+      {p.missing && !plainly(p.path) && !faded && <GuessMark at={midway(p.path)} />}
+    </Fragment>
+  ));
+}
+
+// The ✦ on a guessed bit of a route.
+function GuessMark({ at }: { at: Spot }) {
+  return (
+    <HtmlMarker position={at} zIndex={6} passive>
+      <span
+        title="A guess: the phone missed this part, so it's filled in along the streets"
+        className="grid size-[18px] place-items-center rounded-full bg-[#faf6f0] text-[11px] leading-none text-[#7f5539] shadow ring-1 ring-[#7f5539]/40"
+      >
+        ✦
+      </span>
+    </HtmlMarker>
+  );
+}
+
+// Halfway along a line (by distance).
+function midway(path: Spot[]): Spot {
+  const steps = path.slice(1).map((q, i) => metres(path[i], q));
+  let left = steps.reduce((a, b) => a + b, 0) / 2;
+  for (let i = 0; i < steps.length; i++) {
+    if (left <= steps[i]) {
+      const k = steps[i] ? left / steps[i] : 0;
+      return { lat: path[i].lat + (path[i + 1].lat - path[i].lat) * k, lng: path[i].lng + (path[i + 1].lng - path[i].lng) * k };
+    }
+    left -= steps[i];
+  }
+  return path[path.length - 1];
 }
 
 // A bit the phone missed, but where there's no real doubt which way you went (a wait at a bus
@@ -1306,7 +1350,12 @@ function Follow({ spots, cover }: { spots: Spot[]; cover: { top: number; bottom:
   const key = spots.length ? `${spots.length}:${spots[0].lat.toFixed(5)},${spots[0].lng.toFixed(5)}:${spots.at(-1)!.lat.toFixed(5)}` : "";
   useEffect(() => {
     if (!map || !core || !spots.length) return;
-    const pad = { top: cover.top + 40, bottom: cover.bottom + 40, left: 60, right: 60 };
+    // (Never more padding than the map has room for: Google then zooms out to the whole country.)
+    const h = map.getDiv().clientHeight || 600;
+    const room = Math.max(0, h - 160);
+    const want = cover.top + cover.bottom + 80;
+    const k = want > room ? room / want : 1;
+    const pad = { top: Math.round((cover.top + 40) * k), bottom: Math.round((cover.bottom + 40) * k), left: 60, right: 60 };
     const bounds = new core.LatLngBounds();
     for (const s of spots) bounds.extend(s);
     const ne = bounds.getNorthEast();
@@ -1331,48 +1380,86 @@ function Follow({ spots, cover }: { spots: Spot[]; cover: { top: number; bottom:
   return null;
 }
 
-// (Reflect) Someone walking a route: a glowing dot at time t, with a fading trail behind it.
+// (Reflect) Someone walking a route: the line drawn in behind them as they go (like a pen
+// tracing it), a glowing dot where they are at time t, and a fading trail.
 function Walker({ trips, walk }: { trips: Trip[]; walk: { start: number; end: number; t: number; color: string } }) {
   const on = trips.filter((x) => x.end > walk.start && x.start < walk.end).sort((a, b) => a.start - b.start);
-  if (!on.length) return null;
-  const at = (t: number) => {
-    const trip = on.find((x) => t <= x.end) ?? on.at(-1)!;
+  // Each trip's whole line, and how far along it each point is (metres).
+  const lines = on.map((trip) => {
     const path = trip.pieces.flatMap((p) => p.path);
-    if (path.length < 2) return path[0] ?? null;
-    const frac = Math.min(1, Math.max(0, (t - trip.start) / Math.max(1, trip.end - trip.start)));
-    const steps = path.slice(1).map((p, i) => metres(path[i], p));
-    let left = frac * steps.reduce((a, b) => a + b, 0);
-    for (let i = 0; i < steps.length; i++) {
-      if (left <= steps[i] || i === steps.length - 1) {
-        const k = steps[i] ? Math.min(1, left / steps[i]) : 0;
-        return { lat: path[i].lat + (path[i + 1].lat - path[i].lat) * k, lng: path[i].lng + (path[i + 1].lng - path[i].lng) * k };
+    const at = [0];
+    for (let i = 1; i < path.length; i++) at.push(at[i - 1] + metres(path[i - 1], path[i]));
+    return { trip, path, at, total: at[at.length - 1] };
+  });
+  // Where they are at time t: which trip, and the line up to there.
+  const upTo = (t: number) => {
+    const out: Spot[] = [];
+    let here: Spot | null = null;
+    for (const l of lines) {
+      if (l.path.length === 0) continue;
+      const frac = Math.min(1, Math.max(0, (t - l.trip.start) / Math.max(1, l.trip.end - l.trip.start)));
+      if (frac <= 0) break;
+      const want = frac * l.total;
+      let i = 1;
+      while (i < l.path.length && l.at[i] < want) {
+        out.push(l.path[i - 1]);
+        i++;
       }
-      left -= steps[i];
+      out.push(l.path[i - 1]);
+      if (i < l.path.length) {
+        const k = l.at[i] - l.at[i - 1] ? (want - l.at[i - 1]) / (l.at[i] - l.at[i - 1]) : 0;
+        here = { lat: l.path[i - 1].lat + (l.path[i].lat - l.path[i - 1].lat) * k, lng: l.path[i - 1].lng + (l.path[i].lng - l.path[i - 1].lng) * k };
+        out.push(here);
+      } else here = l.path[l.path.length - 1];
+      if (frac < 1) break;
     }
-    return path.at(-1)!;
+    return { drawn: out, here };
   };
+  const { drawn, here } = upTo(walk.t);
   const span = walk.end - walk.start;
-  const here = at(walk.t);
-  if (!here) return null;
-  const trail = [1, 2, 3, 4, 5].map((i) => at(Math.max(walk.start, walk.t - (span * i) / 60))).filter((p): p is Spot => !!p);
+  const trail = [1, 2, 3, 4].map((i) => upTo(Math.max(walk.start, walk.t - (span * i) / 70)).here).filter((p): p is Spot => !!p);
+  if (!lines.length) return null;
   return (
     <>
+      <Ink path={drawn} color={walk.color} />
       {trail.map((p, i) => (
         <HtmlMarker key={`trail-${i}`} position={p} zIndex={7} passive>
-          <span
-            className="pointer-events-none block rounded-full"
-            style={{ width: 10 - i * 1.4, height: 10 - i * 1.4, background: walk.color, opacity: 0.55 - i * 0.1, boxShadow: `0 0 8px ${walk.color}` }}
-          />
+          <span className="pointer-events-none block rounded-full" style={{ width: 9 - i * 1.5, height: 9 - i * 1.5, background: walk.color, opacity: 0.5 - i * 0.1 }} />
         </HtmlMarker>
       ))}
-      <HtmlMarker position={here} zIndex={8} passive>
-        <span className="pointer-events-none relative grid size-7 place-items-center">
-          <span className="absolute inset-0 animate-ping rounded-full opacity-50" style={{ background: walk.color }} />
-          <span className="relative size-4 rounded-full border-[3px] border-[#faf6f0] shadow-lg" style={{ background: walk.color, boxShadow: `0 0 14px 4px ${walk.color}` }} />
-        </span>
-      </HtmlMarker>
+      {here && (
+        <HtmlMarker position={here} zIndex={8} passive>
+          <span className="pointer-events-none relative grid size-7 place-items-center">
+            <span className="absolute inset-0 animate-ping rounded-full opacity-50" style={{ background: walk.color }} />
+            <span className="relative size-4 rounded-full border-[3px] border-[#faf6f0] shadow-lg" style={{ background: walk.color, boxShadow: `0 0 14px 4px ${walk.color}` }} />
+          </span>
+        </HtmlMarker>
+      )}
     </>
   );
+}
+
+// (Reflect) The line drawn so far: one polyline, its points updated as it grows (not a new line
+// every frame), with a soft wider glow under it.
+function Ink({ path, color }: { path: Spot[]; color: string }) {
+  const map = useMap();
+  const maps = useMapsLibrary("maps");
+  const lines = useRef<google.maps.Polyline[]>([]);
+  useEffect(() => {
+    if (!map || !maps) return;
+    const glow = new maps.Polyline({ map, clickable: false, strokeColor: color, strokeOpacity: 0.25, strokeWeight: 16, zIndex: 3 });
+    const pen = new maps.Polyline({ map, clickable: false, strokeColor: color, strokeOpacity: 1, strokeWeight: 6, zIndex: 4 });
+    lines.current = [glow, pen];
+    return () => {
+      glow.setMap(null);
+      pen.setMap(null);
+      lines.current = [];
+    };
+  }, [map, maps, color]);
+  useEffect(() => {
+    for (const l of lines.current) l.setPath(path);
+  }, [path]);
+  return null;
 }
 
 // Back to the whole day (in the corner where the zoom buttons were).
