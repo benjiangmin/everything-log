@@ -874,7 +874,7 @@ function useFilledTrips(trips: Trip[], points: RoutePoint[]): { trips: Trip[]; s
           if (thin) {
             // (Too few dots to check a trusted route against: still the best guess, dashed.)
             const remembered = trusted[0]?.line.slice(1, -1) ?? (whole ? await rememberedRoute(t.fromId!, t.toId!).catch(() => null) : null);
-            const found = remembered ?? (await walkingRoute(a, b, byCar(t) ? "DRIVE" : "WALK"));
+            const found = remembered ?? (await gapRoute(t, i, a, b));
             if (found) {
               setGuessed((g) => new Set(g).add(key));
               guessedNow = true;
@@ -885,7 +885,7 @@ function useFilledTrips(trips: Trip[], points: RoutePoint[]): { trips: Trip[]; s
           const remembered = trusted[0]?.line.slice(1, -1) ?? (whole ? await rememberedRoute(t.fromId!, t.toId!).catch(() => null) : null);
           // (Joined to both ends: the route found starts and ends on the nearest street, which left
           // a little gap to where your dots stop and start again.)
-          const found = remembered ?? (await walkingRoute(a, b, byCar(t) ? "DRIVE" : "WALK"));
+          const found = remembered ?? (await gapRoute(t, i, a, b));
           path = found ? [a, ...found, b] : null;
         }
         if (path && path.length >= 2) setBetter((m) => ({ ...m, [key]: path! }));
@@ -1051,18 +1051,23 @@ const pieceKey = (t: Trip, i: number) => {
 // Google's walking route between two spots (Routes API; it has to be allowed on the key).
 // (mode DRIVE for a trip you made by car or bus: walking directions take crosswalks and paths a
 // car never would.)
-async function walkingRoute(a: Spot, b: Spot, mode: "WALK" | "DRIVE" = "WALK"): Promise<Spot[] | null> {
-  const id = `mbm-${mode === "WALK" ? "walk" : "drive"}:${a.lat.toFixed(4)},${a.lng.toFixed(4)}>${b.lat.toFixed(4)},${b.lng.toFixed(4)}`;
+// heading: the way you were going at each end (degrees), so a car route starts off that way (from
+// a point on a divided road, Google otherwise may start down the other side and turn round).
+async function walkingRoute(a: Spot, b: Spot, mode: "WALK" | "DRIVE" = "WALK", heading: { from?: number | null; to?: number | null } = {}): Promise<Spot[] | null> {
+  const hv = (h?: number | null) => (mode === "DRIVE" && h != null ? Math.round(((h % 360) + 360) % 360) : null);
+  const h0 = hv(heading.from);
+  const h1 = hv(heading.to);
+  const id = `mbm-${mode === "WALK" ? "walk" : "drive"}:${a.lat.toFixed(4)},${a.lng.toFixed(4)}>${b.lat.toFixed(4)},${b.lng.toFixed(4)}${h0 != null || h1 != null ? `@${h0 ?? ""},${h1 ?? ""}` : ""}`;
   try {
     const kept = localStorage.getItem(id);
     if (kept) return JSON.parse(kept) as Spot[];
   } catch {}
   try {
-    const at = (s: Spot) => ({ location: { latLng: { latitude: s.lat, longitude: s.lng } } });
+    const at = (s: Spot, h: number | null) => ({ location: { latLng: { latitude: s.lat, longitude: s.lng }, ...(h != null ? { heading: h } : {}) } });
     const res = await fetch("https://routes.googleapis.com/directions/v2:computeRoutes", {
       method: "POST",
       headers: { "Content-Type": "application/json", "X-Goog-Api-Key": KEY!, "X-Goog-FieldMask": "routes.polyline.encodedPolyline" },
-      body: JSON.stringify({ origin: at(a), destination: at(b), travelMode: mode }),
+      body: JSON.stringify({ origin: at(a, h0), destination: at(b, h1), travelMode: mode }),
     });
     if (!res.ok) return null;
     const body = (await res.json()) as { routes?: { polyline?: { encodedPolyline?: string } }[] };
@@ -1076,6 +1081,40 @@ async function walkingRoute(a: Spot, b: Spot, mode: "WALK" | "DRIVE" = "WALK"): 
   } catch {
     return null;
   }
+}
+
+// A bit the phone missed, filled in along the streets (driving directions for a car trip), heading
+// off the way you were going and arriving the way you went on. If the directions still go out of
+// their way and come back past where they started (a U-turn down the road), that loop is cut off:
+// from the last time they pass by the start (within its dot's accuracy), to the first time they
+// reach the end.
+async function gapRoute(t: Trip, i: number, a: Spot, b: Spot): Promise<Spot[] | null> {
+  const before = t.pieces[i - 1]?.dots ?? [];
+  const after = t.pieces[i + 1]?.dots ?? [];
+  const bearing = (p: Spot, q: Spot) => (Math.atan2((q.lng - p.lng) * Math.cos((p.lat * Math.PI) / 180), q.lat - p.lat) * 180) / Math.PI;
+  // (The way you were going: from a dot a little way back, so GPS wobble doesn't decide it.)
+  const way = (dots: Dot[], atEnd: boolean) => {
+    if (dots.length < 2) return null;
+    const ref = atEnd ? dots[dots.length - 1] : dots[0];
+    const list = atEnd ? [...dots].reverse() : dots;
+    const other = list.find((d) => metres(d, ref) >= 2 * (ref.acc ?? 10));
+    if (!other) return null;
+    return atEnd ? bearing(other, ref) : bearing(ref, other);
+  };
+  const car = byCar(t);
+  const path = await walkingRoute(a, b, car ? "DRIVE" : "WALK", car ? { from: way(before, true), to: way(after, false) } : {});
+  if (!path || path.length < 3) return path;
+  const tolA = Math.max(25, before[before.length - 1]?.acc ?? 25);
+  const tolB = Math.max(25, after[0]?.acc ?? 25);
+  let j = 0;
+  for (let k = 1; k < path.length; k++) if (metres(path[k], a) <= tolA) j = k;
+  let e = path.length - 1;
+  for (let k = j + 1; k < path.length; k++)
+    if (metres(path[k], b) <= tolB) {
+      e = k;
+      break;
+    }
+  return path.slice(j, e + 1);
 }
 
 // Made by car or bus: its dots went faster than anyone walks or runs (legs.ts calls it a ride),
