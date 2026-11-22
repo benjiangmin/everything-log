@@ -14,7 +14,12 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="en" className="h-full antialiased">
+    // (suppressHydrationWarning: the night-mode script below sets data-theme before React loads.)
+    <html lang="en" className="h-full antialiased" suppressHydrationWarning>
+      <head>
+        {/* Night mode, set before anything's drawn, so a dark page never flashes light. */}
+        <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
+      </head>
       <body className="min-h-full">
         <ConfirmProvider>
           {/* The navigation bar on the left of every page (not the login page). */}
@@ -29,3 +34,5 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     </html>
   );
 }
+
+const THEME_SCRIPT = `try{if(localStorage.getItem("theme")==="dark")document.documentElement.dataset.theme="dark"}catch(e){}`;

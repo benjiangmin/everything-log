@@ -12,6 +12,21 @@
   --danger: #a3473a;
 }
 
+/* Night mode (profile menu → Night mode): an off dark grey with a hint of the same warmth, light
+   text. The same names, so everything that uses them follows; the map stays a map. */
+html[data-theme="dark"] {
+  --paper: #1f1c1a;
+  --surface: #2b2724;
+  --ink: #ede5db;
+  --muted: #a8998a;
+  --line: #3b3531;
+  --accent: #e4d6c5;
+  --accent-ink: #1f1c1a;
+  --danger: #e07a6a;
+  --color-black: var(--ink); /* (hover icons that turn "black") */
+  color-scheme: dark;
+}
+
 @theme inline {
   --color-paper: var(--paper);
   --color-surface: var(--surface);

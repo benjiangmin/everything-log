@@ -1,11 +1,12 @@
 "use client";
 
 import Link from "next/link";
+import { readDark, readDarkServer, setDark, subscribeDark } from "@/components/ui/theme";
 import { usePathname } from "next/navigation";
 import { signOut } from "@/app/mbm/actions";
 import TopSearch from "./TopSearch";
 import Avatar from "./Avatar";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 
 // Minute by Minute's top bar: its name, the three pages, and signing out. `owner`: you (signed in
 // to the everything-log on this browser) also get a link back to it; nobody else does.
@@ -159,6 +160,7 @@ function ProfileMenu({
           </div>
           <div className="h-px bg-line" />
           <div className="py-1">
+            <NightToggle className={item} />
             <Link href="/mbm/account" onClick={() => setOpen(false)} className={item} role="menuitem">
               Your account
             </Link>
@@ -192,4 +194,22 @@ function ago(ms: number) {
   const h = Math.round(m / 60);
   if (h < 36) return `${h} h ago`;
   return `${Math.round(h / 24)} days ago`;
+}
+
+// Night mode, from the profile menu: a moon, and a switch.
+function NightToggle({ className }: { className: string }) {
+  const dark = useSyncExternalStore(subscribeDark, readDark, readDarkServer);
+  return (
+    <button type="button" role="menuitemcheckbox" aria-checked={dark} onClick={() => setDark(!dark)} className={`${className} flex items-center justify-between`}>
+      <span className="flex items-center gap-2.5">
+        <svg aria-hidden="true" viewBox="0 0 24 24" className="size-4 text-muted" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5Z" />
+        </svg>
+        Night mode
+      </span>
+      <span aria-hidden="true" className={`relative h-5 w-9 shrink-0 rounded-full transition-colors ${dark ? "bg-accent" : "bg-line"}`}>
+        <span className={`absolute top-0.5 size-4 rounded-full bg-paper shadow transition-[left] ${dark ? "left-[18px]" : "left-0.5"}`} />
+      </span>
+    </button>
+  );
 }
