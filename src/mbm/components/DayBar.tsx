@@ -369,9 +369,8 @@ export default function DayBar({
   const shownPlans = plans.filter((p) => p.end > now && p.start < dayEnd && p.end > from && p.start < to);
   const main = shownPlaced.filter((p) => p.lane === 0);
   const side = shownPlaced.filter((p) => p.lane > 0);
-  // Sandwiched: the same job somewhere before and after it (within 12 hours: Work, Commute,
-  // Eating, Commute, Work), and it's not that job. Hovering it shows a ↓: the two become one,
-  // with everything between under it. (The same rule as tuck_between, 052.)
+  // Sandwiched: hovering it shows a ↓, and the two around it become one with it under them
+  // (tuck_between, 052).
   const sandwich = new Map<string, Block>(); // middle's id → the entry before it
   // Only directly between two of the same job: the entry right before it ends as it starts, and
   // the one right after starts as it ends (a minute's slack), with nothing else in between.
