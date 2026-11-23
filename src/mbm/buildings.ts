@@ -152,19 +152,43 @@ export function closestOnOutline(o: Outline, lat: number, lng: number): [number,
 // St from the Extension Bldg to Theory: yes. Across campus: no, buildings in the way.
 // (Asks OpenStreetMap for the buildings the straight line touches. true / false; undefined:
 // couldn't ask right now.)
+// (Answers kept for this visit: asking the same two spots again is instant.)
+const between = new Map<string, boolean>();
+
 export async function nothingBetween(a: [number, number], b: [number, number]): Promise<boolean | undefined> {
   const f = (s: [number, number]) => `${s[0].toFixed(6)},${s[1].toFixed(6)}`;
+  const key = `${f(a)}>${f(b)}`;
+  if (between.has(key)) return between.get(key);
   // (3 is plenty: the two ends' own buildings, and one more means something's in the way.)
   const q = `[out:json][timeout:8];(way(around:1,${f(a)},${f(b)})[building];relation(around:1,${f(a)},${f(b)})[building];);out geom 3;`;
-  for (const server of SERVERS) {
+  const own = (s: [number, number]) => (o: Outline) => contains(o, s[0], s[1]) || edgeDistance(o, s[0], s[1]) <= 1;
+  // The map servers are asked a moment apart, not one after another: the first good answer wins
+  // and the rest are called off (one slow server used to hold up saving a stop for 30 seconds).
+  const stop = new AbortController();
+  const ask = async (server: string, wait: number) => {
+    if (wait) await new Promise((r) => setTimeout(r, wait));
+    if (stop.signal.aborted) throw new Error("done");
+    const own_ = new AbortController();
+    const timer = setTimeout(() => own_.abort(), 9000);
+    const off = () => own_.abort();
+    stop.signal.addEventListener("abort", off);
     try {
-      const res = await fetch(`${server}?data=${encodeURIComponent(q)}`, { signal: AbortSignal.timeout(9000), cache: "no-store" });
-      if (!res.ok) continue;
+      const res = await fetch(`${server}?data=${encodeURIComponent(q)}`, { signal: own_.signal, cache: "no-store" });
+      if (!res.ok) throw new Error("busy");
       const body = (await res.json()) as { remark?: string; elements?: Element[] };
-      if (body.remark || !Array.isArray(body.elements)) continue;
-      const own = (s: [number, number]) => (o: Outline) => contains(o, s[0], s[1]) || edgeDistance(o, s[0], s[1]) <= 1;
+      if (body.remark || !Array.isArray(body.elements)) throw new Error("busy");
       return body.elements.every((e) => shapesOf(e).some((o) => o.length >= 4 && (own(a)(o) || own(b)(o))));
-    } catch {}
+    } finally {
+      clearTimeout(timer);
+      stop.signal.removeEventListener("abort", off);
+    }
+  };
+  try {
+    const ok = await Promise.any(SERVERS.map((server, i) => ask(server, i * 1200)));
+    stop.abort();
+    between.set(key, ok);
+    return ok;
+  } catch {
+    return undefined;
   }
-  return undefined;
 }

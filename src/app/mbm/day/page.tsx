@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Suspense } from "react";
-import { connection } from "next/server";
+import { after, connection } from "next/server";
 import { redirect } from "next/navigation";
 import { getDay, mbmTz } from "@/mbm/data";
 import { mbm, mbmReady, mbmUser } from "@/mbm/supabase";
@@ -41,12 +41,16 @@ async function MbmDay({ day: asked, show, showAt }: { day?: string; show: "unmar
 
   // Today, first: anything due to start for you (plans you've got to, jobs at their places), so
   // it's on the bar below. (043; before it's run, nothing.)
-  // (Your Google Calendar brought up to date first, at most every 10 minutes: a plan added since
-  // the last look still starts its job.)
+  // Then, once the page is on its way (so it isn't slower): Google Calendar brought up to date (at
+  // most every 10 minutes) and anything due started again, so a plan added since the last look
+  // still starts its job (it shows on the next refresh; the phone also does this every 10 minutes).
   if (isToday) {
     const client = await mbm();
-    await syncCalendar(client).catch(() => null);
     await client.rpc("start_for_you").then(() => null, () => null);
+    after(async () => {
+      const synced = await syncCalendar(client).catch(() => null);
+      if (synced?.count) await client.rpc("start_for_you").then(() => null, () => null);
+    });
   }
   const [day, plans] = await Promise.all([getDay(dayKey).catch((e: Error) => e), isToday ? upcoming(new Date(), dayKey, tz) : Promise.resolve([])]);
   if (day instanceof Error) return <p className="rounded-card bg-surface px-5 py-4 text-sm text-danger">{day.message}</p>;

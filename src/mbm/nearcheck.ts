@@ -16,12 +16,12 @@ export async function notNextTo(
   if (!info) return "Couldn't check where your phone had you. Try again in a moment.";
   const { spots, target } = info;
   if (!target || !spots.length) return null; // (nothing recorded to go against)
-  for (const s of spots) {
-    const t: [number, number] = target.outline && target.outline.length >= 3 ? closestOnOutline(target.outline, s[0], s[1]) : [target.lat, target.lng];
-    const ok = await nothingBetween(s, t);
-    if (ok === undefined) return "Couldn't check the buildings around there right now. Try again in a moment.";
-    if (!ok) return `${name} isn't next to where your phone had you. Pick a place in or right next to that building.`;
-  }
+  // (All the spots at once, not one after another.)
+  const answers = await Promise.all(
+    spots.map((s) => nothingBetween(s, target.outline && target.outline.length >= 3 ? closestOnOutline(target.outline, s[0], s[1]) : [target.lat, target.lng])),
+  );
+  if (answers.includes(false)) return `${name} isn't next to where your phone had you. Pick a place in or right next to that building.`;
+  if (answers.includes(undefined)) return "Couldn't check the buildings around there right now. Try again in a moment.";
   return null;
 }
 
@@ -29,11 +29,9 @@ export async function notNextTo(
 export async function cantMoveTo(visitId: string, lat: number, lng: number): Promise<string | null> {
   const info = await nearCheckInfo({ visitId }, { lat, lng }).catch(() => null);
   if (!info) return "Couldn't check where your phone had you. Try again in a moment.";
-  for (const s of info.spots) {
-    const ok = await nothingBetween(s, [lat, lng]);
-    if (ok === undefined) return "Couldn't check the buildings around there right now. Try again in a moment.";
-    if (!ok) return "Too far from where your phone had you: drop it in or right next to that building.";
-  }
+  const answers = await Promise.all(info.spots.map((s) => nothingBetween(s, [lat, lng])));
+  if (answers.includes(false)) return "Too far from where your phone had you: drop it in or right next to that building.";
+  if (answers.includes(undefined)) return "Couldn't check the buildings around there right now. Try again in a moment.";
   return null;
 }
 

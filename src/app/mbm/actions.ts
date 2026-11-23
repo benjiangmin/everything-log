@@ -4,6 +4,7 @@ import { googleStatus, syncCalendar } from "@/mbm/google";
 import { buildingAt, contains } from "@/mbm/buildings";
 
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
 import { redirect } from "next/navigation";
 import { headers } from "next/headers";
 import { mbm, mbmReady } from "@/mbm/supabase";
@@ -490,7 +491,7 @@ export async function namePlace(visitId: string, name: string): Promise<Result> 
   await unlockDaysOf(await mbm(), visitId);
   const { error } = await (await mbm()).rpc("name_place", { p_visit_id: visitId, p_name: clean });
   if (error) return fail(/name_place/.test(error.message) ? "Run supabase/minute-by-minute/005_location.sql first." : error.message);
-  await learnMisread(visitId);
+  after(() => learnMisread(visitId));
   refresh();
   return { ok: true };
 }
@@ -1116,7 +1117,8 @@ export async function setStopPlace(visitId: string, own: string | null, pick: Pl
   await unlockDaysOf(client, visitId);
   const { error } = await client.rpc("set_stop_place", { p_visit: visitId, p_own: name, p_place: pick.kind === "mine" ? pick.id : null, p_real: real });
   if (error) return fail(/set_stop_place|place_for_real/.test(error.message) ? NEEDS_047 : error.message);
-  await learnMisread(visitId);
+  // (Learning from the fix happens once you've got your answer: it doesn't need you to wait.)
+  after(() => learnMisread(visitId));
   refresh();
   return { ok: true };
 }
