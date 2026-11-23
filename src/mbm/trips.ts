@@ -69,13 +69,19 @@ function cleanDots(points: RoutePoint[]) {
     }))
     .sort((a, b) => a.t - b.t);
   // Standing somewhere (waiting to cross, talking): one dot, not a zigzag of jitter. A still dot
-  // within 20 m of the last one kept is dropped.
+  // within 20 m of the last one kept is dropped, and a vague one (said still, poor accuracy).
+  // Unless it's clearly somewhere else: further from the last dot kept than both their accuracies
+  // together. Then it moved, whatever its speed says (when the phone loses the GPS in a car, its
+  // stand-in readings all say 0 mph while they creep along the road you're on: on Nov 22 they
+  // were the only record of University Ave west of Farley, and dropping them left a gap that
+  // filled-in directions looped through).
   const pts: typeof all = [];
   for (const p of all) {
-    if (p.fuzzy) continue;
     const prev = pts[pts.length - 1];
-    if (prev && p.still && metres(prev, p) < 20) continue;
-    pts.push(p);
+    const moved = !!prev && metres(prev, p) > (prev.acc ?? 0) + (p.acc ?? 0);
+    if (p.fuzzy && !moved) continue;
+    if (prev && p.still && !moved && metres(prev, p) < 20) continue;
+    pts.push(moved && p.still ? { ...p, still: false, fuzzy: false } : p);
   }
   return pts.filter((b, i) => {
     const a = pts[i - 1];
