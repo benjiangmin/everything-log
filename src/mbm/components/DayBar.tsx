@@ -372,21 +372,20 @@ export default function DayBar({
   // Sandwiched: the same job somewhere before and after it (within 12 hours: Work, Commute,
   // Eating, Commute, Work), and it's not that job. Hovering it shows a ↓: the two become one,
   // with everything between under it. (The same rule as tuck_between, 052.)
-  const HALF_DAY = 12 * 3600_000;
   const sandwich = new Map<string, Block>(); // middle's id → the entry before it
+  // Only directly between two of the same job: the entry right before it ends as it starts, and
+  // the one right after starts as it ends (a minute's slack), with nothing else in between.
+  // (Work, Coffee, Work: yes. Work, Commute, Church, Commute, …, Work: no.) Never under a Commute.
   main.forEach((p, i) => {
     if (!p.block.ended_at || !p.block.activity_id) return;
-    for (let k = i - 1; k >= 0; k--) {
-      const b = main[k];
-      if (p.start - b.end > HALF_DAY) break;
-      const job = b.block.activity_id;
-      // (Never under a Commute: Work, Commute, Work tucks the Commute; Commute, Work, Commute doesn't tuck Work.)
-      if (!job || job === p.block.activity_id || b.block.source === "location" || byId.get(job)?.name === "Commute" || !b.block.ended_at) continue;
-      if (main.some((a, j) => j > i && a.block.activity_id === job && a.start >= p.end - 60_000 && a.start <= b.end + HALF_DAY)) {
-        sandwich.set(p.block.id, b.block);
-        break;
-      }
-    }
+    const b = main[i - 1];
+    const a = main[i + 1];
+    if (!b || !a) return;
+    const job = b.block.activity_id;
+    if (!job || job === p.block.activity_id || a.block.activity_id !== job) return;
+    if (b.block.source === "location" || byId.get(job)?.name === "Commute" || !b.block.ended_at) return;
+    if (p.start - b.end > 60_000 || a.start - p.end > 60_000) return;
+    sandwich.set(p.block.id, b.block);
   });
   // Under a job (on a row below, all of it inside one entry above): hovering it shows a ↑ that
   // brings it back up and cuts the job around it (lift_out).
