@@ -530,7 +530,7 @@ function tripRow(t: Trip, blocks: Block[], activities: Activity[], tz: string, g
     key: t.key,
     color: best?.color ?? "#7f5539",
     title: `${best?.name ?? "Trip (no Commute tracked) · click to add"}${guess ? " ✦" : ""}`,
-    detail: `${clock(new Date(t.start), tz)} – ${clock(new Date(t.end), tz)} · ${span(t.end - t.start)}${guess ? " · ✦ this bit's a guess" : ""}`,
+    detail: `${clock(new Date(t.start), tz)} – ${clock(new Date(t.end), tz)} · ${span(t.end - t.start)}`,
     untracked: !best,
   };
 }
