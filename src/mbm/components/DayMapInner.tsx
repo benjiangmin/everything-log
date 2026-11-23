@@ -533,7 +533,7 @@ export default function DayMapInner({
   );
 }
 
-type Row = { key: string; color: string; title: string; detail: string; untracked?: boolean };
+type Row = { key: string; color: string; title: string; detail: string; untracked?: boolean; hint?: string };
 
 // A trip, named after the moving entry during it (Commute, or later Running…). Never after a
 // still one like a class: if no moving entry covers it, it's just a trip nothing was tracked for.
@@ -550,7 +550,8 @@ function tripRow(t: Trip, blocks: Block[], activities: Activity[], tz: string, g
   return {
     key: t.key,
     color: best?.color ?? "#7f5539",
-    title: `${best?.name ?? "Trip (no Commute tracked) · click to add"}${guess ? " ✦" : ""}`,
+    title: `${best?.name ?? "Commute detected"}${guess ? " ✦" : ""}`,
+    hint: best ? undefined : "click to add",
     detail: `${clock(new Date(t.start), tz)} – ${clock(new Date(t.end), tz)} · ${span(t.end - t.start)}`,
     untracked: !best,
   };
@@ -701,9 +702,10 @@ function Tip({ x, y, rows, heading, cover = 0, under, gap = 14 }: { x: number; y
       <ul className="flex flex-col gap-1">
         {rows.map((r) => (
           <li key={r.key} className="leading-tight">
-            <p className="flex items-center gap-1.5 text-sm font-semibold">
+            <p className={`flex items-center gap-1.5 text-sm font-semibold ${r.hint ? "whitespace-nowrap" : ""}`}>
               <span className="size-2 shrink-0 rounded-full ring-1 ring-paper/40" style={{ background: r.color }} />
               {r.title}
+              {r.hint && <span className="whitespace-nowrap font-normal text-paper/50">· {r.hint}</span>}
             </p>
             <p className="num text-xs text-paper/70">{r.detail}</p>
           </li>
