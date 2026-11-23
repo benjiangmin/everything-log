@@ -1,13 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { readDark, readDarkServer, setDark, subscribeDark } from "@/components/ui/theme";
-import { usePathname } from "next/navigation";
+import ThemeChoice from "@/components/ui/ThemeChoice";
+import { usePathname, useSearchParams } from "next/navigation";
 import { signOut } from "@/app/mbm/actions";
 import TopSearch from "./TopSearch";
 import Avatar from "./Avatar";
-import { useEffect, useRef, useState, useSyncExternalStore } from "react";
-import { atLabel, useReflectOpen } from "@/mbm/reflectAt";
+import { Suspense, useEffect, useRef, useState } from "react";
+import { atLabel, useMinute, useReflectOpen } from "@/mbm/reflectAt";
 
 // Minute by Minute's top bar: its name, the three pages, and signing out. `owner`: you (signed in
 // to the everything-log on this browser) also get a link back to it; nobody else does.
@@ -100,6 +100,24 @@ export default function MbmTopBar({
 // Reflect: a walk back through today. Greyed out (not a link) until the evening, at the time set
 // on Your account (11 PM unless you change it).
 function ReflectTab({ active }: { active: boolean }) {
+  return (
+    <Suspense fallback={<ReflectTabFor active={active} pastDay={null} />}>
+      <ReflectTabWithDay active={active} />
+    </Suspense>
+  );
+}
+
+// (On the Day tab looking at a day before today: Reflect opens on that day, whatever the time.)
+function ReflectTabWithDay({ active }: { active: boolean }) {
+  const path = usePathname();
+  const day = useSearchParams().get("day");
+  const minute = useMinute();
+  const today = minute === null ? null : localDayKey(new Date(minute * 60000));
+  const pastDay = path === "/mbm/day" && day && /^\d{4}-\d{2}-\d{2}$/.test(day) && today && day < today ? day : null;
+  return <ReflectTabFor active={active} pastDay={pastDay} />;
+}
+
+function ReflectTabFor({ active, pastDay }: { active: boolean; pastDay: string | null }) {
   const { open, at } = useReflectOpen();
   const look = "flex items-center gap-1.5 rounded-control px-3 py-2 text-sm font-semibold transition-colors";
   const moon = (
@@ -107,7 +125,7 @@ function ReflectTab({ active }: { active: boolean }) {
       <path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5Z" />
     </svg>
   );
-  if (!open && !active) {
+  if (!open && !active && !pastDay) {
     return (
       <span aria-disabled="true" title={`Reflect opens at ${atLabel(at)}`} className={`${look} cursor-not-allowed text-muted opacity-45`}>
         {moon}
@@ -116,12 +134,20 @@ function ReflectTab({ active }: { active: boolean }) {
     );
   }
   return (
-    <Link href="/mbm/reflect" aria-current={active ? "page" : undefined} className={`${look} ${active ? "bg-accent text-accent-ink" : "reflect-glow text-ink hover:bg-surface"}`}>
+    <Link
+      href={pastDay ? `/mbm/reflect?day=${pastDay}` : "/mbm/reflect"}
+      title={pastDay ? "Reflect on this day" : undefined}
+      aria-current={active ? "page" : undefined}
+      className={`${look} ${active ? "bg-accent text-accent-ink" : "reflect-glow text-ink hover:bg-surface"}`}
+    >
       {moon}
       Reflect
     </Link>
   );
 }
+
+// "2026-11-22", in this browser's time.
+const localDayKey = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 
 // You: your picture (or initial). Click for your account, About you, and signing out.
 function ProfileMenu({
@@ -188,7 +214,9 @@ function ProfileMenu({
           </div>
           <div className="h-px bg-line" />
           <div className="py-1">
-            <NightToggle className={item} />
+            <div className="px-3 pb-2 pt-1.5">
+              <ThemeChoice app="mbm" />
+            </div>
             <Link href="/mbm/account" onClick={() => setOpen(false)} className={item} role="menuitem">
               Your account
             </Link>
@@ -224,20 +252,3 @@ function ago(ms: number) {
   return `${Math.round(h / 24)} days ago`;
 }
 
-// Night mode, from the profile menu: a moon, and a switch.
-function NightToggle({ className }: { className: string }) {
-  const dark = useSyncExternalStore(subscribeDark, readDark, readDarkServer);
-  return (
-    <button type="button" role="menuitemcheckbox" aria-checked={dark} onClick={() => setDark(!dark)} className={`${className} flex items-center justify-between`}>
-      <span className="flex items-center gap-2.5">
-        <svg aria-hidden="true" viewBox="0 0 24 24" className="size-4 text-muted" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5Z" />
-        </svg>
-        Night mode
-      </span>
-      <span aria-hidden="true" className={`relative h-5 w-9 shrink-0 rounded-full transition-colors ${dark ? "bg-accent" : "bg-line"}`}>
-        <span className={`absolute top-0.5 size-4 rounded-full bg-paper shadow transition-[left] ${dark ? "left-[18px]" : "left-0.5"}`} />
-      </span>
-    </button>
-  );
-}

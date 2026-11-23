@@ -3,6 +3,8 @@
 import { sunTimes } from "@/mbm/sun";
 import { clock } from "@/mbm/time";
 import { useNow } from "./useNow";
+import { rememberWhere } from "@/components/ui/theme";
+import { useEffect } from "react";
 
 // Home's top: the light outside right now. The panel takes the sky's colour for the hour (dawn,
 // day, dusk, night), and an arc traces today's sun from sunrise to sunset over where you are,
@@ -17,6 +19,8 @@ const PHASES: Record<"night" | "dawn" | "day" | "dusk", Phase> = {
 
 export default function HomeSky({ name, tz, lat, lng, renderedAt, dateLabel }: { name: string | null; tz: string; lat: number; lng: number; renderedAt: number; dateLabel: string }) {
   const now = useNow(renderedAt);
+  // (Day / night set to follow the sun: it follows it here.)
+  useEffect(() => rememberWhere(lat, lng), [lat, lng]);
   const sun = sunTimes(now, lat, lng);
   const hour = Number(new Intl.DateTimeFormat("en-US", { hour: "numeric", hourCycle: "h23", timeZone: tz }).format(now));
   const H = 3600_000;
