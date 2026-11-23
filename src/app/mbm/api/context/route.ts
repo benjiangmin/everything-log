@@ -1,4 +1,4 @@
-import { createClient } from "@supabase/supabase-js";
+import { phoneClient } from "@/mbm/phoneAuth";
 import { syncCalendar } from "@/mbm/google";
 
 // For the phone: best guesses for right now (and whether something's probably over), plus your
@@ -7,15 +7,10 @@ import { syncCalendar } from "@/mbm/google";
 //   POST /mbm/api/context  Authorization: Bearer <access token>
 //   { "lat": 43.07, "lng": -89.40, "tz": "America/Chicago" }   (lat/lng optional)
 export async function POST(req: Request) {
-  const token = req.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
-  if (!token) return Response.json({ error: "Sign in first." }, { status: 401 });
-  const client = createClient(process.env.MBM_SUPABASE_URL!, process.env.MBM_SUPABASE_PUBLISHABLE_KEY!, {
-    global: { headers: { Authorization: `Bearer ${token}` } },
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
-  const { data: user } = await client.auth.getUser(token);
-  if (!user.user) return Response.json({ error: "Sign in first." }, { status: 401 });
-  const body = (await req.json().catch(() => ({}))) as { lat?: number; lng?: number; tz?: string };
+  const auth = await phoneClient(req);
+  if (auth.error) return auth.error;
+  const { client } = auth;
+  const body = auth.body as { lat?: number; lng?: number; tz?: string };
   const tz = typeof body.tz === "string" && /^[A-Za-z_]+(\/[A-Za-z_+-]+)*$/.test(body.tz) ? body.tz : "America/Chicago";
   const lat = Number.isFinite(body.lat) ? body.lat : null;
   const lng = Number.isFinite(body.lng) ? body.lng : null;
