@@ -38,6 +38,10 @@ const NEAR: google.maps.MapTypeStyle[] = [
 const MID = [...CALM, { featureType: "poi", elementType: "labels", stylers: [{ visibility: "off" }] }, { featureType: "transit", stylers: [{ visibility: "off" }] }];
 const FAR = [...QUIET, { featureType: "road.arterial", elementType: "labels", stylers: [{ visibility: "off" }] }];
 // Night mode (profile menu): the same map in the site's dark greys and muted browns.
+// The map's own color before its pictures load (and the cover over it until they have): the
+// night map's ground, or the day map's, so switching days never flashes white.
+export const MAP_GROUND = { day: "#f3efe8", night: "#24211f" };
+
 const NIGHT: google.maps.MapTypeStyle[] = [
   { elementType: "geometry", stylers: [{ color: "#24211f" }] },
   { elementType: "labels.text.fill", stylers: [{ color: "#a8998a" }] },

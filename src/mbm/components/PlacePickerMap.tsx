@@ -5,7 +5,7 @@ import { useState, useSyncExternalStore } from "react";
 import { APIProvider, Map } from "@vis.gl/react-google-maps";
 import type { PlaceLite } from "@/app/mbm/actions";
 import type { Spot } from "@/mbm/trips";
-import { HtmlMarker, KEY, stylesFor } from "./mapBits";
+import { HtmlMarker, KEY, MAP_GROUND, stylesFor } from "./mapBits";
 
 // Click the map where it was, name it, save. Your places show as small dots (click one to use it).
 export default function PlacePickerMap({
@@ -25,14 +25,19 @@ export default function PlacePickerMap({
   const [name, setName] = useState("");
   const [zoom, setZoom] = useState(17);
   const dark = useSyncExternalStore(subscribeDark, readDark, readDarkServer); // (night mode: the map too)
+  // Covered in the map's own color until its pictures have loaded (then the cover fades): a new
+  // map (another day) never flashes white, at night especially.
+  const [painted, setPainted] = useState(false);
   if (!KEY) return <p className="text-xs text-muted">Add NEXT_PUBLIC_GOOGLE_MAPS_KEY to pick on the map.</p>;
 
   return (
     <div className="flex flex-col gap-2">
-      <div className="isolate h-56 overflow-hidden rounded-control ring-1 ring-line">
+      <div className="relative isolate h-56 overflow-hidden rounded-control ring-1 ring-line">
         <APIProvider apiKey={KEY}>
           <Map
             styles={stylesFor(zoom, dark)}
+            backgroundColor={dark ? MAP_GROUND.night : MAP_GROUND.day}
+            onTilesLoaded={() => setPainted(true)}
             onZoomChanged={(e) => setZoom(e.detail.zoom)}
             defaultCenter={center ?? { lat: 43.0731, lng: -89.4012 }}
             defaultZoom={17}
@@ -69,6 +74,11 @@ export default function PlacePickerMap({
             )}
           </Map>
         </APIProvider>
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 z-[5] transition-opacity duration-500 ease-out"
+          style={{ background: dark ? MAP_GROUND.night : MAP_GROUND.day, opacity: painted ? 0 : 1 }}
+        />
       </div>
       {pin ? (
         <div className="flex gap-2">

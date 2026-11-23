@@ -12,7 +12,7 @@ const PATH_ENGINE = "legs+trails+match-v3 (2026-11-22: into a building at its wa
 import { useConfirm } from "@/components/ui/ConfirmDialog";
 import type { Activity, Block, LockedTrip, RoutePoint, Visit } from "@/mbm/data";
 import { clock, dayRange, span } from "@/mbm/time";
-import { HtmlMarker, KEY, stylesFor } from "./mapBits";
+import { HtmlMarker, KEY, MAP_GROUND, stylesFor } from "./mapBits";
 import { fitToEntries, buildTrips, decodePolyline, joinSameBuilding, metres, type Piece, type Spot, type Trip } from "@/mbm/trips";
 import { encodePolyline, snapLeg } from "@/mbm/snap";
 import { splitLegs, waitSpot, type Dot } from "@/mbm/legs";
@@ -81,6 +81,9 @@ export default function DayMapInner({
   const [addPending, runAdd] = useTransition();
   const [zoom, setZoom] = useState(15);
   const dark = useSyncExternalStore(subscribeDark, readDark, readDarkServer); // (night mode: the map too)
+  // Covered in the map's own color until its pictures have loaded (then the cover fades): a new
+  // map (another day) never flashes white, at night especially.
+  const [painted, setPainted] = useState(false);
   // What the pointer is on: trips under it (several, where paths overlap) or a stop.
   const [pointed, setPointed] = useState<{ trips: string[]; stops: string[]; guesses?: string[]; x: number; y: number; cover?: number; under?: number; gap?: number } | null>(null);
   const box = useRef<HTMLDivElement>(null);
@@ -204,11 +207,13 @@ export default function DayMapInner({
   const outdoorDots = points.filter((p) => !visits.some((v) => nearOutline(v.outline, p.lat, p.lng, 0)));
 
   return (
-    <div ref={box} className="relative size-full" onMouseLeave={() => pointed && point(null)}>
+    <div ref={box} className="relative size-full" style={{ background: dark ? MAP_GROUND.night : MAP_GROUND.day }} onMouseLeave={() => pointed && point(null)}>
     {all.length > 0 && !follow && <WholeDay onClick={() => setRefit((n) => n + 1)} />}
     <APIProvider apiKey={KEY}>
       <Map
         styles={stylesFor(zoom, dark)}
+        backgroundColor={dark ? MAP_GROUND.night : MAP_GROUND.day}
+        onTilesLoaded={() => setPainted(true)}
         onZoomChanged={(e) => setZoom(e.detail.zoom)}
         defaultCenter={all[0] ?? { lat: 43.0731, lng: -89.4012 }}
         defaultZoom={15}
@@ -387,6 +392,11 @@ export default function DayMapInner({
       )}
       <BuildingNote status={buildings} needsSql={visits.some((v) => v.place && !v.placeId)} />
     </APIProvider>
+    <div
+      aria-hidden="true"
+      className="pointer-events-none absolute inset-0 z-[5] transition-opacity duration-500 ease-out"
+      style={{ background: dark ? MAP_GROUND.night : MAP_GROUND.day, opacity: painted ? 0 : 1 }}
+    />
       {adding && (
         <div
           className={`absolute z-40 w-max -translate-x-1/2 rounded-card bg-paper p-1.5 text-sm shadow-xl shadow-ink/20 ring-1 ring-line ${adding.below ? "" : "-translate-y-full"}`}
