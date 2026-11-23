@@ -20,9 +20,39 @@ const STILL = 0.6;
 const PAUSE = 90_000; // a bus stopping, a red light: a slow bit this short inside a ride is still the ride
 const WAIT_MIN = 45_000; // standing still at least this long before a ride: waiting for it
 
-// Each dot's speed: the phone's, or else from the dots either side.
+// Stand-ins: when the phone loses the GPS mid-trip, it keeps logging guesses that all say 0 mph
+// while they creep along behind you (Nov 22, in a car on University Ave: five minutes of them).
+// A run of "standing still" dots whose first and last are further apart than twice their usual
+// accuracy isn't standing still. They're the trip going on, at the speed it was going.
+function standIns(dots: Dot[]) {
+  const out = dots.map(() => false);
+  for (let i = 0; i < dots.length; ) {
+    const still = (k: number) => dots[k].speed != null && dots[k].speed! <= STILL;
+    if (!still(i)) {
+      i++;
+      continue;
+    }
+    let j = i;
+    while (j + 1 < dots.length && still(j + 1)) j++;
+    if (j > i) {
+      const accs = dots.slice(i, j + 1).map((d) => d.acc ?? 15);
+      if (metres(dots[i], dots[j]) > 2 * median(accs)) for (let k = i; k <= j; k++) out[k] = true;
+    }
+    i = j + 1;
+  }
+  return out;
+}
+
+// Each dot's speed: the phone's, or else from the dots either side. A stand-in (above) goes at the
+// speed of the last real dot before it (or the first after).
 function speeds(dots: Dot[]) {
+  const stand = standIns(dots);
+  const real = (i: number) => !stand[i] && dots[i].speed != null && dots[i].speed! >= 0;
   return dots.map((d, i) => {
+    if (stand[i]) {
+      for (let k = i - 1; k >= 0; k--) if (real(k)) return dots[k].speed!;
+      for (let k = i + 1; k < dots.length; k++) if (real(k)) return dots[k].speed!;
+    }
     if (d.speed != null && d.speed >= 0) return d.speed;
     const a = dots[Math.max(0, i - 1)];
     const b = dots[Math.min(dots.length - 1, i + 1)];

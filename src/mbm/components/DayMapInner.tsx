@@ -1102,19 +1102,34 @@ async function gapRoute(t: Trip, i: number, a: Spot, b: Spot): Promise<Spot[] | 
     return atEnd ? bearing(other, ref) : bearing(ref, other);
   };
   const car = byCar(t);
-  const path = await walkingRoute(a, b, car ? "DRIVE" : "WALK", car ? { from: way(before, true), to: way(after, false) } : {});
-  if (!path || path.length < 3) return path;
+  // By car: start from where the drive before it is drawn to end (its dots matched to the road),
+  // not the last raw dot. The phone's stand-in dots drift off the road (on Nov 22, 70 m up a side
+  // street off University Ave), and directions from there went round the block to get back.
+  // (The same match as drawing it: kept in this browser, so asking again is instant.)
+  let from = a;
+  if (car && before.length >= 3) {
+    const legs = splitLegs(before);
+    const last = legs[legs.length - 1];
+    if (last?.mode === "ride") {
+      const matched = await snapLeg(last.dots, "ride").catch(() => null);
+      const end = matched?.[matched.length - 1];
+      if (end && metres(end, a) <= Math.max(50, 2 * (before[before.length - 1].acc ?? 25))) from = end;
+    }
+  }
+  const path = await walkingRoute(from, b, car ? "DRIVE" : "WALK", car ? { from: way(before, true), to: way(after, false) } : {});
+  if (!path) return null;
+  if (path.length < 3) return from === a ? path : [from, ...path];
   const tolA = Math.max(25, before[before.length - 1]?.acc ?? 25);
   const tolB = Math.max(25, after[0]?.acc ?? 25);
   let j = 0;
-  for (let k = 1; k < path.length; k++) if (metres(path[k], a) <= tolA) j = k;
+  for (let k = 1; k < path.length; k++) if (metres(path[k], from) <= tolA) j = k;
   let e = path.length - 1;
   for (let k = j + 1; k < path.length; k++)
     if (metres(path[k], b) <= tolB) {
       e = k;
       break;
     }
-  return path.slice(j, e + 1);
+  return from === a ? path.slice(j, e + 1) : [from, ...path.slice(j, e + 1)];
 }
 
 // Made by car or bus: its dots went faster than anyone walks or runs (legs.ts calls it a ride),
