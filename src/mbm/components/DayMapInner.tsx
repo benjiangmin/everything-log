@@ -1594,7 +1594,9 @@ function NameStop({ visit, onDone, onMove }: { visit: Visit; onDone: () => void;
       // (A newly picked place: only one next to where the phone had you.)
       const far = real ? await pickIsNear({ visitId: visit.id }, real) : null;
       if (far) return setMessage(far);
-      const res = await setStopPlace(visit.id, own.trim() !== startOwn.trim() || real ? own : null, pick);
+      // (Picking one of your places keeps its name, unless you typed a new one: "Home!" stays.)
+      const ownArg = own.trim() !== startOwn.trim() || real?.kind === "real" ? own : null;
+      const res = await setStopPlace(visit.id, ownArg, pick);
       if (res.ok) onDone();
       else setMessage(res.message);
     });

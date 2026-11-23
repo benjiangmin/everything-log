@@ -117,8 +117,13 @@ export async function getDay(dayKey: string): Promise<Day> {
     }
     return out;
   }
+  let realNames = true; // (047 run: places have your name and the actual place)
   const [firstVisits, pointRows, phoneRows] = await Promise.all([
     visitsOn("id, arrived_at, departed_at, lat, lng, auto_name, outline, outline_checked, places(id, name, lat, lng, outline, outline_checked, own_name, real_name, real_address)")
+      .then((r) => {
+        realNames = !r.error;
+        return r;
+      })
       .then((r) => (r.error ? visitsOn("id, arrived_at, departed_at, lat, lng, auto_name, outline, places(id, name, lat, lng, outline, outline_checked)") : r)) // (047 not run yet)
       .then((r) => (r.error ? visitsOn("id, arrived_at, departed_at, lat, lng, auto_name, places(name, lat, lng)") : r)), // (without outline: 021 not run yet)
     allPoints(),
@@ -146,7 +151,14 @@ export async function getDay(dayKey: string): Promise<Day> {
           ? { placeId: place.id, placeNeedsOutline: place.outline_checked === false }
           : { stopNeedsOutline: (v as { outline_checked?: boolean }).outline_checked === false && !v.outline }; // (an unnamed stop's own building)
         delete (v as { outline_checked?: boolean }).outline_checked;
-        const names = place && "real_name" in place ? { placeOwn: place.own_name ?? null, placeReal: place.real_name ? { name: place.real_name, address: place.real_address ?? null } : null } : {};
+        // (A stop at none of your places: nothing linked yet, so its box offers your places and a
+        // search, not just a name. Before, it only had the name box.)
+        const names =
+          place && "real_name" in place
+            ? { placeOwn: place.own_name ?? null, placeReal: place.real_name ? { name: place.real_name, address: place.real_address ?? null } : null }
+            : !place && realNames
+              ? { placeOwn: null, placeReal: null }
+              : {};
         return { ...v, ...pin, ...gps, ...where, ...names, outline: place?.outline ?? v.outline ?? null, auto_name: v.auto_name ?? null, place: place?.name ?? null };
       });
   const points: RoutePoint[] = pointRows;
