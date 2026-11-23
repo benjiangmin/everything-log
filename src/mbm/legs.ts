@@ -23,8 +23,9 @@ const WAIT_MIN = 45_000; // standing still at least this long before a ride: wai
 // Stand-ins: when the phone loses the GPS mid-trip, it keeps logging guesses that all say 0 mph
 // while they creep along behind you (Nov 22, in a car on University Ave: five minutes of them).
 // A run of "standing still" dots whose first and last are further apart than twice their usual
-// accuracy isn't standing still. They're the trip going on, at the speed it was going.
-function standIns(dots: Dot[]) {
+// accuracy isn't standing still. They're the trip going on, at the speed it was going. (Where they
+// are is no use: they lag behind you and drift off the road. trips.ts leaves them out.)
+export function standIns(dots: (Spot & { speed: number | null; acc: number | null })[]) {
   const out = dots.map(() => false);
   for (let i = 0; i < dots.length; ) {
     const still = (k: number) => dots[k].speed != null && dots[k].speed! <= STILL;

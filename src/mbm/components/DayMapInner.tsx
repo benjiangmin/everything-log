@@ -1129,7 +1129,33 @@ async function gapRoute(t: Trip, i: number, a: Spot, b: Spot): Promise<Spot[] | 
       e = k;
       break;
     }
-  return from === a ? path.slice(j, e + 1) : [from, ...path.slice(j, e + 1)];
+  const kept = unloop(path.slice(j, e + 1), Math.max(tolA, tolB));
+  return from === a ? kept : [from, ...kept];
+}
+
+// Directions that go round a block and come back to nearly where they were (a car turning round
+// because the start was put on the wrong side of a divided road, Nov 22 at Farley Ave): the loop
+// is cut out. A loop: two points of the route close together (within twice the dots' accuracy,
+// 80 to 100 m: about a block's width) with at least four times that much route between them.
+export function unloop(path: Spot[], tol: number): Spot[] {
+  const near = Math.min(100, Math.max(80, 2 * tol));
+  const along = [0];
+  for (let k = 1; k < path.length; k++) along.push(along[k - 1] + metres(path[k - 1], path[k]));
+  const out: Spot[] = [];
+  for (let i = 0; i < path.length; i++) {
+    out.push(path[i]);
+    // The furthest point further on that comes back close to this one, after a long way round.
+    let skip = -1;
+    for (let k = path.length - 1; k > i + 1; k--) {
+      const chord = metres(path[i], path[k]);
+      if (chord <= near && along[k] - along[i] >= 4 * Math.max(chord, near / 2)) {
+        skip = k;
+        break;
+      }
+    }
+    if (skip > 0) i = skip - 1;
+  }
+  return out;
 }
 
 // Made by car or bus: its dots went faster than anyone walks or runs (legs.ts calls it a ride),

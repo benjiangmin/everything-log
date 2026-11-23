@@ -1,6 +1,6 @@
 import { closestOnOutline, contains, nearOutline } from "./buildings";
 import type { RoutePoint, Visit } from "./data";
-import { splitLegs, waitSpot, type Dot } from "./legs";
+import { splitLegs, standIns, waitSpot, type Dot } from "./legs";
 
 // The day as stops and the trips between them. Every trip starts at a stop and ends at the next
 // one (or at a loose end: where the day's first recording began, or where you are now if you
@@ -68,21 +68,20 @@ function cleanDots(points: RoutePoint[]) {
       fuzzy: p.speed_mps != null && p.speed_mps < 0.5 && (p.accuracy_m ?? 0) > 25,
     }))
     .sort((a, b) => a.t - b.t);
+  // The phone's stand-ins while it's lost the GPS (legs.ts): 0 mph, creeping along behind you and
+  // off the road. Where they are is no use, so they're left out: that stretch is a gap, filled in
+  // along the streets from your last real dot (on Nov 22 they were drawn as a walk cutting across
+  // the blocks north of University Ave, then matched to side streets).
+  const stand = standIns(all);
   // Standing somewhere (waiting to cross, talking): one dot, not a zigzag of jitter. A still dot
-  // within 20 m of the last one kept is dropped, and a vague one (said still, poor accuracy).
-  // Unless it's clearly somewhere else: further from the last dot kept than both their accuracies
-  // together. Then it moved, whatever its speed says (when the phone loses the GPS in a car, its
-  // stand-in readings all say 0 mph while they creep along the road you're on: on Nov 22 they
-  // were the only record of University Ave west of Farley, and dropping them left a gap that
-  // filled-in directions looped through).
+  // within 20 m of the last one kept is dropped.
   const pts: typeof all = [];
-  for (const p of all) {
+  all.forEach((p, i) => {
+    if (p.fuzzy || stand[i]) return;
     const prev = pts[pts.length - 1];
-    const moved = !!prev && metres(prev, p) > (prev.acc ?? 0) + (p.acc ?? 0);
-    if (p.fuzzy && !moved) continue;
-    if (prev && p.still && !moved && metres(prev, p) < 20) continue;
-    pts.push(moved && p.still ? { ...p, still: false, fuzzy: false } : p);
-  }
+    if (prev && p.still && metres(prev, p) < 20) return;
+    pts.push(p);
+  });
   return pts.filter((b, i) => {
     const a = pts[i - 1];
     const c = pts[i + 1];
