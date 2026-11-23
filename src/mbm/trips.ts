@@ -73,25 +73,11 @@ function cleanDots(points: RoutePoint[]) {
   // along the streets from your last real dot (on Nov 22 they were drawn as a walk cutting across
   // the blocks north of University Ave, then matched to side streets).
   const stand = standIns(all);
-  // A dot the phone was much less sure of than the ones around it (within a few minutes): its
-  // spot is a blur, and a run of them (standing by a bus stop, Nov 23: ±25-37 m among ±9-15 m
-  // dots) got drawn as a loop down the sidewalk and back. Judged against the phone's own nearby
-  // accuracy, not a set number: where every dot is blurry (indoors), none is left out for it.
-  const blurry = all.map((p, i) => {
-    if (p.acc == null) return false;
-    const near = all
-      .slice(Math.max(0, i - 15), i + 16)
-      .map((q) => q.acc)
-      .filter((v): v is number => v != null)
-      .sort((x, y) => x - y);
-    const typical = near[Math.floor(near.length / 2)];
-    return typical != null && p.acc > typical * 1.5 && p.acc - typical > 8;
-  });
   // Standing somewhere (waiting to cross, talking): one dot, not a zigzag of jitter. A still dot
   // within 20 m of the last one kept is dropped.
   const pts: typeof all = [];
   all.forEach((p, i) => {
-    if (p.fuzzy || stand[i] || blurry[i]) return;
+    if (p.fuzzy || stand[i]) return;
     const prev = pts[pts.length - 1];
     if (prev && p.still && metres(prev, p) < 20) return;
     pts.push(p);
