@@ -174,7 +174,11 @@ export default function DayMapInner({
     // more than the phone says they could be off by (twice their accuracy), and outside the
     // stop's building. No set distance: a sharp fix across the street counts (the phone's stop
     // can lag behind it, as at the Book Store), a fuzzy indoor one doesn't.
+    // (A dot the phone itself filed under the stop, "still", is you there, however far indoor GPS
+    // has wandered: at Theory it drifts a block east, past Hawthorne Ct. Only a moving dot can
+    // say you've gone.)
     const away = (p: RoutePoint) =>
+      p.motion !== "still" &&
       +new Date(p.at) > +new Date(open!.arrived_at) &&
       p.accuracy_m != null &&
       !nearOutline(open!.outline, p.lat, p.lng, 0) &&
@@ -189,6 +193,13 @@ export default function DayMapInner({
     const prev = visits.length ? visits[visits.length - 1] : null;
     if (!open && last && prev?.outline && nearOutline(prev.outline, last.lat, last.lng, 0)) {
       return { at: { lat: prev.lat, lng: prev.lng }, when: null };
+    }
+    // Or every dot since you "left" it the phone files as standing still, and each is within twice
+    // its accuracy of it (or in its building): you never left; it's that stop.
+    if (!open && last && prev?.departed_at) {
+      const since = points.filter((p) => +new Date(p.at) > +new Date(prev.departed_at!));
+      const there = (p: RoutePoint) => nearOutline(prev.outline, p.lat, p.lng, 0) || metres(prev.gps ?? prev, p) <= 2 * (p.accuracy_m ?? 20);
+      if (since.length && since.every((p) => p.motion === "still" && there(p))) return { at: { lat: prev.lat, lng: prev.lng }, when: null };
     }
     return last ? { at: { lat: last.lat, lng: last.lng }, when: last.at } : null;
   }, [liveColor, points, visits]);
