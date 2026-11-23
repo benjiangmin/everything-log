@@ -82,7 +82,7 @@ export default function DayMapInner({
   const [zoom, setZoom] = useState(15);
   const dark = useSyncExternalStore(subscribeDark, readDark, readDarkServer); // (night mode: the map too)
   // What the pointer is on: trips under it (several, where paths overlap) or a stop.
-  const [pointed, setPointed] = useState<{ trips: string[]; stops: string[]; x: number; y: number; cover?: number; under?: number; gap?: number } | null>(null);
+  const [pointed, setPointed] = useState<{ trips: string[]; stops: string[]; guesses?: string[]; x: number; y: number; cover?: number; under?: number; gap?: number } | null>(null);
   const box = useRef<HTMLDivElement>(null);
   // A stop whose building is known but whose spot is out on the street (GPS wanders indoors): it's
   // drawn in the middle of the building, and its routes go there.
@@ -138,7 +138,7 @@ export default function DayMapInner({
   const lit = pointed ? { trip: new Set(pointed.trips), stops: new Set(pointed.stops) } : barLit;
 
   // Pointing at something on the map: light it up here, and tell the day bar its times.
-  const point = (p: { trips: string[]; stops: string[]; x: number; y: number; under?: number; gap?: number } | null) => {
+  const point = (p: { trips: string[]; stops: string[]; guesses?: string[]; x: number; y: number; under?: number; gap?: number } | null) => {
     setPointed(p && { ...p, cover: coveredIn(box.current) });
     if (!onPointer) return;
     if (!p) return onPointer(null);
@@ -245,7 +245,7 @@ export default function DayMapInner({
         {!follow && <FitTo spots={all} top={topCover} again={refit} />}
         {follow && <Follow spots={followSpots(lit, visits, trips, all)} cover={follow} />}
         {walk && <Walker trips={trips} walk={walk} />}
-        <PointerTrack trips={trips} onHit={(hit, e) => point(hit.length ? { trips: hit, stops: [], ...where(e) } : null)} />
+        <PointerTrack trips={trips} onHit={(hit, e, guesses) => point(hit.length ? { trips: hit, stops: [], guesses, ...where(e) } : null)} />
         {showDots && <Dots points={outdoorDots} tz={tz} />}
         {/* The building you were in, lit up while you hover the stop (here or on the day bar). */}
         {visits.map((v) => (v.outline && lit?.stops.has(v.id) ? <Building key={`b-${v.id}`} outline={v.outline} /> : null))}
@@ -503,7 +503,7 @@ export default function DayMapInner({
           cover={pointed.cover ?? 0}
           heading={!pointed.stops.length && pointed.trips.length > 1 ? `${pointed.trips.length} trips here` : undefined}
           rows={[
-            ...trips.filter((t) => pointed.trips.includes(t.key)).map((t) => tripRow(t, blocks, activities, tz)),
+            ...trips.filter((t) => pointed.trips.includes(t.key)).map((t) => tripRow(t, blocks, activities, tz, pointed.guesses?.includes(t.key))),
             ...(pointed.stops.length ? stopRows(visits.filter((v) => pointed.stops.includes(v.id)), blocks, activities, day, { visits, points, trips }) : []),
           ]}
         />
@@ -516,7 +516,8 @@ type Row = { key: string; color: string; title: string; detail: string; untracke
 
 // A trip, named after the moving entry during it (Commute, or later Running…). Never after a
 // still one like a class: if no moving entry covers it, it's just a trip nothing was tracked for.
-function tripRow(t: Trip, blocks: Block[], activities: Activity[], tz: string): Row {
+// guess: the pointer's on a bit of it the phone missed (filled in along the streets): "Commute ✦".
+function tripRow(t: Trip, blocks: Block[], activities: Activity[], tz: string, guess = false): Row {
   let best: Activity | undefined;
   let most = 0;
   for (const b of blocks) {
@@ -528,8 +529,8 @@ function tripRow(t: Trip, blocks: Block[], activities: Activity[], tz: string): 
   return {
     key: t.key,
     color: best?.color ?? "#7f5539",
-    title: best?.name ?? "Trip (no Commute tracked) · click to add",
-    detail: `${clock(new Date(t.start), tz)} – ${clock(new Date(t.end), tz)} · ${span(t.end - t.start)}`,
+    title: `${best?.name ?? "Trip (no Commute tracked) · click to add"}${guess ? " ✦" : ""}`,
+    detail: `${clock(new Date(t.start), tz)} – ${clock(new Date(t.end), tz)} · ${span(t.end - t.start)}${guess ? " · ✦ this bit's a guess" : ""}`,
     untracked: !best,
   };
 }
@@ -665,7 +666,8 @@ function Tip({ x, y, rows, heading, cover = 0, under, gap = 14 }: { x: number; y
 }
 
 // Which trips are under the pointer (within ~10 px of their line), as it moves over the map.
-function PointerTrack({ trips, onHit }: { trips: Trip[]; onHit: (keys: string[], e: { clientX: number; clientY: number }) => void }) {
+// (guesses: the ones where the pointer is on a bit the phone missed, filled in.)
+function PointerTrack({ trips, onHit }: { trips: Trip[]; onHit: (keys: string[], e: { clientX: number; clientY: number }, guesses: string[]) => void }) {
   const map = useMap();
   const report = useRef(onHit); // the latest callback, without re-listening every render
   useEffect(() => {
@@ -697,23 +699,22 @@ function PointerTrack({ trips, onHit }: { trips: Trip[]; onHit: (keys: string[],
           const u = len ? Math.max(0, Math.min(1, ((c.x - a.x) * dx + (c.y - a.y) * dy) / len)) : 0;
           return Math.hypot(a.x + u * dx - c.x, a.y + u * dy - c.y);
         };
-        const hit = trips
-          .filter((t) =>
-            t.pieces.some((p) => {
-              let prev = px(p.path[0]);
-              for (let i = 1; i < p.path.length; i++) {
-                const cur = px(p.path[i]);
-                if (near(prev, cur) < 10) return true;
-                prev = cur;
-              }
-              return false;
-            }),
-          )
-          .map((t) => t.key);
-        const sig = hit.join("|");
+        const under = (p: Piece) => {
+          let prev = px(p.path[0]);
+          for (let i = 1; i < p.path.length; i++) {
+            const cur = px(p.path[i]);
+            if (near(prev, cur) < 10) return true;
+            prev = cur;
+          }
+          return false;
+        };
+        const hitTrips = trips.filter((t) => t.pieces.some(under));
+        const hit = hitTrips.map((t) => t.key);
+        const guesses = hitTrips.filter((t) => t.pieces.some((p) => p.missing && !plainly(p.path) && under(p))).map((t) => t.key);
+        const sig = hit.join("|") + "/" + guesses.join("|");
         if (sig === last && !hit.length) return;
         last = sig;
-        report.current(hit, dom);
+        report.current(hit, dom, guesses);
       });
     });
     const out = map.addListener("mouseout", () => {
@@ -1165,46 +1166,18 @@ function byCar(t: Trip) {
   return (t.pace ?? 0) > 4;
 }
 
-// A trip: always a solid line. Where the way is really a guess (the phone missed it), a small
-// ✦ sits on that bit. Lit = the hovered stretch (thicker, caramel); faded = the rest of the day
+// A trip: always a solid line. Where the way is really a guess (the phone missed it), hovering
+// that bit says so ("Commute ✦"). Lit = the hovered stretch (thicker, caramel); faded = the rest of the day
 // while hovering. hidden: being drawn in by Reflect right now (it draws its own).
 function TripLine({ pieces, lit, faded, hidden = false }: { pieces: Piece[]; lit: boolean; faded: boolean; hidden?: boolean }) {
   if (hidden) return null;
   return pieces.map((p, i) => (
     <Fragment key={i}>
       <Route path={p.path} dashed={false} lit={lit} faded={faded} />
-      {p.missing && !plainly(p.path) && !faded && <GuessMark at={midway(p.path)} />}
     </Fragment>
   ));
 }
 
-// The ✦ on a guessed bit of a route.
-function GuessMark({ at }: { at: Spot }) {
-  return (
-    <HtmlMarker position={at} zIndex={6} passive>
-      <span
-        title="A guess: the phone missed this part, so it's filled in along the streets"
-        className="grid size-[18px] place-items-center rounded-full bg-[#faf6f0] text-[11px] leading-none text-[#7f5539] shadow ring-1 ring-[#7f5539]/40"
-      >
-        ✦
-      </span>
-    </HtmlMarker>
-  );
-}
-
-// Halfway along a line (by distance).
-function midway(path: Spot[]): Spot {
-  const steps = path.slice(1).map((q, i) => metres(path[i], q));
-  let left = steps.reduce((a, b) => a + b, 0) / 2;
-  for (let i = 0; i < steps.length; i++) {
-    if (left <= steps[i]) {
-      const k = steps[i] ? left / steps[i] : 0;
-      return { lat: path[i].lat + (path[i + 1].lat - path[i].lat) * k, lng: path[i].lng + (path[i + 1].lng - path[i].lng) * k };
-    }
-    left -= steps[i];
-  }
-  return path[path.length - 1];
-}
 
 // A bit the phone missed, but where there's no real doubt which way you went (a wait at a bus
 // stop, a few blocks along one street): drawn solid like the rest. It counts as plain when it's
