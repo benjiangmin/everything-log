@@ -17,7 +17,7 @@ export default function NowPanel({ switching = false, initial = "", onClose }: {
   const [info, setInfo] = useState<NowInfo | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [text, setText] = useState(initial);
-  const [since, setSince] = useState<Since>("last");
+  const [since, setSince] = useState<Since>("now"); // (Now by default; Since last entry when you forgot)
   const [custom, setCustom] = useState("");
   const [pending, run] = useTransition();
   const [guesses, setGuesses] = useState<Guess[]>([]);
@@ -129,10 +129,10 @@ export default function NowPanel({ switching = false, initial = "", onClose }: {
           <div>
             <p className="mb-1.5 text-sm font-semibold text-ink">Started</p>
             <div role="radiogroup" aria-label="Started" className="flex flex-col gap-2">
+              <WhenRow icon="bolt" title="Now" time={info ? clock(new Date(info.loadedAt), tz) : ""} on={since === "now" || (since === "last" && lastLabel === "now")} onPick={() => setSince("now")} />
               {lastLabel !== "now" && (
                 <WhenRow icon="back" title="Since last entry" time={lastLabel} on={since === "last"} onPick={() => setSince("last")} />
               )}
-              <WhenRow icon="bolt" title="Now" time={info ? clock(new Date(info.loadedAt), tz) : ""} on={since === "now" || (since === "last" && lastLabel === "now")} onPick={() => setSince("now")} />
               <WhenRow icon="clock" title="Pick a time" on={since === "custom"} onPick={() => setSince("custom")} open={since === "custom"} />
             </div>
             {since === "custom" && (

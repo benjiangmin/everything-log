@@ -5,6 +5,7 @@ import { buildingAt, contains } from "@/mbm/buildings";
 
 import { revalidatePath } from "next/cache";
 import { after } from "next/server";
+import { hereName, sharpen } from "@/mbm/smartGuesses";
 import { redirect } from "next/navigation";
 import { headers } from "next/headers";
 import { mbm, mbmReady } from "@/mbm/supabase";
@@ -777,9 +778,11 @@ export type Guess = { activity_id: string; name: string; color: string; confiden
 export async function bestGuesses(): Promise<Guess[]> {
   const client = await mbm();
   await syncCalendar(client).catch(() => null);
-  const { data, error } = await client.rpc("suggest", { p_at: new Date().toISOString(), p_tz: mbmTz(), p_limit: 2 });
+  const { data, error } = await client.rpc("suggest", { p_at: new Date().toISOString(), p_tz: mbmTz(), p_limit: 8 });
   if (error || !Array.isArray(data)) return [];
-  return (data as Guess[]).slice(0, 2);
+  // (Understanding what each job is, and where you are: smartGuesses.ts.)
+  const here = await hereName(client, null, null).catch(() => null);
+  return (await sharpen(client, data as Guess[], { at: new Date(), tz: mbmTz(), here, limit: 2, later: after }).catch(() => (data as Guess[]).slice(0, 2))) as Guess[];
 }
 
 // Google Calendar: connected? (null: 030 isn't run yet)
