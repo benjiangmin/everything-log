@@ -279,14 +279,30 @@ export function decodePolyline(encoded: string, precision = 5): Spot[] {
 // after the phone says you left (you were still finishing up), the trip starts when the job
 // ended; if you started one before the phone noticed you'd arrived, the trip ends then. Same as
 // the day bar, so hovering a route lights up exactly its Commute.
+//
+// And the automatic Commute: the server times it from your dots (when you really left), and the
+// phone's own stop times can be far off (Nov 22: the app wasn't running from 4:14 to 4:43, so the
+// phone said you left home at 4:14; the Commute said 4:39). Where the trip has no dots of its own
+// before the Commute starts (or after it ends), the trip is the Commute's times, so hovering a
+// route says the same as the bar and lights up exactly its Commute.
 export function fitToEntries(trips: Trip[], blocks: { started_at: string; ended_at: string | null; source: string }[], now = Date.now()): Trip[] {
-  const mine = blocks.filter((b) => b.source !== "location").map((b) => ({ start: +new Date(b.started_at), end: b.ended_at ? +new Date(b.ended_at) : now }));
+  const span = (b: { started_at: string; ended_at: string | null }) => ({ start: +new Date(b.started_at), end: b.ended_at ? +new Date(b.ended_at) : now });
+  const mine = blocks.filter((b) => b.source !== "location").map(span);
+  const auto = blocks.filter((b) => b.source === "location").map(span);
   return trips.map((t) => {
     let start = t.start;
     let end = t.end;
     for (const b of mine) {
       if (b.start < start && b.end > start && b.end < end) start = b.end; // still on your last thing
       if (b.start > start && b.start < end && b.end > end) end = b.start; // already on your next thing
+    }
+    const over = auto.filter((c) => c.end > start && c.start < end);
+    if (over.length) {
+      const dots = t.pieces.flatMap((p) => p.dots ?? []);
+      const first = Math.min(...over.map((c) => c.start));
+      const last = Math.max(...over.map((c) => c.end));
+      if (first > start && !dots.some((d) => d.t < first)) start = first;
+      if (last < end && !dots.some((d) => d.t > last)) end = last;
     }
     return start === t.start && end === t.end ? t : { ...t, start, end };
   });

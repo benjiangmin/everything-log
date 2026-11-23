@@ -4,6 +4,7 @@ import { connection } from "next/server";
 import { redirect } from "next/navigation";
 import { getDay, mbmTz } from "@/mbm/data";
 import { mbm, mbmReady, mbmUser } from "@/mbm/supabase";
+import { syncCalendar } from "@/mbm/google";
 import { calendarHidden, eventsBetween, isGoogleEvent, placeFor } from "@/mbm/plans";
 import type { DayPlan } from "@/mbm/components/DayBar";
 import { dayKeyOf, dayRange, dayTitle, isDayKey, shiftDay } from "@/mbm/time";
@@ -40,7 +41,13 @@ async function MbmDay({ day: asked, show, showAt }: { day?: string; show: "unmar
 
   // Today, first: anything due to start for you (plans you've got to, jobs at their places), so
   // it's on the bar below. (043; before it's run, nothing.)
-  if (isToday) await (await mbm()).rpc("start_for_you").then(() => null, () => null);
+  // (Your Google Calendar brought up to date first, at most every 10 minutes: a plan added since
+  // the last look still starts its job.)
+  if (isToday) {
+    const client = await mbm();
+    await syncCalendar(client).catch(() => null);
+    await client.rpc("start_for_you").then(() => null, () => null);
+  }
   const [day, plans] = await Promise.all([getDay(dayKey).catch((e: Error) => e), isToday ? upcoming(new Date(), dayKey, tz) : Promise.resolve([])]);
   if (day instanceof Error) return <p className="rounded-card bg-surface px-5 py-4 text-sm text-danger">{day.message}</p>;
 
