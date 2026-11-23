@@ -1,7 +1,7 @@
 "use server";
 
 import { googleStatus, syncCalendar } from "@/mbm/google";
-import { buildingAt, contains } from "@/mbm/buildings";
+import { buildingAt, contains, nothingBetween } from "@/mbm/buildings";
 
 import { revalidatePath } from "next/cache";
 import { after } from "next/server";
@@ -376,6 +376,16 @@ export async function setEntryPlace(blockId: string, placeId: string | null): Pr
 // Where your phone really had you for a stop, or for the stops during an entry: the middle of
 // its still dots (a stop set to a place shows the place's spot, not the phone's). For checking
 // a place you pick is next to it (nearcheck.ts). The place: its spot and building.
+// The building check (nearcheck.ts), asked from the website's server when your browser couldn't
+// reach the map servers: they turn some away at times, and a second route usually gets through.
+export async function buildingsBetween(a: [number, number], b: [number, number]): Promise<boolean | undefined> {
+  const ok = (p: unknown) => Array.isArray(p) && p.length === 2 && p.every((x) => typeof x === "number" && Number.isFinite(x));
+  if (!ok(a) || !ok(b)) return undefined;
+  const { data } = await (await mbm()).auth.getUser(); // (signed in only)
+  if (!data.user) return undefined;
+  return nothingBetween(a, b);
+}
+
 export async function nearCheckInfo(
   of: { visitId?: string; blockId?: string },
   place: { placeId?: string; lat?: number; lng?: number },
