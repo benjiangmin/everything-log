@@ -120,7 +120,8 @@ export async function syncCalendar(client: SupabaseClient, { force = false } = {
   const { data, error } = await client.from("google_accounts").select("refresh_token, access_token, access_expires, synced_at, email").maybeSingle();
   if (error || !data) return { ok: false, message: error ? error.message : "Not connected." };
   const a = data as Account;
-  if (!force && a.synced_at && Date.now() - +new Date(a.synced_at) < 10 * 60_000) return { ok: true };
+  // TESTING (Nov 23): every minute, so a calendar event made just now shows up fast. Back to 10 * 60_000 after.
+  if (!force && a.synced_at && Date.now() - +new Date(a.synced_at) < 60_000) return { ok: true };
   const token = await accessToken(client, a);
   if (!token) return { ok: false, message: "Google sign-in ran out: connect again." };
   const auth = { Authorization: `Bearer ${token}` };
