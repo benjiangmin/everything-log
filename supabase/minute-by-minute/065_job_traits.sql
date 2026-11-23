@@ -1,3 +1,4 @@
+-- NOT YET: for the AI suggestions, on hold. Don't run until they're switched on.
 -- Minute by Minute: suggestions that understand what a job is (AI). Run once; safe to run again.
 --
 -- activities.traits: what the AI read from a job's name, once (again only if you rename it):

@@ -1,4 +1,7 @@
 import "server-only";
+
+// NOT USED YET: the AI suggestions are on hold (wired back in later: api/context/route.ts and
+// bestGuesses in actions.ts call sharpen(); needs OPENAI_API_KEY and 065_job_traits.sql).
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { ask } from "./ai";
 

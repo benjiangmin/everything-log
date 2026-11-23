@@ -1,5 +1,8 @@
 import "server-only";
 
+// NOT USED YET: the AI suggestions are on hold (wired back in later: api/context/route.ts and
+// bestGuesses in actions.ts call sharpen(); needs OPENAI_API_KEY and 065_job_traits.sql).
+
 // The AI (OpenAI), server-only: OPENAI_API_KEY in the environment (never sent to a browser or the
 // phone). Small, rare calls: reading a new job's name once, and which job fits a new place once.
 // Without the key, everything works as before (no AI).
