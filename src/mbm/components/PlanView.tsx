@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
-import { deletePlan, savePlan, setCalendarHidden } from "@/app/mbm/actions";
+import { deletePlan, savePlan, setCalendarHidden, setCalendarIgnored } from "@/app/mbm/actions";
 import { clock, dayTitle, shiftDay, zonedTime } from "@/mbm/time";
 import PlaceField, { type Picked } from "./PlaceField";
 import { useNow } from "./useNow";
@@ -58,8 +58,10 @@ export default function PlanView({
   openId,
   renderedAt,
   calendarHidden = false,
+  calendarIgnored = false,
 }: {
   calendarHidden?: boolean; // Google Calendar's events hidden (here and on the Day bar)
+  calendarIgnored?: boolean; // Google Calendar's events don't start jobs
   day: string;
   today: string;
   tz: string;
@@ -302,29 +304,40 @@ export default function PlanView({
       </div>
 
       <GoogleNote google={google} canWrite={canWrite} />
+      {/* Two separate things: whether Google Calendar's events show (here and on the Day bar),
+          and whether they start jobs set to "only if it's on my calendar". */}
       {google?.connected && (
-        <div className="mt-3 flex items-center gap-3 text-sm">
-          <button
-            type="button"
-            role="switch"
-            aria-checked={!calendarHidden}
-            aria-label="Show Google Calendar events"
+        <div className="mt-3 flex flex-col gap-2 text-sm">
+          <Switch
+            on={!calendarHidden}
+            label="Show Google Calendar events"
             disabled={pending}
-            onClick={() =>
+            onToggle={() =>
               start(async () => {
                 const res = await safely(() => setCalendarHidden(!calendarHidden));
                 if (!res.ok) setMessage(res.message);
                 else router.refresh();
               })
             }
-            className={`relative h-6 w-11 shrink-0 rounded-full transition-colors disabled:opacity-60 ${calendarHidden ? "bg-line" : "bg-accent"}`}
           >
-            <span className={`absolute top-0.5 size-5 rounded-full bg-paper shadow transition-[left] ${calendarHidden ? "left-0.5" : "left-[1.375rem]"}`} />
-          </button>
-          <span>
-            Google Calendar events {calendarHidden ? "hidden" : "shown"}
-            {calendarHidden && <span className="text-muted"> (here and on the Day bar; your own plans still show)</span>}
-          </span>
+            Show Google Calendar events
+            <span className="text-muted"> {calendarHidden ? "(hidden here and on the Day bar; your own plans still show)" : "(here and on the Day bar)"}</span>
+          </Switch>
+          <Switch
+            on={!calendarIgnored}
+            label="Use Google Calendar events to start jobs"
+            disabled={pending}
+            onToggle={() =>
+              start(async () => {
+                const res = await safely(() => setCalendarIgnored(!calendarIgnored));
+                if (!res.ok) setMessage(res.message);
+                else router.refresh();
+              })
+            }
+          >
+            Use them to start jobs
+            <span className="text-muted"> (a job set to start &ldquo;only if it&rsquo;s on my calendar&rdquo;{calendarHidden && !calendarIgnored ? ", even while they're hidden" : ""})</span>
+          </Switch>
         </div>
       )}
 
@@ -825,5 +838,25 @@ function Chevron({ dir }: { dir: 1 | -1 }) {
         strokeLinejoin="round"
       />
     </svg>
+  );
+}
+
+// An on/off switch with its words beside it.
+function Switch({ on, label, disabled, onToggle, children }: { on: boolean; label: string; disabled: boolean; onToggle: () => void; children: React.ReactNode }) {
+  return (
+    <div className="flex items-center gap-3">
+      <button
+        type="button"
+        role="switch"
+        aria-checked={on}
+        aria-label={label}
+        disabled={disabled}
+        onClick={onToggle}
+        className={`relative h-6 w-11 shrink-0 rounded-full transition-colors disabled:opacity-60 ${on ? "bg-accent" : "bg-line"}`}
+      >
+        <span className={`absolute top-0.5 size-5 rounded-full bg-paper shadow transition-[left] ${on ? "left-[1.375rem]" : "left-0.5"}`} />
+      </button>
+      <span>{children}</span>
+    </div>
   );
 }

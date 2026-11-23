@@ -40,9 +40,15 @@ export function placeFor(e: PlanEvent, places: { name: string; lat: number; lng:
   return hit ? { lat: hit.lat, lng: hit.lng } : null;
 }
 
-// You've hidden Google Calendar's events (049): only your own plans show, and only they start.
+// You've hidden Google Calendar's events (049): only your own plans show. (They still start
+// jobs, unless calendarIgnored.)
 export async function calendarHidden(client: Client): Promise<boolean> {
   const { data, error } = await client.from("profiles").select("hide_calendar").maybeSingle();
   return !error && !!(data as { hide_calendar?: boolean } | null)?.hide_calendar;
+}
+// You've turned off Google Calendar's events starting jobs (064). (Before it's run: false.)
+export async function calendarIgnored(client: Client): Promise<boolean> {
+  const { data, error } = await client.from("profiles").select("ignore_calendar").maybeSingle();
+  return !error && !!(data as { ignore_calendar?: boolean } | null)?.ignore_calendar;
 }
 export const isGoogleEvent = (e: { id: string }) => !e.id.startsWith("mbm:");

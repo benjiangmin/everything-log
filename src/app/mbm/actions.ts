@@ -1191,6 +1191,17 @@ export async function setStopOutline(visitId: string, outline: [number, number][
   return { ok: true };
 }
 
+// Let Google Calendar's events start jobs ("only if it's on my calendar"), shown or not (064).
+export async function setCalendarIgnored(ignore: boolean): Promise<Result> {
+  const client = await mbm();
+  const { data: auth } = await client.auth.getUser();
+  if (!auth.user) return fail("Sign in first.");
+  const { error } = await client.from("profiles").upsert({ user_id: auth.user.id, ignore_calendar: !!ignore });
+  if (error) return fail(/ignore_calendar/.test(error.message) ? "Run 064_use_calendar_when_hidden.sql in Supabase first." : error.message);
+  revalidatePath("/mbm/plan");
+  return { ok: true };
+}
+
 // Show or hide Google Calendar's events on Plan and the Day bar (049).
 export async function setCalendarHidden(hide: boolean): Promise<Result> {
   const client = await mbm();
