@@ -16,6 +16,9 @@ export async function POST(req: Request) {
   const lng = Number.isFinite(body.lng) ? body.lng : null;
 
   const calendar = await syncCalendar(client).catch(() => ({ ok: false }));
+  // Anything due starts first (a job set to start when you arrive at its place), so opening the
+  // app shows it running instead of waiting for the phone's next background send.
+  await client.rpc("start_for_you");
   const now = new Date();
   const [guess, over, upcoming] = await Promise.all([
     client.rpc("suggest", { p_at: now.toISOString(), p_lat: lat, p_lng: lng, p_tz: tz, p_limit: 2 }),

@@ -1,7 +1,7 @@
 "use client";
 
 import { readDark, readDarkServer, subscribeDark } from "@/components/ui/theme";
-import { Fragment, useEffect, useMemo, useRef, useState, useSyncExternalStore, useTransition, type ReactNode } from "react";
+import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, useTransition, type ReactNode } from "react";
 import { APIProvider, InfoWindow, Map, useMap, useMapsLibrary } from "@vis.gl/react-google-maps";
 import { useRouter } from "next/navigation";
 import { forgetDrawings, lockDay, lookupPlaceOutline, moveStop, myPlaces, pastDrawings, rememberedRoute, removeStop, reportRoute, saveDrawing, savedDrawings, trustedRoutes, saveBlock, setPlaceOutline, setStopOutline, setStopPlace, trailCells, type PlaceLite, type PlacePick } from "@/app/mbm/actions";
@@ -662,13 +662,40 @@ function samePlace(visits: Visit[], v: Visit): Visit[] {
 // (under: where the thing pointed at ends, if it's below the pointer spot, like a stop's dot;
 // gap: the space between them.)
 function Tip({ x, y, rows, heading, cover = 0, under, gap = 14 }: { x: number; y: number; rows: Row[]; heading?: string; cover?: number; under?: number; gap?: number }) {
+  const ref = useRef<HTMLDivElement>(null);
+  // Placed once it's drawn and its size is known: above the pointer; under it when that runs into
+  // the top (or what covers the map); beside it when neither fits (the bottom of the map or the
+  // window cut it off).
+  useLayoutEffect(() => {
+    const el = ref.current;
+    const box = el?.offsetParent as HTMLElement | null;
+    if (!el || !box) return;
+    const b = box.getBoundingClientRect();
+    const w = el.offsetWidth;
+    const h = el.offsetHeight;
+    const topLimit = Math.max(cover, -b.top) + 8;
+    const bottomLimit = Math.min(b.height, window.innerHeight - b.top) - 8;
+    const aboveTop = y - gap - h;
+    const belowTop = (under ?? y) + gap + 4;
+    let left = x - w / 2;
+    let top: number;
+    if (aboveTop >= topLimit) top = aboveTop;
+    else if (belowTop + h <= bottomLimit) top = belowTop;
+    else {
+      top = Math.max(topLimit, Math.min(y - h / 2, bottomLimit - h));
+      left = x + gap + 6 + w <= b.width - 8 ? x + gap + 6 : x - gap - 6 - w;
+    }
+    left = Math.max(8, Math.min(left, b.width - w - 8));
+    el.style.left = `${left}px`;
+    el.style.top = `${top}px`;
+    el.style.visibility = "visible";
+  });
   if (!rows.length) return null;
-  const below = y - cover < gap + 26 + rows.length * 40; // near the top of what you can see of the map: show it under instead
   return (
     <div
+      ref={ref}
       role="tooltip"
-      className={`pointer-events-none absolute z-30 w-max max-w-64 -translate-x-1/2 rounded-card bg-ink px-3 py-2 text-paper shadow-lg ${below ? "" : "-translate-y-full"}`}
-      style={{ left: x, top: below ? (under ?? y) + gap + 4 : y - gap }}
+      className="pointer-events-none invisible absolute left-0 top-0 z-30 w-max max-w-64 rounded-card bg-ink px-3 py-2 text-paper shadow-lg"
     >
       {heading && <p className="mb-1 text-[11px] text-paper/60">{heading}</p>}
       <ul className="flex flex-col gap-1">
