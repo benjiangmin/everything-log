@@ -259,9 +259,10 @@ function Player({ day, today, title, name, prev, next }: { day: Day; today: bool
 
   return (
     <div className="reflect relative size-full" style={{ "--reflect-glow": glow } as CSSProperties}>
-      {/* The map, the whole screen. */}
-      <div className={`absolute inset-0 flex flex-col transition-[filter] duration-700 ${stage === "play" ? "" : "blur-[2px] saturate-50"}`}>
-        {empty ? <div className="size-full bg-[radial-gradient(circle_at_50%_40%,var(--surface),var(--paper))]" /> : <DayMap day={day} focus={focus} walk={walk} follow={follow} gestures="greedy" bare chrome={false} />}
+      {/* The map, the whole screen. Just to watch: hovering, clicking and dragging it do nothing
+          (pointing at a route used to light it up and pull the camera off the walk). */}
+      <div className={`pointer-events-none absolute inset-0 flex flex-col transition-[filter] duration-700 ${stage === "play" ? "" : "blur-[2px] saturate-50"}`}>
+        {empty ? <div className="size-full bg-[radial-gradient(circle_at_50%_40%,var(--surface),var(--paper))]" /> : <DayMap day={day} focus={focus} walk={walk} follow={follow} gestures="none" bare chrome={false} />}
       </div>
       {/* A glow in the color of what's playing, rising from the bottom. */}
       <div aria-hidden="true" className="reflect-glow-layer pointer-events-none absolute inset-0 z-10" />

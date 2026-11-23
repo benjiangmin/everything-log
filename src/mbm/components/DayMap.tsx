@@ -29,7 +29,7 @@ export default function DayMap({
   follow?: { top: number; bottom: number } | null;
   chrome?: boolean; // false: no border or rounded box (Reflect: the map is the whole screen)
   bare?: boolean; // just the map (the day page's map layout puts its own things on top)
-  gestures?: "cooperative" | "greedy"; // greedy: scroll / pinch zooms the map (when it's the screen you're on)
+  gestures?: "cooperative" | "greedy" | "none"; // greedy: scroll / pinch zooms the map (when it's the screen you're on); none: just to watch (Reflect)
   day: Day;
   focus?: Focus | null;
   pin?: DayPlan | null;

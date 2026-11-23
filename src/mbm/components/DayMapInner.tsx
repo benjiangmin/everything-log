@@ -56,7 +56,7 @@ export default function DayMapInner({
   dayKey?: string;
   finished?: boolean; // the day's over: once drawn, its routes are saved (034_locked_days.sql)
   locked?: LockedTrip[] | null; // its saved routes: drawn as they are, nothing worked out again
-  gestures?: "cooperative" | "greedy";
+  gestures?: "cooperative" | "greedy" | "none"; // none: just to watch (Reflect): nothing reacts to the pointer
   topCover?: number; // px at the top covered by something floating on the map: fit the day below it
   visits: Visit[];
   points: RoutePoint[];
@@ -233,6 +233,7 @@ export default function DayMapInner({
         clickableIcons={false}
         draggableCursor={moving ? "crosshair" : undefined}
         onClick={(e) => {
+          if (gestures === "none") return;
           const at = e.detail.latLng;
           if (!moving) {
             // Clicked a trip: its menu (the untracked one first, where paths overlap).
@@ -261,7 +262,7 @@ export default function DayMapInner({
         {!follow && <FitTo spots={all} top={topCover} again={refit} />}
         {follow && <Follow spots={followSpots(lit, visits, trips, all)} cover={follow} />}
         {walk && <Walker trips={trips} walk={walk} />}
-        <PointerTrack trips={trips} onHit={(hit, e, guesses) => point(hit.length ? { trips: hit, stops: [], guesses, ...where(e) } : null)} />
+        {gestures !== "none" && <PointerTrack trips={trips} onHit={(hit, e, guesses) => point(hit.length ? { trips: hit, stops: [], guesses, ...where(e) } : null)} />}
         {showDots && <Dots points={outdoorDots} tz={tz} />}
         {/* The building you were in, lit up while you hover the stop (here or on the day bar). */}
         {visits.map((v) => (v.outline && lit?.stops.has(v.id) ? <Building key={`b-${v.id}`} outline={v.outline} /> : null))}
@@ -322,10 +323,11 @@ export default function DayMapInner({
                 type="button"
                 // Clicking it: its box opens, and the hover bubble goes (it was in the way of the box).
                 onClick={() => {
+                  if (gestures === "none") return;
                   point(null);
                   setOpen(v);
                 }}
-                onMouseEnter={(e) => open?.id !== v.id && point({ trips: [], stops: samePlace(visits, v).map((x) => x.id), ...overStop(e.currentTarget) })}
+                onMouseEnter={(e) => gestures !== "none" && open?.id !== v.id && point({ trips: [], stops: samePlace(visits, v).map((x) => x.id), ...overStop(e.currentTarget) })}
                 onMouseLeave={() => point(null)}
                 aria-label={name ?? "Unnamed stop"}
                 className={`flex cursor-pointer flex-col items-center transition-[opacity,transform] duration-150 ${dim ? "opacity-35" : ""} ${on ? "scale-125" : ""}`}
