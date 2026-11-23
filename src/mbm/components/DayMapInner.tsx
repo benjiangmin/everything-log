@@ -4,7 +4,7 @@ import { readDark, readDarkServer, subscribeDark } from "@/components/ui/theme";
 import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, useTransition, type ReactNode } from "react";
 import { APIProvider, InfoWindow, Map, useMap, useMapsLibrary } from "@vis.gl/react-google-maps";
 import { useRouter } from "next/navigation";
-import { forgetDrawings, lockDay, lookupPlaceOutline, moveStop, myPlaces, pastDrawings, rememberedRoute, removeStop, reportRoute, saveDrawing, savedDrawings, trustedRoutes, saveBlock, setPlaceOutline, setStopOutline, setStopPlace, trailCells, type PlaceLite, type PlacePick } from "@/app/mbm/actions";
+import { forgetDrawings, forgetDrawingsLike, lockDay, lookupPlaceOutline, moveStop, myPlaces, pastDrawings, rememberedRoute, removeStop, reportRoute, saveDrawing, savedDrawings, trustedRoutes, saveBlock, setPlaceOutline, setStopOutline, setStopPlace, trailCells, type PlaceLite, type PlacePick } from "@/app/mbm/actions";
 import { Search as PlaceSearch, type Found } from "./PlaceSearch";
 
 // Which version of the path engine drew a route (saved with "Route looks wrong" reports).
@@ -444,7 +444,7 @@ export default function DayMapInner({
                     forgetPieces();
                     // Way off: drawn again with the latest rules (your report keeps the old line).
                     const orig = built.find((b) => b.key === t.key);
-                    if (stars <= 2 && orig) void filled.redraw(orig);
+                    if (stars <= 2 && orig) void filled.redraw(orig, t.pieces.flatMap((p) => p.path));
                     setAdding((a) => (a ? { ...a, report: "sent", note: undefined } : a));
                     setTimeout(() => setAdding((a) => (a?.report === "sent" ? null : a)), 1600);
                   } else setAdding((a) => (a ? { ...a, note: res.message } : a));
@@ -786,12 +786,15 @@ function PointerTrack({ trips, onHit }: { trips: Trip[]; onHit: (keys: string[],
 // snapped onto the real paths and roads (solid; see snap.ts). Bits it missed are filled in and
 // stay dashed: a whole missed trip uses a walk you recorded before between the same two places,
 // otherwise Google's walking route. Answers are kept in this browser.
-function useFilledTrips(trips: Trip[], points: RoutePoint[]): { trips: Trip[]; settled: boolean; redraw: (t: Trip) => Promise<void> } {
+function useFilledTrips(trips: Trip[], points: RoutePoint[]): { trips: Trip[]; settled: boolean; redraw: (t: Trip, rated?: Spot[]) => Promise<void> } {
   const [again, setAgain] = useState(0); // (bumped by redraw: work out the forgotten pieces)
   const [better, setBetter] = useState<Record<string, Spot[]>>({});
   const [doneKeys, setDoneKeys] = useState<Set<string>>(() => new Set()); // (pieces worked out, drawn better or not)
   const [guessed, setGuessed] = useState<Set<string>>(() => new Set()); // (recorded pieces with too few dots: filled in, so a guess)
   const asked = useRef(new Set<string>());
+  // Trips you rated way off this visit: drawn again from scratch, not from an earlier line between
+  // the same places (that's how the rated line came straight back).
+  const fromScratch = useRef(new Set<string>());
   // Your trails around the day (trails.ts), learned from your walks before it. Fetched once per
   // day; the pieces wait for them (a few hundred ms) so they're drawn the learned way first time.
   const [trails, setTrails] = useState<{ day: string; center: ReturnType<typeof makeTrails> } | null>(null);
@@ -873,7 +876,7 @@ function useFilledTrips(trips: Trip[], points: RoutePoint[]): { trips: Trip[]; s
         const trusted = whole
           ? [
               ...(await trustedRoutes(t.fromId!, t.toId!).catch(() => [])),
-              ...(await pastDrawings(t.fromId!, t.toId!).catch(() => [])),
+              ...(fromScratch.current.has(t.key) ? [] : await pastDrawings(t.fromId!, t.toId!).catch(() => [])),
             ].map((r) => ({ ...r, line: r.reversed ? [...r.line].reverse() : r.line }))
           : [];
         // Your dots fit one (by their own accuracy, both ways round: routefit.ts): drawn that way.
@@ -958,9 +961,12 @@ function useFilledTrips(trips: Trip[], points: RoutePoint[]): { trips: Trip[]; s
     }
   }, [trips, ready, trails, again]);
   // Rated way off: this trip's lines are forgotten (here, in this browser, and saved) and worked out again.
-  const redraw = async (t: Trip) => {
+  // (rated: the line you rated, so earlier saved copies of it go too.)
+  const redraw = async (t: Trip, rated: Spot[] = []) => {
     const keys = t.pieces.map((_, i) => pieceKey(t, i));
+    fromScratch.current.add(t.key);
     await forgetDrawings(t.pieces.map((_, i) => drawKey(t, i))).catch(() => {});
+    await forgetDrawingsLike(t.fromId, t.toId, rated).catch(() => {});
     for (const k of keys) {
       asked.current.delete(k);
       forgetBefore(k);

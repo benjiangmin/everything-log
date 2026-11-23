@@ -703,6 +703,36 @@ export async function forgetDrawings(keys: string[]): Promise<void> {
   await (await mbm()).from("drawn_routes").delete().in("key", want);
 }
 
+// The same rated-off line saved before under other keys (while the trip was still being recorded
+// its dots changed, and each version was saved): those copies go too, or the next trip between
+// these places (or this one, drawn again) reuses the bad line because your dots fit it. A copy:
+// between the same two places, ending (or, the other way round, starting) the same way.
+export async function forgetDrawingsLike(fromId: string | null, toId: string | null, line: Line): Promise<void> {
+  if (!fromId || !toId || !isUuid(fromId) || !isUuid(toId) || !Array.isArray(line) || line.length < 3) return;
+  const client = await mbm();
+  const { data: vs } = await client.from("visits").select("id, place_id").in("id", [fromId, toId]);
+  const placeOf = (id: string) => ((vs ?? []) as { id: string; place_id: string | null }[]).find((v) => v.id === id)?.place_id ?? null;
+  const a = placeOf(fromId);
+  const b = placeOf(toId);
+  if (!a || !b) return;
+  const { data } = await client
+    .from("drawn_routes")
+    .select("key, path, from_place")
+    .or(`and(from_place.eq.${a},to_place.eq.${b}),and(from_place.eq.${b},to_place.eq.${a})`)
+    .limit(200);
+  const same = (p: unknown, q: unknown) =>
+    Array.isArray(p) && Array.isArray(q) && Math.abs(Number(p[0]) - Number(q[0])) < 2e-5 && Math.abs(Number(p[1]) - Number(q[1])) < 2e-5;
+  const tail = line.slice(-3);
+  const keys = ((data ?? []) as { key: string; path: unknown; from_place: string }[])
+    .filter((r) => {
+      const path = toLine(r.path);
+      const end = (r.from_place === b ? [...path].reverse() : path).slice(-3);
+      return end.length === 3 && end.every((pt, i) => same(pt, tail[i]));
+    })
+    .map((r) => r.key);
+  if (keys.length) await client.from("drawn_routes").delete().in("key", keys);
+}
+
 // Save a piece's line, the first time it's worked out (a line already saved for it stays).
 export async function saveDrawing(d: {
   key: string;
