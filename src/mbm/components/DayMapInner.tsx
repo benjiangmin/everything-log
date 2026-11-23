@@ -1486,7 +1486,7 @@ function Follow({ spots, cover }: { spots: Spot[]; cover: { top: number; bottom:
 }
 
 // (Reflect) Someone walking a route: the line drawn in behind them as they go (like a pen
-// tracing it), a glowing dot where they are at time t, and a fading trail.
+// tracing it). Just the line: no dot at its tip.
 function Walker({ trips, walk }: { trips: Trip[]; walk: { start: number; end: number; t: number; color: string } }) {
   const on = trips.filter((x) => x.end > walk.start && x.start < walk.end).sort((a, b) => a.start - b.start);
   // Each trip's whole line, and how far along it each point is (metres).
@@ -1520,28 +1520,8 @@ function Walker({ trips, walk }: { trips: Trip[]; walk: { start: number; end: nu
     }
     return { drawn: out, here };
   };
-  const { drawn, here } = upTo(walk.t);
-  const span = walk.end - walk.start;
-  const trail = [1, 2, 3, 4].map((i) => upTo(Math.max(walk.start, walk.t - (span * i) / 70)).here).filter((p): p is Spot => !!p);
   if (!lines.length) return null;
-  return (
-    <>
-      <Ink path={drawn} color={walk.color} />
-      {trail.map((p, i) => (
-        <HtmlMarker key={`trail-${i}`} position={p} zIndex={7} passive>
-          <span className="pointer-events-none block rounded-full" style={{ width: 9 - i * 1.5, height: 9 - i * 1.5, background: walk.color, opacity: 0.5 - i * 0.1 }} />
-        </HtmlMarker>
-      ))}
-      {here && (
-        <HtmlMarker position={here} zIndex={8} passive>
-          <span className="pointer-events-none relative grid size-7 place-items-center">
-            <span className="absolute inset-0 animate-ping rounded-full opacity-50" style={{ background: walk.color }} />
-            <span className="relative size-4 rounded-full border-[3px] border-[#faf6f0] shadow-lg" style={{ background: walk.color, boxShadow: `0 0 14px 4px ${walk.color}` }} />
-          </span>
-        </HtmlMarker>
-      )}
-    </>
-  );
+  return <Ink path={upTo(walk.t).drawn} color={walk.color} />;
 }
 
 // (Reflect) The line drawn so far: one polyline, its points updated as it grows (not a new line
