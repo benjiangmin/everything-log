@@ -913,11 +913,17 @@ function useFilledTrips(trips: Trip[], points: RoutePoint[]): { trips: Trip[]; s
             // stop (the phone said you'd arrived while you were still walking up): along the
             // paths, not a straight line through whatever's between.
             // (Not when the paths go far round: then the short straight bit is the better guess.)
+            // (Turning straight back on itself is never the way you walked: Google ends a route on
+            // the nearest path, sometimes a few steps past the spot and back, which drew a stub
+            // sticking out of Steenbock on Nov 23. And a way round that's much longer than the gap
+            // isn't how you got there either: a box around the lawn for a 40 m walk up. Then
+            // straight across.)
             const joinTo = async (from: Spot, to: Spot) => {
               if (metres(from, to) <= 40) return [];
-              const way = await walkingRoute(from, to).catch(() => null);
+              const found = await walkingRoute(from, to).catch(() => null);
+              const way = found ? noReversals(found) : null;
               const long = way ? way.slice(1).reduce((t, s, i) => t + metres(way[i], s), 0) : Infinity;
-              return way && long <= metres(from, to) * 2.5 + 60 ? way : [];
+              return way && long <= metres(from, to) * 1.6 + 20 ? way : [];
             };
             const first = head.length ? head[head.length - 1] : null;
             const lead = first && metres(first, body[0]) > 40 ? await joinTo(first, body[0]) : [];
@@ -1190,6 +1196,23 @@ async function gapRoute(t: Trip, i: number, a: Spot, b: Spot): Promise<Spot[] | 
 // because the start was put on the wrong side of a divided road, Nov 22 at Farley Ave): the loop
 // is cut out. A loop: two points of the route close together (within twice the dots' accuracy,
 // 80 to 100 m: about a block's width) with at least four times that much route between them.
+// A path that goes somewhere and comes straight back the same way (out and back, ending within a
+// quarter of the way out from where it turned): the out-and-back left out.
+function noReversals(path: Spot[]): Spot[] {
+  const out: Spot[] = [];
+  for (const p of path) {
+    out.push(p);
+    while (out.length >= 3) {
+      const [a, b, c] = out.slice(-3);
+      const ab = metres(a, b);
+      const bc = metres(b, c);
+      if (ab > 3 && bc > 3 && metres(a, c) < 0.25 * Math.min(ab, bc)) out.splice(out.length - 2, 1);
+      else break;
+    }
+  }
+  return out;
+}
+
 export function unloop(path: Spot[], tol: number): Spot[] {
   const near = Math.min(100, Math.max(80, 2 * tol));
   const along = [0];
