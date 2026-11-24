@@ -192,3 +192,49 @@ export async function nothingBetween(a: [number, number], b: [number, number]): 
     return undefined;
   }
 }
+
+// Every building around a spot (within metres), for picking the right one by hand. undefined:
+// no server answered (log says what each did).
+export async function buildingsNear(lat: number, lng: number, within = 120, log?: string[]): Promise<Outline[] | undefined> {
+  const at = `around:${within},${lat.toFixed(6)},${lng.toFixed(6)}`;
+  const q = `[out:json][timeout:12];(way(${at})[building];relation(${at})[building];);out geom;`;
+  for (const server of SERVERS) {
+    try {
+      const res = await fetch(`${server}?data=${encodeURIComponent(q)}`, { signal: AbortSignal.timeout(14000), cache: "no-store" });
+      if (!res.ok) {
+        log?.push(`${new URL(server).host}: HTTP ${res.status}`);
+        continue;
+      }
+      const body = (await res.json()) as { remark?: string; elements?: Element[] };
+      if (body.remark || !Array.isArray(body.elements)) {
+        log?.push(`${new URL(server).host}: ${body.remark ?? "no answer"}`);
+        continue;
+      }
+      return body.elements.flatMap(shapesOf).filter((s) => s.length >= 4);
+    } catch (e) {
+      log?.push(`${new URL(server).host}: ${e instanceof Error ? (e.name === "TimeoutError" ? "no answer in 14s" : e.message) : "failed"}`);
+    }
+  }
+  return undefined;
+}
+
+// One outline around several pieces of a building (Theory's wings): the shape around all their
+// corners. One piece: itself.
+export function around(pieces: Outline[]): Outline {
+  if (pieces.length === 1) return pieces[0];
+  const pts = pieces.flat().map(([a, b]) => [a, b] as [number, number]);
+  pts.sort((p, q) => p[1] - q[1] || p[0] - q[0]);
+  const cross = (o: [number, number], a: [number, number], b: [number, number]) => (a[1] - o[1]) * (b[0] - o[0]) - (a[0] - o[0]) * (b[1] - o[1]);
+  const lower: [number, number][] = [];
+  for (const p of pts) {
+    while (lower.length >= 2 && cross(lower[lower.length - 2], lower[lower.length - 1], p) <= 0) lower.pop();
+    lower.push(p);
+  }
+  const upper: [number, number][] = [];
+  for (const p of [...pts].reverse()) {
+    while (upper.length >= 2 && cross(upper[upper.length - 2], upper[upper.length - 1], p) <= 0) upper.pop();
+    upper.push(p);
+  }
+  const hull = [...lower.slice(0, -1), ...upper.slice(0, -1)];
+  return [...hull, hull[0]];
+}

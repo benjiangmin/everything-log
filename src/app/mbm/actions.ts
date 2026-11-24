@@ -1,7 +1,7 @@
 "use server";
 
 import { googleStatus, syncCalendar } from "@/mbm/google";
-import { buildingAt, contains, nothingBetween } from "@/mbm/buildings";
+import { buildingAt, buildingsNear, contains, nothingBetween } from "@/mbm/buildings";
 
 import { revalidatePath } from "next/cache";
 import { after } from "next/server";
@@ -892,6 +892,15 @@ export async function lookupPlaceOutline(placeId: string, lat: number, lng: numb
   if (outline === undefined) return "busy";
   const res = await setPlaceOutline(placeId, outline);
   return res.ok ? (outline ? "found" : "none") : res.message;
+}
+
+// The buildings around a place, from the website's server (when your browser couldn't reach
+// OpenStreetMap), and what each server said.
+export async function buildingsNearPlace(lat: number, lng: number): Promise<{ shapes: [number, number][][] | null; log: string[] }> {
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return { shapes: null, log: ["Bad place."] };
+  const log: string[] = [];
+  const shapes = await buildingsNear(lat, lng, 120, log);
+  return { shapes: shapes ?? null, log };
 }
 
 // ---------- Finished days keep their routes (034_locked_days.sql) ----------

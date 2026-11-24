@@ -1,5 +1,6 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { pickIsNear } from "@/mbm/nearcheck";
 import { useRouter } from "next/navigation";
@@ -21,6 +22,9 @@ import { clock, dayKeyOf, span } from "@/mbm/time";
 import { ClearSearch } from "./JobsView";
 import PlaceSearch, { type Found } from "./PlaceSearch";
 
+// (The building map only loads when you open it.)
+const BuildingPicker = dynamic(() => import("./BuildingPicker"), { ssr: false });
+
 // Your places (your name for each, the actual place, how often you're there) and the stops you
 // haven't named yet, in one spot: rename, link to the actual place, merge twins, delete.
 
@@ -32,6 +36,7 @@ export type PlaceRow = {
   real_address?: string | null;
   lat: number;
   lng: number;
+  outline?: [number, number][] | null; // its building (032)
   count: number;
   last: string | null;
 };
@@ -388,6 +393,7 @@ function EditPlace({
   const [real, setReal] = useState<Found | null>(null);
   const [searching, setSearching] = useState(!place.real_name);
   const [merging, setMerging] = useState(false);
+  const [building, setBuilding] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [pending, start] = useTransition();
   const linked = real
@@ -444,6 +450,17 @@ function EditPlace({
           />
         )}
       </Labelled>
+      {place.outline !== undefined && (
+        <Labelled title="Building" help={building ? undefined : place.outline ? "Hover its stops on the map to see it lit up." : "None yet."}>
+          {building ? (
+            <BuildingPicker place={place} outline={place.outline ?? null} onSaved={() => setBuilding(false)} />
+          ) : (
+            <button type="button" onClick={() => setBuilding(true)} className="h-10 rounded-control px-4 text-sm font-semibold ring-1 ring-line hover:bg-surface">
+              {place.outline ? "Change its building" : "Find its building"}
+            </button>
+          )}
+        </Labelled>
+      )}
       {merging && (
         <Labelled
           title={`Merge ${place.name} into…`}
