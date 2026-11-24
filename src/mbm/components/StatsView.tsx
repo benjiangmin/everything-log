@@ -330,8 +330,8 @@ function TimeSpent({
     items.push(...cats.values());
     items.sort((x, y) => sorter(x.kind === "job" ? x.a : x, y.kind === "job" ? y.a : y));
   }
-  // The circle: everything (pinned too, so the shares add up), a category as one slice. Over a
-  // week, a month or a year, the bits under 5% go together as Other (click it for what's in it).
+  // The circle: everything (pinned too, so the shares add up), a category as one slice. Over any
+  // range, a day too, the bits under 5% go together as Other (click it for what's in it).
   const slices: Slice[] = [];
   {
     const cats = new Map<string, Slice>();
@@ -352,7 +352,7 @@ function TimeSpent({
   }
   const pieTotal = slices.reduce((t, x) => t + x.seconds, 0);
   slices.sort((x, y) => y.seconds - x.seconds);
-  if (range !== "day") {
+  {
     const small = slices.filter((x) => pieTotal > 0 && x.seconds / pieTotal < 0.05);
     if (small.length >= 2) {
       const other: Slice = {
