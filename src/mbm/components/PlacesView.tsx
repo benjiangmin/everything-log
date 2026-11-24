@@ -422,7 +422,6 @@ function EditPlace({
   const [real, setReal] = useState<Found | null>(null);
   const [searching, setSearching] = useState(!place.real_name);
   const [merging, setMerging] = useState(false);
-  const [building, setBuilding] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [pending, start] = useTransition();
   const linked = real
@@ -480,27 +479,8 @@ function EditPlace({
         )}
       </Labelled>
       {place.outline !== undefined && (
-        <Labelled
-          title="Building"
-          help={
-            building
-              ? undefined
-              : !place.outline
-                ? "None yet."
-                : place.outline_by_hand
-                  ? "You picked it."
-                  : place.real_name
-                    ? `The one ${place.real_name} is in.`
-                    : "Found from where you've been."
-          }
-        >
-          {building ? (
-            <BuildingPicker place={place} outline={place.outline ?? null} onSaved={() => setBuilding(false)} />
-          ) : (
-            <button type="button" onClick={() => setBuilding(true)} className="h-10 rounded-control px-4 text-sm font-semibold ring-1 ring-line hover:bg-surface">
-              Adjust building
-            </button>
-          )}
+        <Labelled title="Building">
+          <BuildingPicker place={place} outline={place.outline ?? null} />
         </Labelled>
       )}
       {merging && (

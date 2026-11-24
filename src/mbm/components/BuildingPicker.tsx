@@ -3,7 +3,7 @@
 import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { APIProvider, Map, useMap, useMapsLibrary } from "@vis.gl/react-google-maps";
-import { around, buildingsNear, contains, type Outline } from "@/mbm/buildings";
+import { around, buildingsNear, contains, nearOutline, type Outline } from "@/mbm/buildings";
 import { adjustPlaceOutline, buildingsNearPlace } from "@/app/mbm/actions";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
 import { HtmlMarker, KEY, MAP_GROUND, stylesFor } from "./mapBits";
@@ -11,7 +11,7 @@ import { HtmlMarker, KEY, MAP_GROUND, stylesFor } from "./mapBits";
 // A place's building, picked by hand: every building around it from OpenStreetMap, on a map;
 // click the right one (or each piece of one, like Theory's wings) and save. If OpenStreetMap
 // doesn't answer, it says what each server did.
-export default function BuildingPicker({ place, outline, onSaved }: { place: { id: string; name: string; lat: number; lng: number; real_name?: string | null }; outline: Outline | null; onSaved: () => void }) {
+export default function BuildingPicker({ place, outline }: { place: { id: string; name: string; lat: number; lng: number; real_name?: string | null }; outline: Outline | null }) {
   const router = useRouter();
   const confirm = useConfirm();
   const [shapes, setShapes] = useState<Outline[] | null>(null);
@@ -19,6 +19,7 @@ export default function BuildingPicker({ place, outline, onSaved }: { place: { i
   const [looking, setLooking] = useState(true);
   const [picked, setPicked] = useState<Set<number>>(new Set());
   const [message, setMessage] = useState<string | null>(null);
+  const [saved, setSaved] = useState<string | null>(null); // (what was just saved, to say so)
   const [pending, start] = useTransition();
 
   // Look around it: your browser first, then the website's server.
@@ -35,7 +36,10 @@ export default function BuildingPicker({ place, outline, onSaved }: { place: { i
     setShapes(found ?? null);
     setLog(found === undefined ? notes : null);
     // (The ones it's in now, picked to start with.)
-    setPicked(new Set((found ?? []).flatMap((s, i) => (outline && outline.some(([a, b]) => contains(s, a, b) || s.some(([c, d]) => c === a && d === b)) ? [i] : []))));
+    // (The pieces the saved building is made of: each wholly inside it. A neighbour only shares a
+    // wall with it, so some of its corners are outside.)
+    setPicked(new Set((found ?? []).flatMap((s, i) => (outline && s.every(([a, b]) => nearOutline(outline, a, b, 1)) ? [i] : []))));
+    setSaved(null);
     setLooking(false);
   };
   useEffect(() => {
@@ -53,8 +57,8 @@ export default function BuildingPicker({ place, outline, onSaved }: { place: { i
     start(async () => {
       const res = await adjustPlaceOutline(place.id, o);
       if (!res.ok) return setMessage(res.message);
+      setSaved(o ? "Saved." : "Saved: not in a building.");
       router.refresh();
-      onSaved();
     });
   };
 
@@ -71,14 +75,15 @@ export default function BuildingPicker({ place, outline, onSaved }: { place: { i
                 key={i}
                 outline={s}
                 on={picked.has(i)}
-                onClick={() =>
+                onClick={() => {
+                  setSaved(null);
                   setPicked((p) => {
                     const n = new Set(p);
                     if (n.has(i)) n.delete(i);
                     else n.add(i);
                     return n;
-                  })
-                }
+                  });
+                }}
               />
             ))}
             <HtmlMarker position={{ lat: place.lat, lng: place.lng }} zIndex={5} passive>
@@ -109,7 +114,7 @@ export default function BuildingPicker({ place, outline, onSaved }: { place: { i
           onClick={() => save(around(chosen))}
           className="h-10 rounded-control bg-accent px-5 text-sm font-semibold text-accent-ink disabled:opacity-40"
         >
-          {pending ? "Saving…" : chosen.length > 1 ? `Use these ${chosen.length} as one building` : "Use this building"}
+          {pending ? "Saving…" : chosen.length > 1 ? `Save these ${chosen.length} as one building` : "Save building"}
         </button>
         <button type="button" disabled={pending} onClick={() => save(null)} className="h-10 rounded-control px-4 text-sm font-semibold text-muted hover:bg-surface hover:text-ink">
           Not in a building
@@ -121,6 +126,7 @@ export default function BuildingPicker({ place, outline, onSaved }: { place: { i
         )}
       </div>
       {message && <p className="mt-2 text-sm text-danger">{message}</p>}
+      {saved && !message && <p className="mt-2 text-sm text-muted">{saved}</p>}
     </div>
   );
 }
