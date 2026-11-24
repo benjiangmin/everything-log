@@ -105,9 +105,11 @@ export async function getJobMeta(): Promise<JobMeta> {
 export const todayKey = (tz: string) => dayKeyOf(new Date(), tz);
 
 // Your pinned activities on "Time spent", oldest first (023_pins.sql; none if it isn't run yet).
-export async function getPins(): Promise<string[] | null> {
+// (Pins belong to the view they were pinned on, 078: before it's run, they're on every view.)
+export async function getPins(range: Range): Promise<string[] | null> {
   const client = await mbm();
-  const { data, error } = await client.from("stat_pins").select("name").order("created_at");
+  let { data, error } = await client.from("stat_pins").select("name").eq("scope", range).order("created_at");
+  if (error && /scope/.test(error.message)) ({ data, error } = await client.from("stat_pins").select("name").order("created_at"));
   if (error) return null; // null: can't pin yet
   return (data as { name: string }[]).map((p) => p.name);
 }

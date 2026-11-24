@@ -285,7 +285,7 @@ function TimeSpent({
     setPins((list) => (on ? [...list, name.trim()] : list.filter((p) => key(p) !== key(name))));
     setProblem(null);
     start(async () => {
-      const r = await setPinned(name, on);
+      const r = await setPinned(name, on, range);
       if (!r.ok) {
         setProblem(r.message);
         setPins((list) => (on ? list.filter((p) => key(p) !== key(name)) : [...list, name.trim()]));

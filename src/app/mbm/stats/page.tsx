@@ -46,7 +46,7 @@ async function StatsFor({ range, day: asked, q }: { range: Range; day?: string; 
   const today = todayKey(tz);
   const dayKey = isDayKey(asked) && asked <= today ? asked : today;
   const period = periodOf(range, dayKey, today);
-  const [stats, pins, meta] = await Promise.all([getStats(period, tz).catch((e: Error) => e), getPins().catch(() => null), getJobMeta().catch(() => ({ jobs: {}, categories: {} }))]);
+  const [stats, pins, meta] = await Promise.all([getStats(period, tz).catch((e: Error) => e), getPins(range).catch(() => null), getJobMeta().catch(() => ({ jobs: {}, categories: {} }))]);
   // The apps' icons come with the page (it waits for them), so they don't pop in one by one.
   const icons = stats instanceof Error ? {} : await iconsFor(stats.apps.map((a) => a.app));
   const isNow = period.first <= today && today < period.next;
