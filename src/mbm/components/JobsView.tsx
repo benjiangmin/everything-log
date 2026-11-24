@@ -3,7 +3,8 @@
 import Select from "./Select";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState, useTransition, type ReactNode } from "react";
+import { useEffect, useRef, useState, useTransition, type ReactNode } from "react";
+import Floating from "./Floating";
 import { deleteCategory, deleteJob, jobEntryCount, placeIdFor, saveCategory, saveJob, type JobPrefs } from "@/app/mbm/actions";
 import PageMark from "./PageMark";
 import { setPrivate } from "@/app/mbm/social/actions";
@@ -351,7 +352,6 @@ function JobSettings({
       <Field title="Name">
         <input value={name} onChange={(e) => setName(e.target.value)} maxLength={60} aria-label="Name" className="w-full max-w-sm rounded-control border border-line bg-paper px-3 py-2.5 focus:border-ink" style={{ outline: "none" }} />
       </Field>
-      <OnCalendar job={{ ...job, name: name.trim() || job.name, calendar_names: calNames }} jobs={jobs} events={events} names={calNames} onChange={setCalNames} />
       <Field title="Category" help={cat ? `${job.name} is ${cat.name}'s color. Anything below left on “Same as ${cat.name}” follows ${cat.name}'s settings.` : "Put it in a category to give it the category's color and settings."}>
         <Select
           value={p.category_id ?? ""}
@@ -364,7 +364,14 @@ function JobSettings({
       <Field title="Color">
         <JobColor color={color} onChange={setColor} category={cat} />
       </Field>
-      <Prefs name={job.name} value={p} onChange={(v) => setP({ ...p, ...v })} parent={cat} places={places} />
+      <Prefs
+        name={job.name}
+        value={p}
+        onChange={(v) => setP({ ...p, ...v })}
+        parent={cat}
+        places={places}
+        calendar={<OnCalendar job={{ ...job, name: name.trim() || job.name, calendar_names: calNames }} jobs={jobs} events={events} names={calNames} onChange={setCalNames} />}
+      />
       <PrivateSwitch kind="job" id={job.id} on={!!job.private} inherited={!!cat?.private} />
       {deleting ? (
         <DeleteJob job={job} jobs={jobs} onCancel={() => setDeleting(false)} onDone={onDone} />
@@ -375,70 +382,162 @@ function JobSettings({
   );
 }
 
-// Which calendar events are this job: ones that match it by themselves, and ones you link (pick
-// from your calendar's names, so you don't have to remember them exactly). They start it (if it
-// starts by itself) and suggest it.
+// Which calendar events are this job: ones that match it by name by themselves, and ones you sync
+// (searched from your calendar's names, so you don't have to remember them exactly). They start
+// it when it starts by itself, and suggest it.
 function OnCalendar({ job, jobs, events, names, onChange }: { job: Job; jobs: Job[]; events: CalEvent[]; names: string[]; onChange: (n: string[]) => void }) {
   const all = jobs.map((j) => (j.id === job.id ? job : j));
   const lower = new Set(names.map((n) => n.trim().toLowerCase()));
-  const mine = events.filter((e) => eventJobId(e.title, all) === job.id);
-  const auto = mine.filter((e) => !lower.has(e.title.trim().toLowerCase()));
+  const auto = events.filter((e) => eventJobId(e.title, all) === job.id && !lower.has(e.title.trim().toLowerCase()));
   const others = events
     .filter((e) => eventJobId(e.title, all) !== job.id)
-    .sort((a, b) => overlap(job.name, b.title) - overlap(job.name, a.title) || b.n - a.n)
-    .slice(0, 80);
+    .sort((a, b) => overlap(job.name, b.title) - overlap(job.name, a.title) || b.n - a.n);
   const owner = (title: string) => jobs.find((j) => j.id === eventJobId(title, jobs))?.name;
   return (
-    <Field
-      title="On your calendar"
-      help={`Calendar events that are ${job.name}: they start it (if it starts by itself) and suggest it. Link any with a different name.`}
-    >
-      <div className="flex flex-wrap gap-2">
+    <Field title="Sync calendar event" help="Syncs a calendar event to this job, used for starting jobs automatically.">
+      <ListBox add={<AddEvent options={others} owner={owner} onAdd={(t) => onChange([...names, t])} empty={events.length === 0} />}>
         {names.map((n) => (
-          <span key={n} className="inline-flex items-center gap-1.5 rounded-full bg-paper py-1 pl-3 pr-1 text-sm ring-1 ring-line">
-            {n}
-            <button type="button" onClick={() => onChange(names.filter((x) => x !== n))} aria-label={`Unlink ${n}`} className="grid size-6 place-items-center rounded-full text-muted hover:bg-surface hover:text-ink">
-              <svg viewBox="0 0 20 20" className="size-3.5" fill="none" stroke="currentColor" strokeWidth="2.2" aria-hidden="true">
-                <path d="M5 5l10 10M15 5L5 15" strokeLinecap="round" />
-              </svg>
-            </button>
-          </span>
+          <ListRow key={n} icon="calendar" name={n} onRemove={() => onChange(names.filter((x) => x !== n))} />
         ))}
         {auto.map((e) => (
-          <span key={e.title} title="Matches its name, so it's already this job" className="inline-flex items-center gap-1.5 rounded-full bg-surface px-3 py-1 text-sm text-muted">
-            {e.title}
-            <span className="text-xs">· by name</span>
-          </span>
+          <ListRow key={e.title} icon="calendar" name={e.title} note="Same name" />
         ))}
-        {names.length === 0 && auto.length === 0 && <span className="text-sm text-muted">None yet.</span>}
-      </div>
-      {events.length > 0 ? (
-        others.length > 0 && (
-          <div className="mt-3 max-w-sm">
-            <Select
-              value=""
-              label="Link a calendar event"
-              onChange={(t) => t && onChange([...names, t])}
-              options={[
-                { value: "", label: "Link a calendar event…" },
-                ...others.map((e) => {
-                  const o = owner(e.title);
-                  return { value: e.title, label: `${e.title}${o ? ` (now ${o})` : ""}` };
-                }),
-              ]}
-            />
-          </div>
-        )
-      ) : (
-        <p className="mt-2 text-sm text-muted">
-          No calendar events yet.{" "}
-          <Link href="/account/sign-in" className="font-semibold text-ink underline underline-offset-2">
-            Connect Google Calendar
-          </Link>
-          .
-        </p>
-      )}
+      </ListBox>
     </Field>
+  );
+}
+
+// A job's places or calendar events: one box, a row each, and adding at the bottom.
+function ListBox({ children, add }: { children: ReactNode; add: ReactNode }) {
+  return (
+    <div className="max-w-md divide-y divide-line rounded-card border border-line bg-paper">
+      {children}
+      {add}
+    </div>
+  );
+}
+
+function ListRow({ icon, name, note, onRemove }: { icon: "place" | "calendar"; name: string; note?: string; onRemove?: () => void }) {
+  return (
+    <div className="flex items-center gap-3 px-3.5 py-2.5">
+      <RowIcon icon={icon} />
+      <span className="min-w-0 flex-1 truncate">{name}</span>
+      {note && <span className="shrink-0 text-xs text-muted">{note}</span>}
+      {onRemove && (
+        <button type="button" onClick={onRemove} className="shrink-0 rounded-control px-2 py-1 text-xs font-semibold text-muted hover:bg-surface hover:text-danger">
+          Remove
+        </button>
+      )}
+    </div>
+  );
+}
+
+function RowIcon({ icon }: { icon: "place" | "calendar" | "add" }) {
+  return (
+    <span className="grid size-7 shrink-0 place-items-center rounded-control bg-surface text-muted" aria-hidden="true">
+      <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        {icon === "place" ? (
+          <>
+            <path d="M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 0 1 13 0c0 5.4-6.5 11-6.5 11z" />
+            <circle cx="12" cy="10" r="2.3" />
+          </>
+        ) : icon === "calendar" ? (
+          <>
+            <rect x="3.5" y="5" width="17" height="15" rx="3" />
+            <path d="M3.5 10h17M8 3v4M16 3v4" />
+          </>
+        ) : (
+          <path d="M12 6v12M6 12h12" />
+        )}
+      </svg>
+    </span>
+  );
+}
+
+function AddRow({ label, onClick }: { label: string; onClick: () => void }) {
+  return (
+    <button type="button" onClick={onClick} className="flex w-full items-center gap-3 rounded-b-card px-3.5 py-2.5 text-left text-sm font-semibold text-muted transition-colors first:rounded-t-card hover:bg-surface/60 hover:text-ink">
+      <RowIcon icon="add" />
+      {label}
+    </button>
+  );
+}
+
+// Search your calendar's names (or type one that isn't on it yet) to sync.
+function AddEvent({ options, owner, onAdd, empty }: { options: CalEvent[]; owner: (t: string) => string | undefined; onAdd: (t: string) => void; empty: boolean }) {
+  const [open, setOpen] = useState(false);
+  const [q, setQ] = useState("");
+  const [lit, setLit] = useState(0);
+  const field = useRef<HTMLInputElement>(null);
+  const pop = useRef<HTMLDivElement>(null);
+  if (!open) return <AddRow label="Sync a calendar event" onClick={() => setOpen(true)} />;
+  const t = q.trim().toLowerCase();
+  const hits = (t ? options.filter((o) => o.title.toLowerCase().includes(t)) : options).slice(0, 40);
+  const typed = q.trim() && !options.some((o) => o.title.toLowerCase() === t) ? [{ title: q.trim(), n: 0 }] : [];
+  const rows = [...hits, ...typed];
+  const pick = (title: string) => {
+    onAdd(title);
+    setOpen(false);
+    setQ("");
+  };
+  const close = () => {
+    setOpen(false);
+    setQ("");
+  };
+  return (
+    <div className="flex items-center gap-3 px-3.5 py-2">
+      <RowIcon icon="calendar" />
+      <input
+        ref={field}
+        autoFocus
+        value={q}
+        onChange={(e) => {
+          setQ(e.target.value);
+          setLit(0);
+        }}
+        onBlur={(e) => !pop.current?.contains(e.relatedTarget as Node) && close()}
+        onKeyDown={(e) => {
+          if (e.key === "Escape") close();
+          if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+            e.preventDefault();
+            setLit((i) => Math.max(0, Math.min(rows.length - 1, i + (e.key === "ArrowDown" ? 1 : -1))));
+          }
+          if (e.key === "Enter") {
+            e.preventDefault();
+            if (rows[lit]) pick(rows[lit].title);
+          }
+        }}
+        placeholder={empty ? "Type the event's name" : "Search your calendar"}
+        aria-label="Search your calendar"
+        className="min-w-0 flex-1 bg-transparent py-1 text-sm"
+        style={{ outline: "none" }}
+      />
+      <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={close} className="shrink-0 rounded-control px-2 py-1 text-xs font-semibold text-muted hover:bg-surface hover:text-ink">
+        Cancel
+      </button>
+      {rows.length > 0 && (
+        <Floating anchor={field} popRef={pop}>
+          <ul role="listbox" aria-label="Calendar events" onMouseDown={(e) => e.preventDefault()} className="max-h-72 w-96 max-w-[90vw] overflow-y-auto rounded-card bg-paper p-1.5 shadow-xl shadow-ink/15 ring-1 ring-line">
+            {rows.map((o, i) => {
+              const now = o.n ? owner(o.title) : undefined;
+              return (
+                <li
+                  key={o.title + i}
+                  role="option"
+                  aria-selected={i === lit}
+                  onMouseEnter={() => setLit(i)}
+                  onClick={() => pick(o.title)}
+                  className={`flex cursor-pointer items-center justify-between gap-3 rounded-control px-3 py-2 text-sm ${i === lit ? "bg-surface" : ""}`}
+                >
+                  <span className="min-w-0 truncate">{o.n ? o.title : `Use “${o.title}”`}</span>
+                  <span className="shrink-0 text-xs text-muted">{o.n ? (now ? `now ${now}` : `${o.n}×`) : "not on your calendar yet"}</span>
+                </li>
+              );
+            })}
+          </ul>
+        </Floating>
+      )}
+    </div>
   );
 }
 
@@ -594,6 +693,7 @@ function Prefs({
   parent = null,
   places: known,
   group = false,
+  calendar = null,
 }: {
   name: string;
   value: JobPrefs;
@@ -601,6 +701,7 @@ function Prefs({
   parent?: Category | null;
   places: Place[];
   group?: boolean;
+  calendar?: ReactNode; // (a job's synced calendar events, right under its places)
 }) {
   // (A place found in the search that wasn't yours yet: shown by name until the page reloads.)
   const [added, setAdded] = useState<Place[]>([]);
@@ -621,26 +722,26 @@ function Prefs({
   return (
     <>
       <Field title={group ? "Where do they happen?" : `Where does ${name} happen?`} help="Your named places (name a stop on the Day map to make one). Leave it empty if it can happen anywhere.">
-        {following && <p className="mb-2 text-sm text-muted">{parent!.name}&apos;s places:</p>}
-        <div className="flex flex-wrap gap-1.5">
+        <ListBox
+          add={following ? null : <AddPlace places={places.filter((p) => !myPlaces.includes(p.id))} onAdd={(id, place) => onChange({ places: [...myPlaces, id] }, place)} />}
+        >
           {myPlaces.map((id) => (
-            <span key={id} className="flex items-center gap-1 rounded-full bg-paper py-1 pl-3 pr-1 text-sm ring-1 ring-line">
-              {places.find((p) => p.id === id)?.name ?? "A place"}
-              {!following && (
-                <button type="button" aria-label="Remove" onClick={() => onChange({ places: myPlaces.filter((x) => x !== id) })} className="grid size-5 place-items-center rounded-full text-muted hover:bg-surface hover:text-ink">
-                  ×
-                </button>
-              )}
-            </span>
+            <ListRow
+              key={id}
+              icon="place"
+              name={places.find((p) => p.id === id)?.name ?? "A place"}
+              note={following ? `${parent!.name}'s` : undefined}
+              onRemove={following ? undefined : () => onChange({ places: myPlaces.filter((x) => x !== id) })}
+            />
           ))}
-        </div>
-        {!following && <AddPlace places={places.filter((p) => !myPlaces.includes(p.id))} onAdd={(id, place) => onChange({ places: [...myPlaces, id] }, place)} />}
+        </ListBox>
         {parent?.places?.length ? (
           <button type="button" onClick={() => onChange({ places: following ? [...parent.places!] : null })} className="mt-2 text-sm font-semibold text-muted underline underline-offset-2 hover:text-ink">
             {following ? "Use different places" : `Use ${parent.name}'s places instead`}
           </button>
         ) : null}
       </Field>
+      {calendar}
 
       <Field title={e.places.length ? `When you arrive at ${at}` : "When you arrive"} help={e.places.length ? undefined : "Add a place above first: this is about arriving at one."}>
         <Choices
@@ -650,7 +751,7 @@ function Prefs({
           options={[
             ...same(modeWords[parentMode]),
             { v: "always", label: `Start ${it} automatically` },
-            { v: "calendar", label: `Start ${it} only if it's on my calendar then`, note: `A calendar event that's ${group ? "the job" : name} (see On your calendar above) has to be on at that time. For a place where you do different things, like the gym (working out or volleyball).` },
+            { v: "calendar", label: `Start ${it} only if it's on my calendar then` },
             { v: "never", label: "Don't start it. I'll start it myself" },
           ]}
         />
@@ -805,32 +906,32 @@ function AddPlace({ places, onAdd }: { places: Place[]; onAdd: (id: string, plac
   const [open, setOpen] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [pending, start] = useTransition();
-  if (!open)
-    return (
-      <button type="button" onClick={() => setOpen(true)} className="mt-2 rounded-full border border-dashed border-line px-3 py-1 text-sm text-muted hover:border-ink/40 hover:text-ink">
-        + Add a place
-      </button>
-    );
+  if (!open) return <AddRow label="Add a place" onClick={() => setOpen(true)} />;
   return (
-    <div className="mt-2 max-w-md">
-      <PlaceSearch
-        places={places.map((p) => ({ ...p, lat: 0, lng: 0 }))}
-        autoFocus
-        busy={pending}
-        placeholder="Search your places, or anywhere"
-        onPick={(p) =>
-          start(async () => {
-            const res = await placeIdFor(p);
-            if (!res.ok || !res.id) return setMessage(res.ok ? "Couldn't add that." : res.message);
-            onAdd(res.id, { id: res.id, name: p.label });
-            setOpen(false);
-            setMessage(null);
-          })
-        }
-      />
-      <button type="button" onClick={() => setOpen(false)} className="mt-1.5 text-xs text-muted underline underline-offset-2">
-        Cancel
-      </button>
+    <div className="px-3.5 py-2.5">
+      <div className="flex items-center gap-3">
+        <RowIcon icon="place" />
+        <div className="min-w-0 flex-1">
+          <PlaceSearch
+            places={places.map((p) => ({ ...p, lat: 0, lng: 0 }))}
+            autoFocus
+            busy={pending}
+            placeholder="Search your places, or anywhere"
+            onPick={(p) =>
+              start(async () => {
+                const res = await placeIdFor(p);
+                if (!res.ok || !res.id) return setMessage(res.ok ? "Couldn't add that." : res.message);
+                onAdd(res.id, { id: res.id, name: p.label });
+                setOpen(false);
+                setMessage(null);
+              })
+            }
+          />
+        </div>
+        <button type="button" onClick={() => setOpen(false)} className="shrink-0 rounded-control px-2 py-1 text-xs font-semibold text-muted hover:bg-surface hover:text-ink">
+          Cancel
+        </button>
+      </div>
       {message && <p className="mt-1 text-xs text-danger">{message}</p>}
     </div>
   );
