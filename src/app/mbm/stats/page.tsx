@@ -12,6 +12,7 @@ import ReflectButton from "@/mbm/components/ReflectButton";
 import { iconsFor } from "@/mbm/appIcons";
 import RangeRail, { RANGE_COLOR } from "@/mbm/components/RangeRail";
 import JumpTo from "@/mbm/components/JumpTo";
+import NoPhoneHint from "@/mbm/components/NoPhoneHint";
 
 export const metadata = { title: "Stats" };
 
@@ -58,6 +59,7 @@ async function StatsFor({ range, day: asked, q }: { range: Range; day?: string; 
         <RangeRail range={range} hrefFor={(r) => href(r, asked)} />
       </aside>
       <div className="min-w-0">
+      <NoPhoneHint what="Places, commutes and screen time" className="mb-3" />
       {/* Which day / week / month / year this is: stays at the top as you scroll. */}
       <div className="sticky top-16 z-20 -mx-2 bg-paper/95 px-2 pb-3 pt-3 backdrop-blur">
       <div className="flex flex-wrap items-center justify-between gap-3">

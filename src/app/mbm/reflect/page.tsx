@@ -6,6 +6,7 @@ import { mbm, mbmReady, mbmUser } from "@/mbm/supabase";
 import { dayKeyOf, dayTitle, isDayKey, shiftDay } from "@/mbm/time";
 import Reflect from "@/mbm/components/Reflect";
 import Loading from "@/mbm/components/Loading";
+import NoPhoneHint from "@/mbm/components/NoPhoneHint";
 
 export const metadata = { title: "Reflect" };
 
@@ -45,6 +46,10 @@ async function ReflectFor({ day: asked }: { day?: string }) {
   ]);
   if (day instanceof Error) return <p className="m-6 rounded-card bg-surface px-5 py-4 text-sm text-danger">{day.message}</p>;
   return (
+    <>
+    <div className="absolute inset-x-0 top-3 z-40 flex justify-center px-4">
+      <NoPhoneHint what="The places and routes Reflect walks through" />
+    </div>
     <Reflect
       key={dayKey}
       day={day}
@@ -54,5 +59,6 @@ async function ReflectFor({ day: asked }: { day?: string }) {
       prev={shiftDay(dayKey, -1)}
       next={dayKey < today ? shiftDay(dayKey, 1) : null}
     />
+    </>
   );
 }

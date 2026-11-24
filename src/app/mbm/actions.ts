@@ -48,10 +48,13 @@ export async function signUp(_prev: SignInState, formData: FormData): Promise<Si
   if (!email || !password) return { message: "Email and password, please." };
   if (password.length < 8) return { message: "Pick a password with at least 8 characters." };
   const origin = (await headers()).get("origin") ?? "";
-  const { data, error } = await (await mbm()).auth.signUp({ email, password, options: { emailRedirectTo: origin ? `${origin}/mbm/login` : undefined } });
+  // (From the welcome: on into the setup, /mbm/setup, now or after confirming your email.)
+  const asked = String(formData.get("next") ?? "");
+  const next = asked.startsWith("/mbm") && !asked.startsWith("//") ? asked : "/mbm";
+  const { data, error } = await (await mbm()).auth.signUp({ email, password, options: { emailRedirectTo: origin ? `${origin}/mbm/login?next=${encodeURIComponent(next)}` : undefined } });
   if (error) return { message: /registered/i.test(error.message) ? "There's already an account with that email. Sign in instead." : error.message };
   if (!data.session) return { message: null, sent: true };
-  redirect("/mbm");
+  redirect(next);
 }
 
 export async function signOut() {

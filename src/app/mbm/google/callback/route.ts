@@ -13,9 +13,12 @@ export async function GET(req: Request) {
   const store = await cookies();
   const expected = store.get("mbm_google_state")?.value;
   const signin = store.get("mbm_google_signin")?.value;
+  const after = store.get("mbm_google_next")?.value; // (connecting from the setup: back there)
+  store.delete({ name: "mbm_google_next", path: "/mbm/google" });
   store.delete({ name: "mbm_google_state", path: "/mbm/google" });
   store.delete({ name: "mbm_google_signin", path: "/mbm/google" });
-  const backHome = (status: string) => Response.redirect(`${origin}/mbm?google=${encodeURIComponent(status)}`, 302);
+  const home = after?.startsWith("/mbm/") ? after : "/mbm";
+  const backHome = (status: string) => Response.redirect(`${origin}${home}${home.includes("?") ? "&" : "?"}google=${encodeURIComponent(status)}`, 302);
   const backLogin = (status: string) => Response.redirect(`${origin}/mbm/login?google=${encodeURIComponent(status)}`, 302);
   const back = signin ? backLogin : backHome;
 

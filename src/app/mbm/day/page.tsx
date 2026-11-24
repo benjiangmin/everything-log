@@ -9,6 +9,7 @@ import { calendarHidden, eventsBetween, isGoogleEvent, placeFor } from "@/mbm/pl
 import type { DayPlan } from "@/mbm/components/DayBar";
 import { dayKeyOf, dayRange, dayTitle, isDayKey, shiftDay } from "@/mbm/time";
 import DayView from "@/mbm/components/DayView";
+import NoPhoneHint from "@/mbm/components/NoPhoneHint";
 
 export const metadata = { title: "Day" };
 
@@ -58,6 +59,7 @@ async function MbmDay({ day: asked, show, showAt }: { day?: string; show: "unmar
   const arrow = "grid size-9 place-items-center rounded-control transition-colors hover:bg-surface";
   return (
     <>
+      <NoPhoneHint what="Your stops, routes and the map" className="mb-3" />
       <DayView
         key={dayKey}
         day={day}

@@ -35,6 +35,11 @@ async function Home({ day: asked, google }: { day?: string; google?: string }) {
   if (!mbmReady()) return <p className="rounded-card bg-surface px-5 py-4 text-sm">Minute by Minute isn&apos;t connected yet.</p>;
   const user = await mbmUser();
   if (!user) redirect("/mbm/login?next=/mbm");
+  // A new account that hasn't been through the setup yet (no About you saved): the setup first.
+  {
+    const { data, error } = await (await mbm()).from("profiles").select("user_id").maybeSingle();
+    if (!error && !data) redirect("/mbm/setup");
+  }
 
   const tz = mbmTz();
   const today = dayKeyOf(new Date(), tz);

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRef, useState, useTransition, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { changeEmail, changePassword, deleteMine, saveAvatar, signOut } from "@/app/mbm/actions";
@@ -33,6 +34,16 @@ export default function AccountView({
       )}
       <Section id="reflect" title="Reflect" note="The Reflect tab walks you back through today. It opens in the evening, at this time (on this browser).">
         <ReflectTime />
+      </Section>
+      <Section title="Setup" note="Go through the welcome and setup again, to change your answers or see what a new account sees.">
+        <div className="flex flex-wrap gap-2">
+          <Link href="/mbm/setup" className="rounded-control px-4 py-2 text-sm font-semibold ring-1 ring-line hover:bg-surface">
+            Replay setup
+          </Link>
+          <Link href="/mbm/welcome?replay=1" className="rounded-control px-4 py-2 text-sm font-semibold text-muted hover:bg-surface hover:text-ink">
+            See the welcome
+          </Link>
+        </div>
       </Section>
       <Section title="Sign-in">
         <EmailForm email={email} />

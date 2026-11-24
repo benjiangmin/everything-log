@@ -10,11 +10,12 @@ import { EDUCATION, EXERCISE, RACES, SMOKING, STATES } from "@/mbm/life";
 type Answers = { name: string; birthday: string; sex: string; race: string; state: string; education: string; smoking: string; exercise: string };
 const STEPS = 8;
 
-export default function AboutYouSteps() {
+// initialName: from Google, to confirm. onDone: in the setup (/mbm/setup), the next slide.
+export default function AboutYouSteps({ initialName = "", onDone }: { initialName?: string; onDone?: () => void } = {}) {
   const router = useRouter();
   const [step, setStep] = useState(0);
   const [dir, setDir] = useState<"fwd" | "back">("fwd");
-  const [a, setA] = useState<Answers>({ name: "", birthday: "", sex: "", race: "", state: "", education: "", smoking: "", exercise: "" });
+  const [a, setA] = useState<Answers>({ name: initialName, birthday: "", sex: "", race: "", state: "", education: "", smoking: "", exercise: "" });
   const [search, setSearch] = useState("");
   const [message, setMessage] = useState<string | null>(null);
   const [pending, start] = useTransition();
@@ -43,7 +44,8 @@ export default function AboutYouSteps() {
       for (const [k, v] of Object.entries(ans)) fd.set(k, v);
       const res = await saveProfile(fd);
       if (!res.ok) return setMessage(res.message);
-      router.refresh();
+      if (onDone) onDone();
+      else router.refresh();
     });
 
   const states = Object.keys(STATES).filter((s) => !search || s.toLowerCase().includes(search.toLowerCase()));
@@ -107,6 +109,7 @@ export default function AboutYouSteps() {
               />
               <Next disabled={!a.birthday}>Continue</Next>
             </form>
+            <Skip onClick={() => set("birthday", "", 2)}>Set up later</Skip>
           </Ask>
         )}
         {step === 2 && (
@@ -131,6 +134,7 @@ export default function AboutYouSteps() {
                 </Choice>
               ))}
             </div>
+            <Skip onClick={() => set("race", "", 4)}>Set up later</Skip>
           </Ask>
         )}
         {step === 4 && (
@@ -151,7 +155,7 @@ export default function AboutYouSteps() {
                 </Choice>
               ))}
             </div>
-            <Skip onClick={() => set("state", "", 5)}>Not in the U.S. / skip</Skip>
+            <Skip onClick={() => set("state", "", 5)}>Not in the U.S. / set up later</Skip>
           </Ask>
         )}
         {step === 5 && (
@@ -163,7 +167,7 @@ export default function AboutYouSteps() {
                 </Choice>
               ))}
             </div>
-            <Skip onClick={() => set("education", "", 6)}>Skip</Skip>
+            <Skip onClick={() => set("education", "", 6)}>Set up later</Skip>
           </Ask>
         )}
         {step === 6 && (
@@ -175,7 +179,7 @@ export default function AboutYouSteps() {
                 </Choice>
               ))}
             </div>
-            <Skip onClick={() => set("smoking", "", 7)}>Skip</Skip>
+            <Skip onClick={() => set("smoking", "", 7)}>Set up later</Skip>
           </Ask>
         )}
         {step === 7 && (
@@ -187,7 +191,7 @@ export default function AboutYouSteps() {
                 </Choice>
               ))}
             </div>
-            <Skip onClick={() => set("exercise", "", STEPS)}>{pending ? "Saving…" : "Skip"}</Skip>
+            <Skip onClick={() => set("exercise", "", STEPS)}>{pending ? "Saving…" : "Set up later"}</Skip>
             {message && (
               <p role="alert" className="mt-3 text-sm text-danger">
                 {message}

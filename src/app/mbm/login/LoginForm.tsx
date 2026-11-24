@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useActionState, useState } from "react";
 import { signIn, signUp, type SignInState } from "../actions";
 
@@ -58,9 +59,16 @@ export default function LoginForm({ next, google = null }: { next: string; googl
       )}
       <p className="text-center text-sm text-muted">
         {up ? "Have an account? " : "New here? "}
-        <button type="button" onClick={() => setMode(up ? "in" : "up")} className="font-semibold text-ink hover:underline">
-          {up ? "Sign in" : "Create an account"}
-        </button>
+        {up ? (
+          <button type="button" onClick={() => setMode("in")} className="font-semibold text-ink hover:underline">
+            Sign in
+          </button>
+        ) : (
+          // (Making an account goes through the welcome: /mbm/welcome.)
+          <Link href="/mbm/welcome" className="font-semibold text-ink hover:underline">
+            Create an account
+          </Link>
+        )}
       </p>
     </form>
     </>
