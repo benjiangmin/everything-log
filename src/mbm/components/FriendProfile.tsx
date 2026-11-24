@@ -54,6 +54,7 @@ export default function FriendProfile({ profile: p, tz, renderedAt }: { profile:
             Accept request
           </button>
         )}
+        {p.relation === "self" && <span className="rounded-full bg-surface px-3 py-1 text-sm font-semibold">You · you see everything; others see what you share</span>}
         {p.relation === "friend" && <span className="rounded-full bg-surface px-3 py-1 text-sm font-semibold">Friends{p.trusted ? " · trusted" : ""}</span>}
       </div>
       {message && <p className="mt-3 text-sm text-danger">{message}</p>}

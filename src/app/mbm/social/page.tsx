@@ -25,5 +25,9 @@ async function Social() {
   if (!(await mbmUser())) redirect("/login?next=/social");
   const res = await loadSocial();
   if (!res.ok) return <p className="rounded-card bg-surface px-5 py-4 text-sm text-danger">{res.message}</p>;
-  return <SocialView social={res.social} />;
+  return <SocialView social={res.social} renderedAt={await loadedAt()} />;
+}
+
+async function loadedAt() {
+  return Date.now();
 }

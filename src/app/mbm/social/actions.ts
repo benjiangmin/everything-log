@@ -7,10 +7,11 @@ import { mbmTz } from "@/mbm/data";
 // Social (070_social.sql). Every call goes through the database's own functions, which check
 // friendship, blocks and what each person shares before anything comes back.
 
-export type Person = { id: string; username: string | null; name: string | null; avatar: string | null; relation: "self" | "friend" | "sent" | "received" | "blocked" | "none"; trusted?: boolean; at?: string };
+export type Person = { id: string; username: string | null; name: string | null; avatar: string | null; relation: "self" | "friend" | "sent" | "received" | "blocked" | "none"; trusted?: boolean; at?: string; now?: Now | null };
+export type Now = { name: string; color: string; since: string };
 export type Share = { now: string; bar: string; stats: string; days: string; map: string };
 export type Social = {
-  me: { username: string | null; name: string | null; avatar: string | null; share: Partial<Share> } | null;
+  me: { id?: string; username: string | null; name: string | null; avatar: string | null; share: Partial<Share>; now?: Now | null } | null;
   friends: Person[];
   incoming: Person[];
   outgoing: Person[];
@@ -58,7 +59,8 @@ export async function loadProfile(username: string, day?: string): Promise<Profi
   const client = await mbm();
   const { data: who } = await client.rpc("search_users", { p_q: username.slice(0, 40) });
   const person = ((who as Person[] | null) ?? []).find((p) => p.username?.toLowerCase() === username.toLowerCase());
-  const id = person?.id ?? (await client.rpc("my_social")).data?.friends?.find((f: Person) => f.username?.toLowerCase() === username.toLowerCase())?.id;
+  const mine = person ? null : ((await client.rpc("my_social")).data as Social | null);
+  const id = person?.id ?? mine?.friends?.find((f) => f.username?.toLowerCase() === username.toLowerCase())?.id ?? (mine?.me?.username?.toLowerCase() === username.toLowerCase() ? mine?.me?.id : undefined);
   if (!id) return null;
   const { data } = await client.rpc("social_profile", { p_user: id, p_day: day && /^\d{4}-\d{2}-\d{2}$/.test(day) ? day : null, p_tz: mbmTz() });
   return (data as Profile | null) ?? null;
