@@ -478,7 +478,8 @@ export default function DayBar({
         {endOk && grip("end")}
       </button>
     ) : (
-      <div key={p.block.id} aria-label={label} onMouseEnter={() => setHover(p)} className={cls} style={look} />
+      // (Just to look at, e.g. someone's profile: still the anchor for the bubble, so it points here.)
+      <div key={p.block.id} data-anchor aria-label={label} onMouseEnter={() => setHover(p)} onMouseMove={(e) => pointAt(e.clientX, p)} className={cls} style={look} />
     );
   };
   // Phone use on screen, cut to the day. Everything counts in the stats; on the bar, a use shorter

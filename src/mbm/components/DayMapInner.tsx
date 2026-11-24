@@ -428,7 +428,7 @@ function DayMapAll({
           {focus?.kind === "moving" ? "No route recorded then" : "No location recorded then"}
         </p>
       )}
-      <BuildingNote status={buildings} needsSql={visits.some((v) => v.place && !v.placeId)} />
+      {!viewOnly && <BuildingNote status={buildings} needsSql={visits.some((v) => v.place && !v.placeId)} />}
     </APIProvider>
     <div
       aria-hidden="true"
