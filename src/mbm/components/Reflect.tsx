@@ -621,7 +621,7 @@ function Locked({ wait, at, prev }: { wait: number; at: string; prev: string }) 
           <Link href={`/reflect?day=${prev}`} className="rounded-full bg-[#faf6f0] px-5 py-2.5 text-sm font-semibold text-[#2b1c14]">
             Look back on yesterday
           </Link>
-          <Link href="/account#reflect" className="rounded-full px-5 py-2.5 text-sm font-semibold ring-1 ring-[#faf6f0]/30 transition-colors hover:bg-[#faf6f0]/10">
+          <Link href="/account/reflect" className="rounded-full px-5 py-2.5 text-sm font-semibold ring-1 ring-[#faf6f0]/30 transition-colors hover:bg-[#faf6f0]/10">
             Change the time
           </Link>
         </div>

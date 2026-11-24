@@ -31,6 +31,7 @@ export default function ShareSettings({ username, share, pinned, today }: { user
     run(() => setShare(next));
   };
   const pick = "rounded-control border border-line bg-paper px-3 py-2 text-sm focus:border-ink";
+  const choose = `${pick} w-44 shrink-0 text-muted`; // (all the same width, and quieter than what they're for)
 
   return (
     <div className="grid gap-5">
@@ -56,7 +57,7 @@ export default function ShareSettings({ username, share, pinned, today }: { user
             <span className="block font-semibold">Name and picture</span>
             <span className="text-muted">Always shown, so people know it&apos;s you.</span>
           </span>
-          <span className="text-muted">Everyone</span>
+          <span className="w-44 shrink-0 px-3 text-sm text-muted">Everyone</span>
         </li>
         {ITEMS.map((it) => (
           <li key={it.key} className="flex items-center justify-between gap-3 text-sm">
@@ -64,7 +65,7 @@ export default function ShareSettings({ username, share, pinned, today }: { user
               <span className="block font-semibold">{it.label}</span>
               <span className="text-muted">{it.note}</span>
             </span>
-            <select value={value[it.key]} disabled={pending} onChange={(e) => change(it.key, e.target.value)} className={pick} style={{ outline: "none" }}>
+            <select value={value[it.key]} disabled={pending} onChange={(e) => change(it.key, e.target.value)} className={choose} style={{ outline: "none" }}>
               <option value="nobody">Nobody</option>
               <option value="mutuals">Mutuals</option>
               <option value="followers">Followers</option>
@@ -77,7 +78,7 @@ export default function ShareSettings({ username, share, pinned, today }: { user
             <span className="block font-semibold">Your map</span>
             <span className="text-muted">Where you went. Pick close friends from your followers on Social.</span>
           </span>
-          <select value={value.map} disabled={pending} onChange={(e) => change("map", e.target.value)} className={pick} style={{ outline: "none" }}>
+          <select value={value.map} disabled={pending} onChange={(e) => change("map", e.target.value)} className={choose} style={{ outline: "none" }}>
             <option value="nobody">Nobody</option>
             <option value="close">Close friends</option>
           </select>

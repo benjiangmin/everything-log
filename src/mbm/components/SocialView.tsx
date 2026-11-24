@@ -34,7 +34,7 @@ export default function SocialView({ social, renderedAt }: { social: Social; ren
     });
 
   const me = social.me;
-  const mine = me?.username ? `/social/${me.username}` : "/account#social";
+  const mine = me?.username ? `/social/${me.username}` : "/account/sharing";
   const live = [...social.following].sort((a, b) => Number(!!b.now) - Number(!!a.now));
 
   return (
@@ -53,7 +53,7 @@ export default function SocialView({ social, renderedAt }: { social: Social; ren
                 {me?.name || me?.username || "You"}
               </Link>
             </h1>
-            <Link href="/account#social" aria-label="What others see" title="What others see" className="grid size-9 shrink-0 place-items-center rounded-full text-muted hover:bg-surface hover:text-ink">
+            <Link href="/account/sharing" aria-label="What others see" title="What others see" className="grid size-9 shrink-0 place-items-center rounded-full text-muted hover:bg-surface hover:text-ink">
               <svg viewBox="0 0 24 24" className="size-5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <circle cx="12" cy="12" r="3" />
                 <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z" />

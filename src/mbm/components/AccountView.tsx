@@ -5,66 +5,88 @@ import { useRef, useState, useTransition, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { changeEmail, changePassword, deleteMine, saveAvatar, signOut } from "@/app/mbm/actions";
 import type { Profile } from "@/mbm/life";
-import AboutYouForm from "./AboutYouForm";
 import Avatar from "./Avatar";
 import { REFLECT_DEFAULT, atLabel, setReflectAt, useReflectAt } from "@/mbm/reflectAt";
 
 const field = "w-full rounded-control border border-line bg-paper px-3 py-2.5 text-ink focus:border-ink";
 
-export default function AccountView({
-  email,
-  profile,
-  connections,
-  social,
-}: {
-  email: string | null;
-  profile: (Profile & { avatar?: string | null }) | null;
-  connections?: ReactNode;
-  social?: ReactNode; // What others see (070)
-}) {
+// Your account: your picture and name on top, then a list of settings, each on its own page
+// (/account/<section>, with a way back here).
+const SECTIONS: { href: string; title: string; note: string }[] = [
+  { href: "/account/about", title: "About you", note: "Birthday and the rest, for the Future page" },
+  { href: "/account/sharing", title: "What others see", note: "Your username, and who sees what on Social" },
+  { href: "/account/jobs", title: "Jobs and categories", note: "Colors, places, starting by themselves" },
+  { href: "/account/places", title: "Places", note: "Your places, and stops you haven't named" },
+  { href: "/account/sign-in", title: "Sign-in and connections", note: "Email, password, Google" },
+  { href: "/account/reflect", title: "Reflect and setup", note: "When Reflect opens, and the welcome again" },
+  { href: "/account/data", title: "Your data", note: "Clear what you've recorded, or delete your account" },
+];
+
+export default function AccountView({ email, profile }: { email: string | null; profile: (Profile & { avatar?: string | null }) | null }) {
   const router = useRouter();
   return (
     <div>
       <Header email={email} profile={profile} onChange={() => router.refresh()} />
-      <Section id="about" title="About you" note="Used on the Future page, to pick the right life table. All optional.">
-        <AboutYouForm profile={profile} />
-      </Section>
-      {social && (
-        <Section id="social" title="What others see" note="Your name and picture always show. Everything else is up to you, and starts as Nobody. Mutuals: people you follow who follow you back. Private jobs show as Busy (Jobs).">
-          {social}
-        </Section>
-      )}
-      {connections && (
-        <Section title="Connected">
-          <div className="-m-1 [&>*]:mt-0">{connections}</div>
-        </Section>
-      )}
-      <Section id="reflect" title="Reflect" note="The Reflect tab walks you back through today. It opens in the evening, at this time (on this browser).">
-        <ReflectTime />
-      </Section>
-      <Section title="Setup" note="Go through the welcome and setup again, to change your answers or see what a new account sees.">
-        <div className="flex flex-wrap gap-2">
-          <Link href="/setup" className="rounded-control px-4 py-2 text-sm font-semibold ring-1 ring-line hover:bg-surface">
-            Replay setup
+      <nav aria-label="Settings" className="mt-8 divide-y divide-line overflow-hidden rounded-card border border-line">
+        {SECTIONS.map((x) => (
+          <Link key={x.href} href={x.href} className="group flex items-center gap-4 px-5 py-4 transition-colors hover:bg-surface/60">
+            <span className="min-w-0 flex-1">
+              <span className="block font-semibold">{x.title}</span>
+              <span className="block truncate text-sm text-muted">{x.note}</span>
+            </span>
+            <svg viewBox="0 0 20 20" className="size-4 shrink-0 text-muted transition-transform group-hover:translate-x-0.5" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+              <path d="M7.5 4.5 13 10l-5.5 5.5" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
           </Link>
-          <Link href="/welcome?replay=1" className="rounded-control px-4 py-2 text-sm font-semibold text-muted hover:bg-surface hover:text-ink">
-            See the welcome
-          </Link>
-        </div>
-      </Section>
-      <Section title="Sign-in">
-        <EmailForm email={email} />
-        <div className="my-6 h-px bg-line" />
-        <PasswordForm />
-      </Section>
-      <Section title="Your data" note="What you've recorded is yours. Clearing it or deleting your account can't be undone.">
-        <Danger />
-      </Section>
+        ))}
+      </nav>
       <form action={signOut} className="mt-8">
         <button type="submit" className="rounded-control px-4 py-2.5 text-sm font-semibold text-muted ring-1 ring-line hover:bg-surface hover:text-ink">
           Sign out
         </button>
       </form>
+    </div>
+  );
+}
+
+// One settings page: "Your account" to go back, its title, a line on what it's for, then the settings.
+export function SubPage({ title, note, children }: { title: string; note?: string; children: ReactNode }) {
+  return (
+    <div>
+      <p className="text-sm font-semibold text-muted">
+        <Link href="/account" className="inline-flex items-center gap-1 hover:text-ink">
+          <svg viewBox="0 0 20 20" className="size-4" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+            <path d="M12.5 4.5 7 10l5.5 5.5" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+          Your account
+        </Link>
+      </p>
+      <h1 className="mt-1 font-display text-3xl font-semibold tracking-tight sm:text-4xl">{title}</h1>
+      {note && <p className="mt-2 max-w-2xl text-muted">{note}</p>}
+      <div className="mt-8">{children}</div>
+    </div>
+  );
+}
+
+export function Card({ title, note, children }: { title?: string; note?: string; children: ReactNode }) {
+  return (
+    <section className="mt-5 rounded-card border border-line bg-paper p-6 first:mt-0 sm:p-7">
+      {title && <h2 className="font-display text-xl font-semibold">{title}</h2>}
+      {note && <p className="mt-1 text-sm text-muted">{note}</p>}
+      <div className={title || note ? "mt-5" : ""}>{children}</div>
+    </section>
+  );
+}
+
+export function SetupLinks() {
+  return (
+    <div className="flex flex-wrap gap-2">
+      <Link href="/setup" className="rounded-control px-4 py-2 text-sm font-semibold ring-1 ring-line hover:bg-surface">
+        Replay setup
+      </Link>
+      <Link href="/welcome?replay=1" className="rounded-control px-4 py-2 text-sm font-semibold text-muted hover:bg-surface hover:text-ink">
+        See the welcome
+      </Link>
     </div>
   );
 }
@@ -108,7 +130,7 @@ function Header({ email, profile, onChange }: { email: string | null; profile: (
   );
 }
 
-function ReflectTime() {
+export function ReflectTime() {
   const at = useReflectAt();
   return (
     <div className="flex flex-wrap items-center gap-3">
@@ -125,17 +147,7 @@ function ReflectTime() {
   );
 }
 
-function Section({ id, title, note, children }: { id?: string; title: string; note?: string; children: ReactNode }) {
-  return (
-    <section id={id} className="mt-8 scroll-mt-24 rounded-card border border-line bg-paper p-6 sm:p-7">
-      <h2 className="font-display text-xl font-semibold">{title}</h2>
-      {note && <p className="mt-1 text-sm text-muted">{note}</p>}
-      <div className="mt-5">{children}</div>
-    </section>
-  );
-}
-
-function EmailForm({ email }: { email: string | null }) {
+export function EmailForm({ email }: { email: string | null }) {
   const [value, setValue] = useState(email ?? "");
   const [pending, start] = useTransition();
   const [note, setNote] = useState<{ ok: boolean; text: string } | null>(null);
@@ -162,7 +174,7 @@ function EmailForm({ email }: { email: string | null }) {
   );
 }
 
-function PasswordForm() {
+export function PasswordForm() {
   const [value, setValue] = useState("");
   const [pending, start] = useTransition();
   const [note, setNote] = useState<{ ok: boolean; text: string } | null>(null);
@@ -191,7 +203,7 @@ function PasswordForm() {
 }
 
 // Two ways out, each behind typing "delete".
-function Danger() {
+export function Danger() {
   const [open, setOpen] = useState<"data" | "account" | null>(null);
   const [typed, setTyped] = useState("");
   const [pending, start] = useTransition();

@@ -223,7 +223,7 @@ function ProfileMenu({
             <Link href="/account" onClick={() => setOpen(false)} className={item} role="menuitem">
               Your account
             </Link>
-            <Link href="/account#about" onClick={() => setOpen(false)} className={item} role="menuitem">
+            <Link href="/account/about" onClick={() => setOpen(false)} className={item} role="menuitem">
               About you
             </Link>
             <Link href="/account/jobs" onClick={() => setOpen(false)} className={item} role="menuitem">
