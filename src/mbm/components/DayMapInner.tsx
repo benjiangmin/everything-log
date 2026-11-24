@@ -1361,6 +1361,21 @@ function Dots({ points, tz }: { points: RoutePoint[]; tz: string }) {
 // big; the next phone sync redoes the day that way. Each place is looked up once per visit to
 // the page (it keeps going even when the page refreshes itself).
 const lookedUp = new Set<string>();
+// (A place OpenStreetMap didn't answer for: left alone for 6 hours on this browser, so the page
+// isn't forever "finding" the same few.)
+const RETRY_MS = 6 * 3600_000;
+function triedLately(id: string) {
+  try {
+    return Date.now() - Number(localStorage.getItem(`mbm-building-tried:${id}`) ?? 0) < RETRY_MS;
+  } catch {
+    return false;
+  }
+}
+function triedNow(id: string) {
+  try {
+    localStorage.setItem(`mbm-building-tried:${id}`, String(Date.now()));
+  } catch {}
+}
 type BuildingStatus = { looking: number; found: number; none: number; busy: number; problem?: string };
 
 function usePlaceBuildings(visits: Visit[]): BuildingStatus | null {
@@ -1368,7 +1383,7 @@ function usePlaceBuildings(visits: Visit[]): BuildingStatus | null {
   const [status, setStatus] = useState<BuildingStatus | null>(null);
   useEffect(() => {
     const todo = new globalThis.Map<string, { lat: number; lng: number }>(); // (Map here is the map component)
-    for (const v of visits) if (v.placeId && v.placeNeedsOutline && !lookedUp.has(v.placeId)) todo.set(v.placeId, { lat: v.lat, lng: v.lng });
+    for (const v of visits) if (v.placeId && v.placeNeedsOutline && !lookedUp.has(v.placeId) && !triedLately(v.placeId)) todo.set(v.placeId, { lat: v.lat, lng: v.lng });
     // Unnamed stops of 8 minutes or more get their building too (once: it's saved), up to 12 a day.
     const stops = new globalThis.Map<string, { lat: number; lng: number }>();
     for (const v of visits) {
@@ -1404,7 +1419,7 @@ function usePlaceBuildings(visits: Visit[]): BuildingStatus | null {
           result = await lookupPlaceOutline(id, at.lat, at.lng).catch(() => "busy"); // (try from the server)
         }
         if (result === "found") saved = true;
-        if (result === "busy") lookedUp.delete(id); // (try again next time)
+        if (result === "busy") triedNow(id); // (OpenStreetMap didn't answer: again in a few hours, quietly)
         setStatus((s) => {
           const n = { found: 0, none: 0, busy: 0, looking: 1, ...s };
           n.looking = Math.max(0, n.looking - 1);
@@ -1426,15 +1441,8 @@ function usePlaceBuildings(visits: Visit[]): BuildingStatus | null {
 function BuildingNote({ status, needsSql }: { status: BuildingStatus | null; needsSql: boolean }) {
   if (needsSql) status = { looking: 0, found: 0, none: 0, busy: 0, problem: "Buildings are off: run 032_places_by_building.sql in Supabase." };
   if (!status) return null;
-  const text = status.problem
-    ? status.problem
-    : status.looking
-      ? `Finding your places' buildings… (${status.found + status.none + status.busy} of ${status.found + status.none + status.busy + status.looking})`
-      : status.busy
-        ? "Couldn't reach OpenStreetMap for some buildings: it'll try again next time."
-        : status.found
-          ? `Found ${status.found} building${status.found === 1 ? "" : "s"}.`
-          : null;
+  // (Looking happens quietly in the background: only say when it found some, or something's wrong.)
+  const text = status.problem ? status.problem : !status.looking && status.found ? `Found ${status.found} building${status.found === 1 ? "" : "s"}.` : null;
   if (!text) return null;
   return <div className="pointer-events-none absolute bottom-8 left-1/2 z-10 max-w-[80%] -translate-x-1/2 rounded-control bg-paper/95 px-3 py-1.5 text-xs text-ink shadow ring-1 ring-line">{text}</div>;
 }
