@@ -4,7 +4,7 @@ import { buildingAt } from "@/mbm/buildings";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { pickIsNear } from "@/mbm/nearcheck";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
 import {
   deletePlace,
@@ -78,7 +78,10 @@ export default function PlacesView({
   const [apart, setApart] = useState<string[]>(keptApart);
   const [, startApart] = useTransition();
   const [q, setQ] = useState("");
-  const [open, setOpen] = useState<string | null>(openId && places.some((p) => p.id === openId) ? openId : null);
+  // (?open=<place>, from a stop's ⚙ on the Day map: read here too, from the address itself.)
+  const params = useSearchParams();
+  const want = openId ?? params.get("open");
+  const [open, setOpen] = useState<string | null>(want && places.some((p) => p.id === want) ? want : null);
   // Places whose building needs looking up (new, or its actual place moved): quietly, in the
   // background, then the list shows them.
   useEffect(() => {
@@ -106,6 +109,12 @@ export default function PlacesView({
   useEffect(() => {
     if (open) reveal(`row-${open}`);
   }, [open]);
+  // (Arriving with one open: once the page has settled, it's brought into view again.)
+  useEffect(() => {
+    if (!want) return;
+    const t = setTimeout(() => reveal(`row-${want}`), 400);
+    return () => clearTimeout(t);
+  }, [want]);
   const [show, setShow] = useState<"all" | "unlinked" | "alike">("all");
   const query = q.trim().toLowerCase();
   const searched = query

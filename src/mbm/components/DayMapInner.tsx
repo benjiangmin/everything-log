@@ -1705,6 +1705,7 @@ function NameStop({ visit, onDone, onMove }: { visit: Visit; onDone: () => void;
         {visit.placeId && (
           <Link
             href={`/account/places?open=${visit.placeId}`}
+            scroll={false}
             aria-label={`${visit.place ?? "This place"}'s settings`}
             title="Place settings"
             className="-my-1 grid size-7 place-items-center rounded-full text-[#86705f] hover:bg-[#f0e7db] hover:text-[#2b1c14]"
