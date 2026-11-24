@@ -19,6 +19,9 @@ const SERVERS = [
 // building is outdoors, not in it). Otherwise the closest one will do (a place's pin is often
 // on its edge or by its door).
 export async function buildingAt(lat: number, lng: number, log?: string[], within = 25, insideOnly = false): Promise<Outline | null | undefined> {
+  // OpenStreetMap's own database first (answers in a second or two); its search servers if not.
+  const direct = await fromOsmApi(lat, lng, within, log);
+  if (direct) return pick(direct, lat, lng, within, insideOnly);
   const at = `around:${within},${lat.toFixed(6)},${lng.toFixed(6)}`;
   // Buildings are simple shapes ("ways"), or for big ones (the library) a few pieces joined up
   // ("relations").
@@ -49,9 +52,11 @@ export async function buildingAt(lat: number, lng: number, log?: string[], withi
       log?.push(`${server}: ${e instanceof Error ? e.message : "failed"}`); // next server
     }
   }
-  // None answered: OpenStreetMap's own database (slower to search, but steadier).
-  const shapes = await fromOsmApi(lat, lng, within, log);
-  if (!shapes) return undefined;
+  return undefined;
+}
+
+// The building a spot is in (the smaller, if one's in another), else the nearest within reach.
+function pick(shapes: Outline[], lat: number, lng: number, within: number, insideOnly: boolean): Outline | null {
   if (!shapes.length) return null;
   const inside = shapes.filter((s) => contains(s, lat, lng));
   if (inside.length) return inside.sort((a, b) => area(a) - area(b))[0];

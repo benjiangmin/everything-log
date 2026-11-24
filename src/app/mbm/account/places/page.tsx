@@ -39,8 +39,9 @@ async function load() {
   const [placesRes, visitsRes, profile] = await Promise.all([
     client
       .from("places")
-      .select("id, name, own_name, real_name, real_address, lat, lng, outline")
+      .select("id, name, own_name, real_name, real_address, lat, lng, outline, outline_checked, outline_by_hand")
       .order("name")
+      .then((r) => (r.error ? client.from("places").select("id, name, own_name, real_name, real_address, lat, lng, outline").order("name") : r))
       .then((r) => (r.error ? client.from("places").select("id, name, own_name, real_name, real_address, lat, lng").order("name") : r))
       .then((r) => (r.error ? client.from("places").select("id, name, lat, lng").order("name") : r)),
     client.from("visits").select("id, place_id, arrived_at, departed_at, lat, lng, auto_name").gte("arrived_at", since).order("arrived_at", { ascending: false }).limit(5000),

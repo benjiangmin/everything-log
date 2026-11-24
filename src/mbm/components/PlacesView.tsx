@@ -1,5 +1,6 @@
 "use client";
 
+import { buildingAt } from "@/mbm/buildings";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { pickIsNear } from "@/mbm/nearcheck";
@@ -11,6 +12,7 @@ import {
   keepApart,
   mergePlaces,
   removeStop,
+  setPlaceOutline,
   setStopPlace,
   type PlacePick,
 } from "@/app/mbm/actions";
@@ -37,6 +39,8 @@ export type PlaceRow = {
   lat: number;
   lng: number;
   outline?: [number, number][] | null; // its building (032)
+  outline_by_hand?: boolean; // (you picked it, 079)
+  outline_checked?: boolean; // (false: its building needs looking up)
   count: number;
   last: string | null;
 };
@@ -75,6 +79,29 @@ export default function PlacesView({
   const [, startApart] = useTransition();
   const [q, setQ] = useState("");
   const [open, setOpen] = useState<string | null>(openId && places.some((p) => p.id === openId) ? openId : null);
+  // Places whose building needs looking up (new, or its actual place moved): quietly, in the
+  // background, then the list shows them.
+  useEffect(() => {
+    const todo = places.filter((p) => p.outline_checked === false && !p.outline_by_hand);
+    if (!todo.length) return;
+    let live = true;
+    (async () => {
+      let changed = false;
+      for (const p of todo) {
+        if (!live) return;
+        const outline = await buildingAt(p.lat, p.lng, undefined, 45).catch(() => undefined);
+        if (outline === undefined) continue; // (no answer: next time)
+        const res = await setPlaceOutline(p.id, outline);
+        changed ||= res.ok;
+      }
+      if (live && changed) router.refresh();
+    })();
+    return () => {
+      live = false;
+    };
+    // (Once per visit to the page.)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   // What you open scrolls to the middle of the screen.
   useEffect(() => {
     if (open) reveal(`row-${open}`);
@@ -453,12 +480,25 @@ function EditPlace({
         )}
       </Labelled>
       {place.outline !== undefined && (
-        <Labelled title="Building" help={building ? undefined : place.outline ? "Hover its stops on the map to see it lit up." : "None yet."}>
+        <Labelled
+          title="Building"
+          help={
+            building
+              ? undefined
+              : !place.outline
+                ? "None yet."
+                : place.outline_by_hand
+                  ? "You picked it."
+                  : place.real_name
+                    ? `The one ${place.real_name} is in.`
+                    : "Found from where you've been."
+          }
+        >
           {building ? (
             <BuildingPicker place={place} outline={place.outline ?? null} onSaved={() => setBuilding(false)} />
           ) : (
             <button type="button" onClick={() => setBuilding(true)} className="h-10 rounded-control px-4 text-sm font-semibold ring-1 ring-line hover:bg-surface">
-              {place.outline ? "Change its building" : "Find its building"}
+              Adjust building
             </button>
           )}
         </Labelled>

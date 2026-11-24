@@ -884,6 +884,19 @@ export async function setPlaceOutline(placeId: string, outline: [number, number]
   return { ok: true };
 }
 
+// A building you pick by hand (Places → Adjust building), or none: it stays until you change the
+// place's actual place (079).
+export async function adjustPlaceOutline(placeId: string, outline: [number, number][] | null): Promise<Result> {
+  if (!isUuid(placeId)) return fail("Bad place.");
+  const clean = outline && outline.length >= 3 && outline.length <= 2000 ? outline.map(([a, b]) => [Math.round(a * 1e7) / 1e7, Math.round(b * 1e7) / 1e7]) : null;
+  const client = await mbm();
+  const { error } = await client.rpc("adjust_place_outline", { p_place: placeId, p_outline: clean });
+  if (error && /adjust_place_outline/.test(error.message)) return setPlaceOutline(placeId, outline); // (079 not run yet)
+  if (error) return fail(error.message);
+  revalidatePath("/mbm", "layout");
+  return { ok: true };
+}
+
 // The same building lookup, from the website's server (when your browser couldn't reach
 // OpenStreetMap). Saves it too. "busy": try again later.
 export async function lookupPlaceOutline(placeId: string, lat: number, lng: number): Promise<"found" | "none" | "busy" | string> {

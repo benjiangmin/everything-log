@@ -4,14 +4,16 @@ import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { APIProvider, Map, useMap, useMapsLibrary } from "@vis.gl/react-google-maps";
 import { around, buildingsNear, contains, type Outline } from "@/mbm/buildings";
-import { buildingsNearPlace, setPlaceOutline } from "@/app/mbm/actions";
+import { adjustPlaceOutline, buildingsNearPlace } from "@/app/mbm/actions";
+import { useConfirm } from "@/components/ui/ConfirmDialog";
 import { HtmlMarker, KEY, MAP_GROUND, stylesFor } from "./mapBits";
 
 // A place's building, picked by hand: every building around it from OpenStreetMap, on a map;
 // click the right one (or each piece of one, like Theory's wings) and save. If OpenStreetMap
 // doesn't answer, it says what each server did.
-export default function BuildingPicker({ place, outline, onSaved }: { place: { id: string; name: string; lat: number; lng: number }; outline: Outline | null; onSaved: () => void }) {
+export default function BuildingPicker({ place, outline, onSaved }: { place: { id: string; name: string; lat: number; lng: number; real_name?: string | null }; outline: Outline | null; onSaved: () => void }) {
   const router = useRouter();
+  const confirm = useConfirm();
   const [shapes, setShapes] = useState<Outline[] | null>(null);
   const [log, setLog] = useState<string[] | null>(null);
   const [looking, setLooking] = useState(true);
@@ -42,13 +44,19 @@ export default function BuildingPicker({ place, outline, onSaved }: { place: { i
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const save = (o: Outline | null) =>
+  const save = async (o: Outline | null) => {
+    // (Not where the actual place is: ask first.)
+    if (o && place.real_name && !contains(o, place.lat, place.lng)) {
+      const yes = await confirm({ title: "Use this building?", body: `It isn't where Google has ${place.real_name}.`, confirmLabel: "Use it anyway" });
+      if (!yes) return;
+    }
     start(async () => {
-      const res = await setPlaceOutline(place.id, o);
+      const res = await adjustPlaceOutline(place.id, o);
       if (!res.ok) return setMessage(res.message);
       router.refresh();
       onSaved();
     });
+  };
 
   if (!KEY) return <p className="text-sm text-muted">The map needs NEXT_PUBLIC_GOOGLE_MAPS_KEY.</p>;
   const chosen = shapes ? [...picked].map((i) => shapes[i]).filter(Boolean) : [];
@@ -91,9 +99,7 @@ export default function BuildingPicker({ place, outline, onSaved }: { place: { i
         </div>
       ) : (
         !looking && (
-          <p className="mt-2 text-sm text-muted">
-            {shapes?.length ? "Click its building. Is it in pieces (like wings)? Click each one." : "No buildings found around it."}
-          </p>
+          shapes?.length === 0 && <p className="mt-2 text-sm text-muted">No buildings found around it.</p>
         )
       )}
       <div className="mt-3 flex flex-wrap items-center gap-2">
