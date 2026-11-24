@@ -11,12 +11,15 @@ import Menu from "./IconMenu";
 import { reveal } from "./reveal";
 import PlaceSearch from "./PlaceSearch";
 import { PALETTE } from "@/mbm/colors";
+import { eventJobId, overlap } from "@/mbm/eventJob";
 
 // Jobs and categories. Each job's settings are written as what will actually happen ("Work starts
 // by itself when you arrive at Russell Labs…"), with an "In short" line that updates as you change
 // them. A category (School) gives its jobs its color, and settings they follow unless changed.
 
-export type Job = JobPrefs & { id: string; name: string; color: string; own_color?: string | null; category_id?: string | null; last_used_at?: string | null; private?: boolean };
+export type Job = JobPrefs & { id: string; name: string; color: string; own_color?: string | null; category_id?: string | null; last_used_at?: string | null; private?: boolean; calendar_names?: string[] };
+// A name on your calendar (last 60 days and next 30): how many times.
+export type CalEvent = { title: string; n: number };
 export type Category = JobPrefs & { id: string; name: string; color: string; private?: boolean };
 type Place = { id: string; name: string };
 type Mode = "always" | "calendar" | "never";
@@ -25,7 +28,7 @@ const blank: JobPrefs = { stop_on_commute: null, places: null, start_mode: null,
 const RECENT = 5;
 const STALE_DAYS = 50; // (not used in this long: listed apart, below)
 
-export default function JobsView({ jobs, categories, places, needsSql = false, now = 0 }: { jobs: Job[]; categories: Category[]; places: Place[]; needsSql?: boolean; now?: number }) {
+export default function JobsView({ jobs, categories, places, needsSql = false, now = 0, events = [] }: { jobs: Job[]; categories: Category[]; places: Place[]; needsSql?: boolean; now?: number; events?: CalEvent[] }) {
   const [openJob, setOpenJob] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null); // (opened straight at "Delete?")
   const [openCat, setOpenCat] = useState<string | null>(null);
@@ -116,7 +119,7 @@ export default function JobsView({ jobs, categories, places, needsSql = false, n
               </IconButton>
             </span>
           )}
-          {openJob === j.id && <JobSettings key={`${j.id}-${deleting === j.id}`} job={j} jobs={jobs} categories={categories} places={places} startDeleting={deleting === j.id} onDone={() => setOpenJob(null)} />}
+          {openJob === j.id && <JobSettings key={`${j.id}-${deleting === j.id}`} job={j} jobs={jobs} categories={categories} places={places} events={events} startDeleting={deleting === j.id} onDone={() => setOpenJob(null)} />}
         </li>
       ))}
       {items.length === 0 && empty && <li className="px-5 py-4 text-sm text-muted">{empty}</li>}
@@ -301,6 +304,7 @@ function JobSettings({
   jobs,
   categories,
   places,
+  events,
   onDone,
   startDeleting = false,
 }: {
@@ -308,6 +312,7 @@ function JobSettings({
   jobs: Job[];
   categories: Category[];
   places: Place[];
+  events: CalEvent[];
   onDone: () => void;
   startDeleting?: boolean;
 }) {
@@ -322,13 +327,20 @@ function JobSettings({
     category_id: job.category_id ?? null,
   });
   const [color, setColor] = useState(job.category_id ? (job.own_color ?? job.color) : job.color);
+  const [name, setName] = useState(job.name);
+  const [calNames, setCalNames] = useState<string[]>(job.calendar_names ?? []);
   const cat = categories.find((c) => c.id === p.category_id) ?? null;
   const [message, setMessage] = useState<string | null>(null);
   const [pending, start] = useTransition();
   const [deleting, setDeleting] = useState(startDeleting);
   const save = () =>
     start(async () => {
-      const res = await saveJob(job.id, { ...p, ...(color !== (job.category_id ? (job.own_color ?? job.color) : job.color) ? { color } : {}) });
+      const res = await saveJob(job.id, {
+        ...p,
+        ...(color !== (job.category_id ? (job.own_color ?? job.color) : job.color) ? { color } : {}),
+        ...(name.trim() !== job.name ? { name } : {}),
+        ...(calNames.join("\n") !== (job.calendar_names ?? []).join("\n") ? { calendar_names: calNames } : {}),
+      });
       if (!res.ok) return setMessage(res.message);
       router.refresh();
       onDone();
@@ -336,6 +348,10 @@ function JobSettings({
   return (
     <div className="border-t border-line bg-surface/40 px-5 py-6 sm:px-6">
       <InShort lines={sentences(job.name, effective(p, cat), places)} />
+      <Field title="Name">
+        <input value={name} onChange={(e) => setName(e.target.value)} maxLength={60} aria-label="Name" className="w-full max-w-sm rounded-control border border-line bg-paper px-3 py-2.5 focus:border-ink" style={{ outline: "none" }} />
+      </Field>
+      <OnCalendar job={{ ...job, name: name.trim() || job.name, calendar_names: calNames }} jobs={jobs} events={events} names={calNames} onChange={setCalNames} />
       <Field title="Category" help={cat ? `${job.name} is ${cat.name}'s color. Anything below left on “Same as ${cat.name}” follows ${cat.name}'s settings.` : "Put it in a category to give it the category's color and settings."}>
         <Select
           value={p.category_id ?? ""}
@@ -356,6 +372,73 @@ function JobSettings({
         <Buttons pending={pending} onSave={save} onCancel={onDone} onDelete={() => setDeleting(true)} deleteLabel="Delete job" message={message} />
       )}
     </div>
+  );
+}
+
+// Which calendar events are this job: ones that match it by themselves, and ones you link (pick
+// from your calendar's names, so you don't have to remember them exactly). They start it (if it
+// starts by itself) and suggest it.
+function OnCalendar({ job, jobs, events, names, onChange }: { job: Job; jobs: Job[]; events: CalEvent[]; names: string[]; onChange: (n: string[]) => void }) {
+  const all = jobs.map((j) => (j.id === job.id ? job : j));
+  const lower = new Set(names.map((n) => n.trim().toLowerCase()));
+  const mine = events.filter((e) => eventJobId(e.title, all) === job.id);
+  const auto = mine.filter((e) => !lower.has(e.title.trim().toLowerCase()));
+  const others = events
+    .filter((e) => eventJobId(e.title, all) !== job.id)
+    .sort((a, b) => overlap(job.name, b.title) - overlap(job.name, a.title) || b.n - a.n)
+    .slice(0, 80);
+  const owner = (title: string) => jobs.find((j) => j.id === eventJobId(title, jobs))?.name;
+  return (
+    <Field
+      title="On your calendar"
+      help={`Calendar events that are ${job.name}: they start it (if it starts by itself) and suggest it. Link any with a different name.`}
+    >
+      <div className="flex flex-wrap gap-2">
+        {names.map((n) => (
+          <span key={n} className="inline-flex items-center gap-1.5 rounded-full bg-paper py-1 pl-3 pr-1 text-sm ring-1 ring-line">
+            {n}
+            <button type="button" onClick={() => onChange(names.filter((x) => x !== n))} aria-label={`Unlink ${n}`} className="grid size-6 place-items-center rounded-full text-muted hover:bg-surface hover:text-ink">
+              <svg viewBox="0 0 20 20" className="size-3.5" fill="none" stroke="currentColor" strokeWidth="2.2" aria-hidden="true">
+                <path d="M5 5l10 10M15 5L5 15" strokeLinecap="round" />
+              </svg>
+            </button>
+          </span>
+        ))}
+        {auto.map((e) => (
+          <span key={e.title} title="Matches its name, so it's already this job" className="inline-flex items-center gap-1.5 rounded-full bg-surface px-3 py-1 text-sm text-muted">
+            {e.title}
+            <span className="text-xs">· by name</span>
+          </span>
+        ))}
+        {names.length === 0 && auto.length === 0 && <span className="text-sm text-muted">None yet.</span>}
+      </div>
+      {events.length > 0 ? (
+        others.length > 0 && (
+          <div className="mt-3 max-w-sm">
+            <Select
+              value=""
+              label="Link a calendar event"
+              onChange={(t) => t && onChange([...names, t])}
+              options={[
+                { value: "", label: "Link a calendar event…" },
+                ...others.map((e) => {
+                  const o = owner(e.title);
+                  return { value: e.title, label: `${e.title}${o ? ` (now ${o})` : ""}` };
+                }),
+              ]}
+            />
+          </div>
+        )
+      ) : (
+        <p className="mt-2 text-sm text-muted">
+          No calendar events yet.{" "}
+          <Link href="/account/sign-in" className="font-semibold text-ink underline underline-offset-2">
+            Connect Google Calendar
+          </Link>
+          .
+        </p>
+      )}
+    </Field>
   );
 }
 
@@ -567,7 +650,7 @@ function Prefs({
           options={[
             ...same(modeWords[parentMode]),
             { v: "always", label: `Start ${it} automatically` },
-            { v: "calendar", label: `Start ${it} only if it's on my calendar then`, note: `A plan called ${group ? "the job's name" : `“${name}”`} has to be on at that time. For a place where you do different things, like the gym (working out or volleyball).` },
+            { v: "calendar", label: `Start ${it} only if it's on my calendar then`, note: `A calendar event that's ${group ? "the job" : name} (see On your calendar above) has to be on at that time. For a place where you do different things, like the gym (working out or volleyball).` },
             { v: "never", label: "Don't start it. I'll start it myself" },
           ]}
         />
