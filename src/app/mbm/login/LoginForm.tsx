@@ -67,10 +67,9 @@ export default function LoginForm({ next, google = null }: { next: string; googl
   );
 }
 
-// "Continue with Google", with your calendar in the same step if you'd like (ticked to start).
+// "Continue with Google", your calendar connected in the same step (no box to tick).
 function GoogleButton({ next, note }: { next: string; note: string | null }) {
-  const [calendar, setCalendar] = useState(true);
-  const href = `/mbm/google/signin?${new URLSearchParams({ next, ...(calendar ? { calendar: "1" } : {}) })}`;
+  const href = `/mbm/google/signin?${new URLSearchParams({ next, calendar: "1" })}`;
   const problem =
     note === "cancelled" ? "Google sign-in was cancelled." : note === "try-again" ? "That didn't go through. Try again." : note === "not-set-up" ? "Google sign-in isn't set up on this site yet." : note?.startsWith("error:") ? note.slice(6) : null;
   return (
@@ -87,10 +86,6 @@ function GoogleButton({ next, note }: { next: string; note: string | null }) {
         </svg>
         Continue with Google
       </a>
-      <label className="mt-2.5 flex cursor-pointer items-center gap-2 text-sm text-muted">
-        <input type="checkbox" checked={calendar} onChange={(e) => setCalendar(e.target.checked)} className="size-4 accent-[var(--accent)]" />
-        Also connect my Google Calendar (for better guesses)
-      </label>
       {problem && (
         <p role="alert" className="mt-2 text-sm text-danger">
           {problem}
