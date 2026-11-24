@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition, type ReactNode } from "react";
 import { deleteCategory, deleteJob, jobEntryCount, placeIdFor, saveCategory, saveJob, type JobPrefs } from "@/app/mbm/actions";
 import PageMark from "./PageMark";
+import Menu from "./IconMenu";
 import { reveal } from "./reveal";
 import PlaceSearch from "./PlaceSearch";
 import { PALETTE } from "@/mbm/colors";
@@ -28,6 +29,9 @@ export default function JobsView({ jobs, categories, places, needsSql = false, n
   const [openCat, setOpenCat] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const [q, setQ] = useState("");
+  // Sort and filter, like Places. Untouched (most recent, all jobs), it's your 5 most recent.
+  const [sort, setSort] = useState<"recent" | "az" | "za" | "oldest">("recent");
+  const [show, setShow] = useState("all"); // all | cat:<id> | none | stale | auto
   const catOf = (j: Job) => categories.find((c) => c.id === j.category_id) ?? null;
   // What you open scrolls to the middle of the screen.
   useEffect(() => {
@@ -47,8 +51,23 @@ export default function JobsView({ jobs, categories, places, needsSql = false, n
 
   const query = q.trim().toLowerCase();
   const stale = (j: Job) => !!now && (!j.last_used_at || +new Date(j.last_used_at) < now - STALE_DAYS * 864e5);
-  const found = query ? jobs.filter((j) => j.name.toLowerCase().includes(query) || catOf(j)?.name.toLowerCase().includes(query)) : jobs.filter((j) => !stale(j)).slice(0, RECENT);
-  const old = query ? [] : jobs.filter(stale);
+  const browsing = !query && sort === "recent" && show === "all"; // (the usual view)
+  const kept = (j: Job) =>
+    show === "all" ||
+    (show === "none" && !j.category_id) ||
+    (show === "stale" && stale(j)) ||
+    (show === "auto" && ["always", "calendar"].includes((j.start_mode ?? catOf(j)?.start_mode) ?? "")) || // (its own setting, or its category's)
+    show === `cat:${j.category_id}`;
+  const usedAt = (j: Job) => (j.last_used_at ? +new Date(j.last_used_at) : 0);
+  const byName = (a: Job, b: Job) => a.name.localeCompare(b.name);
+  const sorted = (list: Job[]) =>
+    [...list].sort((a, b) =>
+      sort === "az" ? byName(a, b) : sort === "za" ? byName(b, a) : sort === "oldest" ? usedAt(a) - usedAt(b) || byName(a, b) : usedAt(b) - usedAt(a) || byName(a, b),
+    );
+  const matches = (j: Job) => !query || j.name.toLowerCase().includes(query) || !!catOf(j)?.name.toLowerCase().includes(query);
+  const found = browsing ? jobs.filter((j) => !stale(j)).slice(0, RECENT) : sorted(jobs.filter((j) => matches(j) && kept(j)));
+  const old = browsing ? jobs.filter(stale) : [];
+  const showName = show === "none" ? "No category" : show === "stale" ? `Not used in ${STALE_DAYS}+ days` : show === "auto" ? "Start by themselves" : categories.find((c) => `cat:${c.id}` === show)?.name;
   // (The one you came here for stays in the list.)
   const opened = openJob && !found.some((j) => j.id === openJob) && !old.some((j) => j.id === openJob) ? jobs.find((j) => j.id === openJob) : undefined;
   const shown = opened ? [opened, ...found] : found;
@@ -118,7 +137,7 @@ export default function JobsView({ jobs, categories, places, needsSql = false, n
         </p>
       )}
 
-      {/* Jobs: a search, with your 5 most recent before you type. */}
+      {/* Jobs: a search, with your 5 most recent before you type (or sort or filter them all). */}
       <section className="mt-8">
         <div className="relative">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true" className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-muted">
@@ -136,8 +155,51 @@ export default function JobsView({ jobs, categories, places, needsSql = false, n
           />
           {q && <ClearSearch onClear={() => setQ("")} />}
         </div>
-        <p className="mt-4 text-sm font-semibold text-muted">{query ? `${found.length} found` : "Used most recently"}</p>
-        {list(shown, query ? `No job called “${q.trim()}”.` : "No jobs yet. They appear here once you track something.")}
+        <div className="mt-4 flex items-center justify-between gap-3">
+          <p className="text-sm font-semibold text-muted">{browsing ? "Used most recently" : query ? `${found.length} found` : `${found.length} ${found.length === 1 ? "job" : "jobs"}`}</p>
+          <div className="flex items-center gap-1.5">
+            {show !== "all" && (
+              <button
+                type="button"
+                onClick={() => setShow("all")}
+                aria-label={`Stop showing only ${showName}`}
+                className="flex items-center gap-1.5 rounded-full bg-ink py-1 pl-3 pr-2 text-sm font-semibold text-paper"
+              >
+                {showName}
+                <span aria-hidden="true" className="text-paper/70">
+                  ×
+                </span>
+              </button>
+            )}
+            <Menu
+              label="Sort"
+              icon={<path d="M7 4v16M7 20l-3-3M7 20l3-3M17 20V4M17 4l-3 3M17 4l3 3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />}
+              value={sort}
+              onPick={(v) => setSort(v as typeof sort)}
+              options={[
+                ["recent", "Used most recently"],
+                ["oldest", "Used longest ago"],
+                ["az", "A to Z"],
+                ["za", "Z to A"],
+              ]}
+            />
+            <Menu
+              label="Filter"
+              active={show !== "all"}
+              icon={<path d="M4 5h16l-6 7.5V19l-4 1.5v-8L4 5z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />}
+              value={show}
+              onPick={setShow}
+              options={[
+                ["all", "All jobs"],
+                ...categories.map((c) => [`cat:${c.id}`, c.name] as const),
+                ["none", "No category"],
+                ["auto", "Start by themselves"],
+                ["stale", `Not used in ${STALE_DAYS}+ days`],
+              ]}
+            />
+          </div>
+        </div>
+        {list(shown, query ? `No job called “${q.trim()}”.` : browsing ? "No jobs yet. They appear here once you track something." : "No jobs here.")}
         {old.length > 0 && (
           <>
             <p className="mt-6 text-sm font-semibold text-muted">
