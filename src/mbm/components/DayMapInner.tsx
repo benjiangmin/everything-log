@@ -4,7 +4,7 @@ import { readDark, readDarkServer, subscribeDark } from "@/components/ui/theme";
 import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, useTransition, type ReactNode } from "react";
 import { APIProvider, InfoWindow, Map, useMap, useMapsLibrary } from "@vis.gl/react-google-maps";
 import { useRouter } from "next/navigation";
-import { forgetDrawings, forgetDrawingsLike, lockDay, lookupPlaceOutline, moveStop, myPlaces, pastDrawings, rememberedRoute, removeStop, reportRoute, saveDrawing, savedDrawings, trustedRoutes, saveBlock, setPlaceOutline, setStopOutline, setStopPlace, trailCells, type PlaceLite, type PlacePick } from "@/app/mbm/actions";
+import { forgetDrawings, forgetDrawingsLike, lockDay, unlockDay, lookupPlaceOutline, moveStop, myPlaces, pastDrawings, rememberedRoute, removeStop, reportRoute, saveDrawing, savedDrawings, trustedRoutes, saveBlock, setPlaceOutline, setStopOutline, setStopPlace, trailCells, type PlaceLite, type PlacePick } from "@/app/mbm/actions";
 import { Search as PlaceSearch, type Found } from "./PlaceSearch";
 
 // Which version of the path engine drew a route (saved with "Route looks wrong" reports).
@@ -99,13 +99,24 @@ export default function DayMapInner({
     const r = dayRange(dayKey, tz);
     return { start: +r.start, end: +r.end };
   }, [dayKey, tz]);
-  const built = useMemo(() => (locked ? [] : fitToEntries(buildTrips(visits, points), blocks)), [visits, points, blocks, locked]);
+  // A finished day's saved routes, unless its stops have changed since (a stop that came back,
+  // like SAC on Nov 22: the saved trip ran straight through it). Then it's worked out again, and
+  // saved again once drawn.
+  const stale = useMemo(() => !!locked && !lockFits(locked, visits), [locked, visits]);
+  const lockedNow = stale ? null : locked;
+  const unlocked = useRef(false);
+  useEffect(() => {
+    if (!stale || !dayKey || unlocked.current) return;
+    unlocked.current = true;
+    unlockDay(dayKey).catch(() => undefined);
+  }, [stale, dayKey]);
+  const built = useMemo(() => (lockedNow ? [] : fitToEntries(buildTrips(visits, points), blocks)), [visits, points, blocks, lockedNow]);
   const filled = useFilledTrips(built, points);
-  const trips: Trip[] = useMemo(() => toStops(locked ? reattach(locked as unknown as Trip[], visits) : filled.trips, visits), [locked, filled.trips, visits]);
+  const trips: Trip[] = useMemo(() => toStops(lockedNow ? reattach(lockedNow as unknown as Trip[], visits) : filled.trips, visits), [lockedNow, filled.trips, visits]);
   // A finished day, all drawn: save its routes, so it's never redrawn differently later.
   const saved = useRef(false);
   useEffect(() => {
-    if (locked || !finished || !dayKey || !filled.settled || saved.current || !filled.trips.length) return;
+    if (lockedNow || !finished || !dayKey || !filled.settled || saved.current || !filled.trips.length) return;
     const t = setTimeout(() => {
       saved.current = true;
       const strip = (x: Trip): LockedTrip => ({
@@ -121,7 +132,7 @@ export default function DayMapInner({
       lockDay(dayKey, filled.trips.map(strip)).catch(() => undefined);
     }, 4000);
     return () => clearTimeout(t);
-  }, [locked, finished, dayKey, filled.settled, filled.trips]);
+  }, [lockedNow, finished, dayKey, filled.settled, filled.trips]);
   const buildings = usePlaceBuildings(visits);
   // What lights up for the hovered stretch: the trips (moving) or the stops (still) during it.
   const barLit = useMemo(() => {
@@ -1727,6 +1738,21 @@ function NameStop({ visit, onDone, onMove }: { visit: Visit; onDone: () => void;
 // A saved day's routes, joined to where its stops are now. (A stop's place can be moved after the
 // day was saved, e.g. Theory's pin nudged to where you usually are inside. Moving a place moves
 // it on every day, so each route's ends follow it rather than stopping at the old spot.)
+// Do a day's saved routes still fit its stops? Not when a trip they end at is gone, or a saved
+// trip runs right through a stop (one that's there now and wasn't when it was saved).
+function lockFits(locked: LockedTrip[], visits: Visit[]): boolean {
+  const ids = new Set(visits.map((v) => v.id));
+  for (const t of locked) {
+    if ((t.fromId && !ids.has(t.fromId)) || (t.toId && !ids.has(t.toId))) return false;
+    for (const v of visits) {
+      const a = +new Date(v.arrived_at);
+      const d = v.departed_at ? +new Date(v.departed_at) : Infinity;
+      if (v.id !== t.fromId && v.id !== t.toId && a > t.start + 60_000 && d < t.end - 60_000) return false;
+    }
+  }
+  return true;
+}
+
 function reattach(trips: Trip[], visits: Visit[]): Trip[] {
   const at = new globalThis.Map(visits.map((v) => [v.id, { lat: v.lat, lng: v.lng }]));
   const near = (a: Spot, b: Spot) => Math.hypot((a.lat - b.lat) * 111_000, (a.lng - b.lng) * 111_000 * Math.cos((a.lat * Math.PI) / 180));
