@@ -1,7 +1,7 @@
 "use client";
 
 import { readDark, readDarkServer, subscribeDark } from "@/components/ui/theme";
-import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, useTransition, type ReactNode } from "react";
+import { createContext, Fragment, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, useTransition, type ReactNode } from "react";
 import { APIProvider, InfoWindow, Map, useMap, useMapsLibrary } from "@vis.gl/react-google-maps";
 import { useRouter } from "next/navigation";
 import { forgetDrawings, forgetDrawingsLike, lockDay, unlockDay, lookupPlaceOutline, moveStop, myPlaces, pastDrawings, rememberedRoute, removeStop, reportRoute, saveDrawing, savedDrawings, trustedRoutes, saveBlock, setPlaceOutline, setStopOutline, setStopPlace, trailCells, type PlaceLite, type PlacePick } from "@/app/mbm/actions";
@@ -32,7 +32,20 @@ type Pin = { title: string; location: string | null; at: { lat: number; lng: num
 // The day on a map: each stop, and the trips between them (from the iPhone's dots). Stops are
 // labelled with their name (yours, or the one the phone found, like "Noland Hall"). Click a stop to rename it; later
 // visits there get the name by themselves. Hovering the day bar highlights where you were then.
-export default function DayMapInner({
+// Someone else's day (a profile on Social): just to look at. Nothing opens to change, and nothing of
+// yours is read or saved for it (your remembered routes, trails, saved drawings, buildings).
+const ViewOnly = createContext(false);
+
+export default function DayMapInner(props: Parameters<typeof DayMapAll>[0] & { viewOnly?: boolean }) {
+  const { viewOnly = false, ...rest } = props;
+  return (
+    <ViewOnly.Provider value={viewOnly}>
+      <DayMapAll {...rest} />
+    </ViewOnly.Provider>
+  );
+}
+
+function DayMapAll({
   visits: phoneVisits,
   points,
   tz,
@@ -69,6 +82,7 @@ export default function DayMapInner({
   showDots?: boolean; // every recorded dot, to see what the phone actually got
   liveColor?: string | null; // today: show where you are now, pulsing, in this color
 }) {
+  const viewOnly = useContext(ViewOnly);
   const [open, setOpen] = useState<Visit | null>(null);
   const [refit, setRefit] = useState(0); // (bumped by "Whole day": zoom back out to all of it)
   const [moving, setMoving] = useState<Visit | null>(null); // "click where it really is"
@@ -133,7 +147,7 @@ export default function DayMapInner({
     }, 4000);
     return () => clearTimeout(t);
   }, [lockedNow, finished, dayKey, filled.settled, filled.trips]);
-  const buildings = usePlaceBuildings(visits);
+  const buildings = usePlaceBuildings(viewOnly ? [] : visits);
   // What lights up for the hovered stretch: the trips (moving) or the stops (still) during it.
   const barLit = useMemo(() => {
     if (!focus) return null;
@@ -244,7 +258,7 @@ export default function DayMapInner({
         clickableIcons={false}
         draggableCursor={moving ? "crosshair" : undefined}
         onClick={(e) => {
-          if (gestures === "none") return;
+          if (gestures === "none" || viewOnly) return;
           const at = e.detail.latLng;
           if (!moving) {
             // Clicked a trip: its menu (the untracked one first, where paths overlap).
@@ -334,7 +348,7 @@ export default function DayMapInner({
                 type="button"
                 // Clicking it: its box opens, and the hover bubble goes (it was in the way of the box).
                 onClick={() => {
-                  if (gestures === "none") return;
+                  if (gestures === "none" || viewOnly) return;
                   point(null);
                   setOpen(v);
                 }}
@@ -675,7 +689,9 @@ function samePlace(visits: Visit[], v: Visit): Visit[] {
 // The little speech bubble by the pointer: everything under it (overlapping paths all listed).
 // (under: where the thing pointed at ends, if it's below the pointer spot, like a stop's dot;
 // gap: the space between them.)
-function Tip({ x, y, rows, heading, cover = 0, under, gap = 14 }: { x: number; y: number; rows: Row[]; heading?: string; cover?: number; under?: number; gap?: number }) {
+function Tip({ x, y, rows: all, heading, cover = 0, under, gap = 14 }: { x: number; y: number; rows: Row[]; heading?: string; cover?: number; under?: number; gap?: number }) {
+  const viewOnly = useContext(ViewOnly);
+  const rows = viewOnly ? all.map((r) => (r.hint ? { ...r, hint: undefined, title: r.title.replace("Commute detected", "On the move") } : r)) : all;
   const ref = useRef<HTMLDivElement>(null);
   // Placed once it's drawn and its size is known: above the pointer; under it when that runs into
   // the top (or what covers the map); beside it when neither fits (the bottom of the map or the
@@ -797,7 +813,21 @@ function PointerTrack({ trips, onHit }: { trips: Trip[]; onHit: (keys: string[],
 // snapped onto the real paths and roads (solid; see snap.ts). Bits it missed are filled in and
 // stay dashed: a whole missed trip uses a walk you recorded before between the same two places,
 // otherwise Google's walking route. Answers are kept in this browser.
+// (useFilledTrips: what it reads and saves, yours; or nothing, for someone else's day.)
+const YOURS = { trailCells, savedDrawings, saveDrawing, trustedRoutes, pastDrawings, rememberedRoute };
+const LOOK_ONLY = {
+  trailCells: (async () => []) as unknown as typeof trailCells,
+  savedDrawings: (async () => ({})) as unknown as typeof savedDrawings,
+  saveDrawing: (async () => undefined) as unknown as typeof saveDrawing,
+  trustedRoutes: (async () => []) as unknown as typeof trustedRoutes,
+  pastDrawings: (async () => []) as unknown as typeof pastDrawings,
+  rememberedRoute: (async () => null) as unknown as typeof rememberedRoute,
+};
+
 function useFilledTrips(trips: Trip[], points: RoutePoint[]): { trips: Trip[]; settled: boolean; redraw: (t: Trip, rated?: Spot[]) => Promise<void> } {
+  // (Someone else's day: drawn from its own dots only, and nothing saved.)
+  const viewOnly = useContext(ViewOnly);
+  const io = viewOnly ? LOOK_ONLY : YOURS;
   const [again, setAgain] = useState(0); // (bumped by redraw: work out the forgotten pieces)
   const [better, setBetter] = useState<Record<string, Spot[]>>({});
   const [doneKeys, setDoneKeys] = useState<Set<string>>(() => new Set()); // (pieces worked out, drawn better or not)
@@ -820,10 +850,10 @@ function useFilledTrips(trips: Trip[], points: RoutePoint[]): { trips: Trip[]; s
       lng1 = Math.max(lng1, p.lng);
     }
     const pad = 0.002;
-    trailCells({ minLat: lat0 - pad, maxLat: lat1 + pad, minLng: lng0 - pad, maxLng: lng1 + pad }, points[0].at)
+    io.trailCells({ minLat: lat0 - pad, maxLat: lat1 + pad, minLng: lng0 - pad, maxLng: lng1 + pad }, points[0].at)
       .catch(() => [])
       .then((cells) => setTrails({ day: dayOf, center: makeTrails(cells) }));
-  }, [points, dayOf, trails?.day]);
+  }, [io, points, dayOf, trails?.day]);
   const ready = !points.length || trails?.day === dayOf;
   // (Answers are kept even if the trips change meanwhile: each piece is only asked about once.)
   useEffect(() => {
@@ -832,7 +862,7 @@ function useFilledTrips(trips: Trip[], points: RoutePoint[]): { trips: Trip[]; s
     // Lines already saved for these pieces (061): drawn exactly that way, on every reload and
     // device. Asked once for the lot.
     const fresh = trips.flatMap((t) => t.pieces.map((_, i) => ({ t, i }))).filter(({ t, i }) => !asked.current.has(pieceKey(t, i)));
-    const savedP = fresh.length ? savedDrawings(fresh.map(({ t, i }) => drawKey(t, i))).catch(() => ({}) as Awaited<ReturnType<typeof savedDrawings>>) : null;
+    const savedP = fresh.length ? io.savedDrawings(fresh.map(({ t, i }) => drawKey(t, i))).catch(() => ({}) as Awaited<ReturnType<typeof savedDrawings>>) : null;
     for (const t of trips) {
       t.pieces.forEach(async (p, i) => {
         const key = pieceKey(t, i);
@@ -847,7 +877,7 @@ function useFilledTrips(trips: Trip[], points: RoutePoint[]): { trips: Trip[]; s
           setBetter((m) => ({ ...m, [key]: before.path! }));
           if (before.guess) setGuessed((g) => new Set(g).add(key));
           keepPiece(key, before.path, before.guess);
-          void saveDrawing({ key: dk, path: before.path, guess: before.guess, fromId: t.fromId, toId: t.toId, dots: p.dots?.length ?? 0, spread: spreadOf(p.dots), replace: true })
+          void io.saveDrawing({ key: dk, path: before.path, guess: before.guess, fromId: t.fromId, toId: t.toId, dots: p.dots?.length ?? 0, spread: spreadOf(p.dots), replace: true })
             .then(() => forgetBefore(key)) // (once saved for everywhere, its old copy's done)
             .catch(() => {});
           setDoneKeys((d) => new Set(d).add(key));
@@ -871,7 +901,7 @@ function useFilledTrips(trips: Trip[], points: RoutePoint[]): { trips: Trip[]; s
             if (local.guess) setGuessed((g) => new Set(g).add(key));
             keepPiece(key, local.path, local.guess);
           }
-          if (local.path) void saveDrawing({ key: dk, path: local.path, guess: local.guess, fromId: t.fromId, toId: t.toId, dots: p.dots?.length ?? 0, spread: spreadOf(p.dots) }).catch(() => {});
+          if (local.path) void io.saveDrawing({ key: dk, path: local.path, guess: local.guess, fromId: t.fromId, toId: t.toId, dots: p.dots?.length ?? 0, spread: spreadOf(p.dots) }).catch(() => {});
           setDoneKeys((d) => new Set(d).add(key));
           return;
         }
@@ -886,8 +916,8 @@ function useFilledTrips(trips: Trip[], points: RoutePoint[]): { trips: Trip[]; s
         // is drawn the same way each time, when your dots fit it.
         const trusted = whole
           ? [
-              ...(await trustedRoutes(t.fromId!, t.toId!).catch(() => [])),
-              ...(fromScratch.current.has(t.key) ? [] : await pastDrawings(t.fromId!, t.toId!).catch(() => [])),
+              ...(await io.trustedRoutes(t.fromId!, t.toId!).catch(() => [])),
+              ...(fromScratch.current.has(t.key) ? [] : await io.pastDrawings(t.fromId!, t.toId!).catch(() => [])),
             ].map((r) => ({ ...r, line: r.reversed ? [...r.line].reverse() : r.line }))
           : [];
         // Your dots fit one (by their own accuracy, both ways round: routefit.ts): drawn that way.
@@ -946,7 +976,7 @@ function useFilledTrips(trips: Trip[], points: RoutePoint[]): { trips: Trip[]; s
           }
           if (thin) {
             // (Too few dots to check a trusted route against: still the best guess, dashed.)
-            const remembered = trusted[0]?.line.slice(1, -1) ?? (whole ? await rememberedRoute(t.fromId!, t.toId!).catch(() => null) : null);
+            const remembered = trusted[0]?.line.slice(1, -1) ?? (whole ? await io.rememberedRoute(t.fromId!, t.toId!).catch(() => null) : null);
             const found = remembered ?? (await gapRoute(t, i, a, b));
             if (found) {
               setGuessed((g) => new Set(g).add(key));
@@ -955,7 +985,7 @@ function useFilledTrips(trips: Trip[], points: RoutePoint[]): { trips: Trip[]; s
             }
           }
         } else if (p.missing && metres(a, b) >= 120) {
-          const remembered = trusted[0]?.line.slice(1, -1) ?? (whole ? await rememberedRoute(t.fromId!, t.toId!).catch(() => null) : null);
+          const remembered = trusted[0]?.line.slice(1, -1) ?? (whole ? await io.rememberedRoute(t.fromId!, t.toId!).catch(() => null) : null);
           // (Joined to both ends: the route found starts and ends on the nearest street, which left
           // a little gap to where your dots stop and start again.)
           const found = remembered ?? (await gapRoute(t, i, a, b));
@@ -964,13 +994,13 @@ function useFilledTrips(trips: Trip[], points: RoutePoint[]): { trips: Trip[]; s
         if (path && path.length >= 2) setBetter((m) => ({ ...m, [key]: path! }));
         keepPiece(key, path && path.length >= 2 ? path : null, guessedNow);
         if (path && path.length >= 2)
-          void saveDrawing({ key: dk, path, guess: guessedNow, fromId: t.fromId, toId: t.toId, dots: p.dots?.length ?? 0, spread: spreadOf(p.dots) }).catch(() => {});
+          void io.saveDrawing({ key: dk, path, guess: guessedNow, fromId: t.fromId, toId: t.toId, dots: p.dots?.length ?? 0, spread: spreadOf(p.dots) }).catch(() => {});
         } finally {
           setDoneKeys((d) => new Set(d).add(key));
         }
       });
     }
-  }, [trips, ready, trails, again]);
+  }, [io, trips, ready, trails, again]);
   // Rated way off: this trip's lines are forgotten (here, in this browser, and saved) and worked out again.
   // (rated: the line you rated, so earlier saved copies of it go too.)
   const redraw = async (t: Trip, rated: Spot[] = []) => {

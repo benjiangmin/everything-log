@@ -6,7 +6,10 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Avatar from "./Avatar";
 import { useNow } from "./useNow";
-import { clock, dayTitle, span } from "@/mbm/time";
+import { dayRange, dayTitle, span } from "@/mbm/time";
+import DayBar from "./DayBar";
+import { layOut } from "./segments";
+import type { Activity, Block } from "@/mbm/data";
 import { answerRequest, cancelRequest, follow, unfollow, type Profile } from "@/app/mbm/social/actions";
 
 const FriendMap = dynamic(() => import("./FriendMap"), { ssr: false, loading: () => <div className="h-80 animate-pulse rounded-card bg-surface" /> });
@@ -110,15 +113,14 @@ export default function FriendProfile({ profile: p, tz, renderedAt }: { profile:
         </section>
       )}
 
-      {p.bar && (
+      {(p.bar || p.stops) && (
         <Section title={p.today ? "Today" : dayTitle(p.day)}>
-          <Bar slices={p.bar} day={p.day} tz={tz} now={p.today ? now : null} />
-        </Section>
-      )}
-
-      {p.stops && (
-        <Section title="On the map">
-          <FriendMap stops={p.stops} route={p.route ?? []} tz={tz} />
+          {p.bar && <FriendBar slices={p.bar} day={p.day} tz={tz} now={p.today ? now : dayRange(p.day, tz).end.getTime()} />}
+          {p.stops && (
+            <div className={p.bar ? "mt-4" : ""}>
+              <FriendMap stops={p.stops} route={p.route ?? []} tz={tz} {...asBlocks(p.bar ?? [])} />
+            </div>
+          )}
         </Section>
       )}
 
@@ -152,73 +154,26 @@ function Chip({ href, on, children }: { href: string; on: boolean; children: Rea
   );
 }
 
-// Their day on one bar, midnight to midnight, with a line at "now" (today). Hover it for what it
-// was (private jobs say Busy).
-function Bar({ slices, day, tz, now }: { slices: Profile["bar"] & object; day: string; tz: string; now: number | null }) {
-  const [hover, setHover] = useState<number | null>(null); // where the pointer is: 0 to 1
-  const first = slices.length ? Math.min(...slices.map((s) => +new Date(s.start))) : (now ?? 0);
-  const dayStart = first ? dayStartOf(first, tz) : 0;
-  const total = 24 * 3600_000;
-  const pct = (t: number) => (Math.min(total, Math.max(0, t - dayStart)) / total) * 100;
-  const at = hover == null ? null : dayStart + hover * total;
-  const lit = at == null ? null : (slices.findLast((s) => +new Date(s.start) <= at && at < +new Date(s.end)) ?? null);
-  return (
-    <div>
-      <div
-        className="relative h-12 rounded-control bg-surface"
-        onPointerMove={(e) => {
-          if (e.pointerType !== "mouse") return;
-          const r = e.currentTarget.getBoundingClientRect();
-          setHover(Math.min(1, Math.max(0, (e.clientX - r.left) / r.width)));
-        }}
-        onPointerLeave={() => setHover(null)}
-      >
-        <div className="absolute inset-0 overflow-hidden rounded-control">
-          {slices.map((s, i) => {
-            const a = pct(+new Date(s.start));
-            const b = pct(+new Date(s.end));
-            if (b <= a) return null;
-            return (
-              <span
-                key={i}
-                className={`absolute inset-y-0 border-r border-paper/60 transition-opacity ${lit && lit !== s ? "opacity-45" : ""}`}
-                style={{ left: `${a}%`, width: `${b - a}%`, background: s.color }}
-              />
-            );
-          })}
-        </div>
-        {now != null && <div aria-hidden="true" className="pointer-events-none absolute -inset-y-1 z-10 w-0.5 -translate-x-1/2 rounded-full bg-ink" style={{ left: `${pct(now)}%` }} />}
-        {lit && (
-          <div
-            role="tooltip"
-            className="pointer-events-none absolute bottom-full z-20 mb-3 w-max rounded-card bg-accent px-4 py-2.5 text-accent-ink shadow-xl shadow-ink/30"
-            style={{ left: `${Math.min(88, Math.max(12, (hover ?? 0) * 100))}%`, transform: "translateX(-50%)" }}
-          >
-            <p className="flex items-center gap-2 font-display text-base font-semibold">
-              <span className="size-2.5 rounded-full ring-1 ring-accent-ink/40" style={{ background: lit.color }} />
-              {lit.name}
-            </p>
-            <p className="num mt-0.5 text-sm opacity-80">
-              {clock(lit.start, tz)} – {now != null && +new Date(lit.end) >= now - 60_000 ? "now" : clock(lit.end, tz)} · {span(+new Date(lit.end) - +new Date(lit.start))}
-            </p>
-          </div>
-        )}
-      </div>
-      <div className="mt-1 flex justify-between text-xs text-muted">
-        <span>12a</span>
-        <span>6a</span>
-        <span>12p</span>
-        <span>6p</span>
-        <span>12a</span>
-      </div>
-      {slices.length === 0 && <p className="mt-2 text-sm text-muted">Nothing tracked {day ? "this day" : "yet"}.</p>}
-    </div>
-  );
+// Their day as entries, the shape the Day page's bar and map take (one job per name and color).
+function asBlocks(slices: NonNullable<Profile["bar"]>): { blocks: Block[]; activities: Activity[] } {
+  const activities = new Map<string, Activity>();
+  const blocks = slices.map((s, i) => {
+    const id = `${s.name}|${s.color}`;
+    if (!activities.has(id)) activities.set(id, { id, name: s.name, color: s.color, last_used_at: "" });
+    return { id: `slice-${i}`, started_at: s.start, ended_at: s.end, activity_id: id, note: null, source: "manual" as const, confirmed: true };
+  });
+  return { blocks, activities: [...activities.values()] };
 }
 
-// Midnight (in tz) of the day a moment is in.
-function dayStartOf(t: number, tz: string) {
-  const parts = new Intl.DateTimeFormat("en-US", { timeZone: tz, hour: "numeric", minute: "numeric", second: "numeric", hourCycle: "h23" }).formatToParts(new Date(t));
-  const get = (k: string) => Number(parts.find((x) => x.type === k)?.value ?? 0);
-  return t - ((get("hour") * 60 + get("minute")) * 60 + get("second")) * 1000 - (t % 1000);
+// Their day bar: the same as the Day page's (hover for what each part was, pinch or ⌘/Ctrl+scroll
+// to zoom, drag to move along), just to look at.
+function FriendBar({ slices, day, tz, now }: { slices: NonNullable<Profile["bar"]>; day: string; tz: string; now: number }) {
+  const { start, end } = dayRange(day, tz);
+  const dayStart = start.getTime();
+  const dayEnd = end.getTime();
+  const { blocks, activities } = asBlocks(slices);
+  const { placed, gaps } = layOut(blocks, dayStart, dayEnd, now);
+  const lanes = Math.max(1, ...placed.map((x) => x.lane + 1));
+  return <DayBar placed={placed} lanes={lanes} gaps={gaps} dayKey={day} dayStart={dayStart} dayEnd={dayEnd} now={now} tz={tz} byId={new Map(activities.map((a) => [a.id, a]))} />;
 }
+
