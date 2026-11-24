@@ -122,6 +122,7 @@ export async function syncCalendar(client: SupabaseClient, { force = false } = {
   const { data, error } = await client.from("google_accounts").select("refresh_token, access_token, access_expires, synced_at, email").maybeSingle();
   if (error || !data) return { ok: false, message: error ? error.message : "Not connected." };
   const a = data as Account;
+  const off = await calendarsOff(client);
   if (!force && a.synced_at && Date.now() - +new Date(a.synced_at) < 10 * 60_000) return { ok: true };
   const token = await accessToken(client, a);
   if (!token) return { ok: false, message: "Google sign-in ran out: connect again." };
@@ -132,7 +133,7 @@ export async function syncCalendar(client: SupabaseClient, { force = false } = {
     const list = (await (
       await fetch("https://www.googleapis.com/calendar/v3/users/me/calendarList?minAccessRole=reader&maxResults=50", { headers: auth, signal: AbortSignal.timeout(6000), cache: "no-store" })
     ).json()) as { items?: { id: string; selected?: boolean; hidden?: boolean }[] };
-    const calendars = (list.items ?? []).filter((c) => c.selected !== false && !c.hidden).slice(0, 12);
+    const calendars = (list.items ?? []).filter((c) => c.selected !== false && !c.hidden && !off.includes(c.id)).slice(0, 12);
     const events: { id: string; title: string; start: string; end: string; allDay: boolean; location: string | null }[] = [];
     await Promise.all(
       calendars.map(async (c) => {
@@ -156,6 +157,37 @@ export async function syncCalendar(client: SupabaseClient, { force = false } = {
     return { ok: true, count: Number(n) };
   } catch (e) {
     return { ok: false, message: e instanceof Error ? e.message : "Couldn't reach Google." };
+  }
+}
+
+// ---------- Which calendars (076) ----------
+
+// The calendars you've switched off (none until 076 is run).
+async function calendarsOff(client: SupabaseClient): Promise<string[]> {
+  const { data, error } = await client.from("google_accounts").select("calendars_off").maybeSingle();
+  return error || !data ? [] : ((data as { calendars_off?: string[] | null }).calendars_off ?? []);
+}
+
+export type GCalendar = { id: string; name: string; color: string | null; mine: boolean; on: boolean };
+
+// Your calendars as Google shows them (yours first), and whether each is read. null: not connected.
+export async function listCalendars(client: SupabaseClient): Promise<GCalendar[] | null> {
+  if (!googleReady()) return null;
+  const { data, error } = await client.from("google_accounts").select("refresh_token, access_token, access_expires, synced_at, email").maybeSingle();
+  if (error || !data) return null;
+  const token = await accessToken(client, data as Account);
+  if (!token) return null;
+  const off = await calendarsOff(client);
+  try {
+    const list = (await (
+      await fetch("https://www.googleapis.com/calendar/v3/users/me/calendarList?minAccessRole=reader&maxResults=50", { headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(6000), cache: "no-store" })
+    ).json()) as { items?: { id: string; summary?: string; summaryOverride?: string; backgroundColor?: string; primary?: boolean; accessRole?: string; selected?: boolean; hidden?: boolean }[] };
+    return (list.items ?? [])
+      .filter((c) => c.selected !== false && !c.hidden)
+      .map((c) => ({ id: c.id, name: c.summaryOverride ?? c.summary ?? c.id, color: c.backgroundColor ?? null, mine: !!c.primary || c.accessRole === "owner", on: !off.includes(c.id) }))
+      .sort((x, y) => Number(y.mine) - Number(x.mine) || x.name.localeCompare(y.name));
+  } catch {
+    return null;
   }
 }
 

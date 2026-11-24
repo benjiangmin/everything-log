@@ -1,6 +1,7 @@
 import { mbm } from "@/mbm/supabase";
 import GoogleCard from "@/mbm/components/GoogleCard";
-import { googleStatus } from "@/mbm/google";
+import { googleStatus, listCalendars } from "@/mbm/google";
+import CalendarPicker from "@/mbm/components/CalendarPicker";
 import { Card, EmailForm, PasswordForm, SubPage } from "@/mbm/components/AccountView";
 import AccountShell from "../shell";
 
@@ -11,7 +12,9 @@ export default function SignInPage() {
     <AccountShell
       path="/account/sign-in"
       render={async (user) => {
-        const google = await googleStatus(await mbm()).catch(() => null);
+        const client = await mbm();
+        const google = await googleStatus(client).catch(() => null);
+        const calendars = google?.connected ? await listCalendars(client).catch(() => null) : null;
         return (
           <SubPage title="Sign-in and connections" note="How you sign in, and the accounts Minute by Minute reads from.">
             <Card title="Email and password">
@@ -24,6 +27,11 @@ export default function SignInPage() {
                 <GoogleCard status={google} />
               </div>
             </Card>
+            {calendars && calendars.length > 0 && (
+              <Card title="Calendars" note="Which ones Minute by Minute reads. One that's off doesn't show, suggest, or start jobs.">
+                <CalendarPicker calendars={calendars} />
+              </Card>
+            )}
           </SubPage>
         );
       }}

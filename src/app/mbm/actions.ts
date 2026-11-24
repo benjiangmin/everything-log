@@ -857,6 +857,21 @@ export async function disconnectGoogle(): Promise<Result> {
   return { ok: true };
 }
 
+// Read a Google calendar or not (076). Off: its events leave on the sync right after.
+export async function setCalendarOn(id: string, on: boolean): Promise<Result> {
+  if (typeof id !== "string" || !id || id.length > 300) return fail("That calendar is gone.");
+  const client = await mbm();
+  const { data, error } = await client.from("google_accounts").select("calendars_off").maybeSingle();
+  if (error) return fail(/calendars_off/.test(error.message) ? "Run supabase/minute-by-minute/076_calendars_off.sql in Supabase first." : error.message);
+  if (!data) return fail("Connect Google Calendar first.");
+  const now = ((data as { calendars_off?: string[] | null }).calendars_off ?? []).filter((x) => x !== id);
+  const { error: e2 } = await client.from("google_accounts").update({ calendars_off: on ? now : [...now, id] }).not("user_id", "is", null);
+  if (e2) return fail(e2.message);
+  await syncCalendar(client, { force: true });
+  refresh();
+  return { ok: true };
+}
+
 // A place's building, found by your browser (OpenStreetMap), or null: it isn't in one
 // (032_places_by_building.sql). Then "at this place" means "in this building", whatever its size.
 export async function setPlaceOutline(placeId: string, outline: [number, number][] | null): Promise<Result> {
