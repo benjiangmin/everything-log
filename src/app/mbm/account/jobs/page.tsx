@@ -47,7 +47,7 @@ async function Jobs() {
   // (Private jobs and categories, 070: none until it's run. Linked calendar names, 073. And the
   // names on your calendar lately and soon, to link.)
   const now = await loadedAt();
-  const [pj, pc, cn, ev, se, sc] = await Promise.all([
+  const [pj, pc, cn, ev, se, sc, ci] = await Promise.all([
     client.from("activities").select("id, private"),
     client.from("categories").select("id, private"),
     client.from("activities").select("id, calendar_names"),
@@ -61,7 +61,9 @@ async function Jobs() {
     // (Stopping at the event's end, 074: hidden until it's run.)
     client.from("activities").select("id, stop_at_event_end"),
     client.from("categories").select("id, stop_at_event_end"),
+    client.from("activities").select("id, calendar_ignore"), // (075)
   ]);
+  const ignored = new Map(((ci.data ?? []) as { id: string; calendar_ignore: string[] | null }[]).map((x) => [x.id, x.calendar_ignore ?? []]));
   const endJ = se.error ? null : new Map(((se.data ?? []) as { id: string; stop_at_event_end: boolean | null }[]).map((x) => [x.id, x.stop_at_event_end]));
   const endC = sc.error ? null : new Map(((sc.data ?? []) as { id: string; stop_at_event_end: boolean | null }[]).map((x) => [x.id, x.stop_at_event_end]));
   const linked = new Map(((cn.data ?? []) as { id: string; calendar_names: string[] | null }[]).map((x) => [x.id, x.calendar_names ?? []]));
@@ -77,7 +79,7 @@ async function Jobs() {
   const events = [...counts.values()].sort((a, b) => b.n - a.n);
   const priv = new Set([...((pj.data ?? []) as { id: string; private: boolean }[]), ...((pc.data ?? []) as { id: string; private: boolean }[])].filter((x) => x.private).map((x) => x.id));
   const mark = <T extends { id: string }>(xs: T[]) => xs.map((x) => ({ ...x, private: priv.has(x.id) }));
-  return <JobsView now={await loadedAt()} events={events} jobs={mark((jobs.data ?? []) as Job[]).map((j) => ({ ...j, calendar_names: linked.get(j.id) ?? [], ...(endJ ? { stop_at_event_end: endJ.get(j.id) ?? null } : {}) }))} categories={mark((cats.data ?? []) as Category[]).map((c) => ({ ...c, ...(endC ? { stop_at_event_end: endC.get(c.id) ?? null } : {}) }))} places={(places.data ?? []) as { id: string; name: string }[]} />;
+  return <JobsView now={await loadedAt()} events={events} jobs={mark((jobs.data ?? []) as Job[]).map((j) => ({ ...j, calendar_names: linked.get(j.id) ?? [], calendar_ignore: ignored.get(j.id) ?? [], ...(endJ ? { stop_at_event_end: endJ.get(j.id) ?? null } : {}) }))} categories={mark((cats.data ?? []) as Category[]).map((c) => ({ ...c, ...(endC ? { stop_at_event_end: endC.get(c.id) ?? null } : {}) }))} places={(places.data ?? []) as { id: string; name: string }[]} />;
 }
 
 // (Outside the component: it reads the clock.)

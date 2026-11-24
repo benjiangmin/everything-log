@@ -19,7 +19,7 @@ import { eventJobId, overlap } from "@/mbm/eventJob";
 // by itself when you arrive at Russell Labs…"), with an "In short" line that updates as you change
 // them. A category (School) gives its jobs its color, and settings they follow unless changed.
 
-export type Job = JobPrefs & { id: string; name: string; color: string; own_color?: string | null; category_id?: string | null; last_used_at?: string | null; private?: boolean; calendar_names?: string[] };
+export type Job = JobPrefs & { id: string; name: string; color: string; own_color?: string | null; category_id?: string | null; last_used_at?: string | null; private?: boolean; calendar_names?: string[]; calendar_ignore?: string[] };
 // A name on your calendar (last 60 days and next 30): how many times.
 export type CalEvent = { title: string; n: number };
 export type Category = JobPrefs & { id: string; name: string; color: string; private?: boolean };
@@ -335,6 +335,8 @@ function JobSettings({
   const [color, setColor] = useState(job.category_id ? (job.own_color ?? job.color) : job.color);
   const [name, setName] = useState(job.name);
   const [calNames, setCalNames] = useState<string[]>(job.calendar_names ?? []);
+  const [calIgnore, setCalIgnore] = useState<string[]>(job.calendar_ignore ?? []);
+  const draft = { ...job, name: name.trim() || job.name, calendar_names: calNames, calendar_ignore: calIgnore };
   const cat = categories.find((c) => c.id === p.category_id) ?? null;
   const [message, setMessage] = useState<string | null>(null);
   const [pending, start] = useTransition();
@@ -346,6 +348,7 @@ function JobSettings({
         ...(color !== (job.category_id ? (job.own_color ?? job.color) : job.color) ? { color } : {}),
         ...(name.trim() !== job.name ? { name } : {}),
         ...(calNames.join("\n") !== (job.calendar_names ?? []).join("\n") ? { calendar_names: calNames } : {}),
+        ...(calIgnore.join("\n") !== (job.calendar_ignore ?? []).join("\n") ? { calendar_ignore: calIgnore } : {}),
       });
       if (!res.ok) return setMessage(res.message);
       router.refresh();
@@ -375,8 +378,21 @@ function JobSettings({
         onChange={(v) => setP({ ...p, ...v })}
         parent={cat}
         places={places}
-        calendar={<OnCalendar job={{ ...job, name: name.trim() || job.name, calendar_names: calNames }} jobs={jobs} events={events} names={calNames} onChange={setCalNames} />}
-        synced={calNames.length > 0 || events.some((e) => eventJobId(e.title, jobs.map((j) => (j.id === job.id ? { ...job, name: name.trim() || job.name, calendar_names: calNames } : j))) === job.id)}
+        calendar={
+          <OnCalendar
+            job={draft}
+            jobs={jobs}
+            events={events}
+            names={calNames}
+            onChange={(n) => {
+              setCalNames(n);
+              // (Synced back: no longer taken off.)
+              setCalIgnore((x) => x.filter((i) => !n.some((m) => m.trim().toLowerCase() === i.trim().toLowerCase())));
+            }}
+            onIgnore={(t) => setCalIgnore((x) => [...x, t])}
+          />
+        }
+        synced={calNames.length > 0 || events.some((e) => eventJobId(e.title, jobs.map((j) => (j.id === job.id ? draft : j))) === job.id)}
       />
       <PrivateSwitch kind="job" id={job.id} on={!!job.private} inherited={!!cat?.private} />
       {deleting ? (
@@ -391,7 +407,7 @@ function JobSettings({
 // Which calendar events are this job: ones that match it by name by themselves, and ones you sync
 // (searched from your calendar's names, so you don't have to remember them exactly). They start
 // it when it starts by itself, and suggest it.
-function OnCalendar({ job, jobs, events, names, onChange }: { job: Job; jobs: Job[]; events: CalEvent[]; names: string[]; onChange: (n: string[]) => void }) {
+function OnCalendar({ job, jobs, events, names, onChange, onIgnore }: { job: Job; jobs: Job[]; events: CalEvent[]; names: string[]; onChange: (n: string[]) => void; onIgnore: (title: string) => void }) {
   const all = jobs.map((j) => (j.id === job.id ? job : j));
   const lower = new Set(names.map((n) => n.trim().toLowerCase()));
   const auto = events.filter((e) => eventJobId(e.title, all) === job.id && !lower.has(e.title.trim().toLowerCase()));
@@ -406,7 +422,7 @@ function OnCalendar({ job, jobs, events, names, onChange }: { job: Job; jobs: Jo
           <ListRow key={n} icon="calendar" name={n} onRemove={() => onChange(names.filter((x) => x !== n))} />
         ))}
         {auto.map((e) => (
-          <ListRow key={e.title} icon="calendar" name={e.title} note="Same name" />
+          <ListRow key={e.title} icon="calendar" name={e.title} note="Same name" onRemove={() => onIgnore(e.title)} />
         ))}
       </ListBox>
     </Field>

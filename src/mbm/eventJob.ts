@@ -3,9 +3,10 @@
 //   1. the job it's linked to (a job's "On your calendar"),
 //   2. the job with exactly its name,
 //   3. the one job whose name's words are all in it (CS577 → "CS 577 LEC 01"),
+//   (2 and 3 skip a job it was taken off),
 //   else none (starting it would make a new job with its name).
 
-type JobLike = { id: string; name: string; calendar_names?: string[] | null; last_used_at?: string | null };
+type JobLike = { id: string; name: string; calendar_names?: string[] | null; calendar_ignore?: string[] | null; last_used_at?: string | null };
 
 const SKIP = new Set(["the", "and", "for", "with", "at", "in", "on", "of", "to", "a", "my"]);
 
@@ -24,10 +25,12 @@ export function eventJobId(title: string, jobs: JobLike[]): string | null {
     .filter((j) => (j.calendar_names ?? []).some((n) => norm(n) === t))
     .sort((a, b) => +new Date(b.last_used_at ?? 0) - +new Date(a.last_used_at ?? 0));
   if (linked[0]) return linked[0].id;
-  const exact = jobs.find((j) => norm(j.name) === t);
+  // (Taken off a job: not that job by name or words.)
+  const open = jobs.filter((j) => !(j.calendar_ignore ?? []).some((n) => norm(n) === t));
+  const exact = open.find((j) => norm(j.name) === t);
   if (exact) return exact.id;
   const words = new Set(nameWords(title));
-  const fits = jobs.filter((j) => {
+  const fits = open.filter((j) => {
     const w = nameWords(j.name);
     return w.length > 0 && w.every((x) => words.has(x));
   });

@@ -1080,7 +1080,7 @@ const cleanPrefs = (p: JobPrefs) => ({
 });
 const missing043 = (msg: string) => /categor|stop_on_commute|start_mode|auto_start|weekly_goal|goal_per|hide_from_stats|own_color|delete_job|tuck_between/i.test(msg);
 
-export async function saveJob(id: string, input: JobPrefs & { category_id: string | null; color?: string; name?: string; calendar_names?: string[] }): Promise<Result> {
+export async function saveJob(id: string, input: JobPrefs & { category_id: string | null; color?: string; name?: string; calendar_names?: string[]; calendar_ignore?: string[] }): Promise<Result> {
   if (!isUuid(id)) return fail("That job is gone.");
   // (A new name, and the calendar events linked to it (073).)
   const name = typeof input.name === "string" ? input.name.trim().slice(0, 60) : null;
@@ -1088,15 +1088,20 @@ export async function saveJob(id: string, input: JobPrefs & { category_id: strin
   const names = Array.isArray(input.calendar_names)
     ? { calendar_names: [...new Set(input.calendar_names.filter((n) => typeof n === "string" && n.trim()).map((n) => n.trim().slice(0, 200)))].slice(0, 40) }
     : {};
+  // (Events taken off it (075): not it by name anymore.)
+  const ignore = Array.isArray(input.calendar_ignore)
+    ? { calendar_ignore: [...new Set(input.calendar_ignore.filter((n) => typeof n === "string" && n.trim()).map((n) => n.trim().slice(0, 200)))].slice(0, 80) }
+    : {};
   const category_id = input.category_id && isUuid(input.category_id) ? input.category_id : null;
   // (Its color: in a category it's the category's; this is kept as its own for if it leaves.)
   const color = typeof input.color === "string" && /^#[0-9a-f]{6}$/i.test(input.color) ? { color: input.color.toLowerCase() } : {};
   const client = await mbm();
-  const { error } = await client.from("activities").update({ ...cleanPrefs(input), category_id, ...color, ...(name ? { name } : {}), ...names }).eq("id", id);
+  const { error } = await client.from("activities").update({ ...cleanPrefs(input), category_id, ...color, ...(name ? { name } : {}), ...names, ...ignore }).eq("id", id);
   if (error) {
     if (error.code === "23505") return fail(`You already have a job called ${name}. Delete one of them and move its entries to the other instead.`);
     if (/calendar_names/.test(error.message)) return fail("Run supabase/minute-by-minute/073_calendar_names.sql in Supabase first.");
     if (/stop_at_event_end/.test(error.message)) return fail("Run supabase/minute-by-minute/074_stop_at_event_end.sql in Supabase first.");
+    if (/calendar_ignore/.test(error.message)) return fail("Run supabase/minute-by-minute/075_calendar_ignore.sql in Supabase first.");
     return fail(missing043(error.message) ? NEEDS_043 : error.message);
   }
   // A calendar event synced here leaves any other job it was synced to (one job each).
