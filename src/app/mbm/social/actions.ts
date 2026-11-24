@@ -5,14 +5,33 @@ import { mbm } from "@/mbm/supabase";
 import { mbmTz } from "@/mbm/data";
 
 // Social (070_social.sql). Every call goes through the database's own functions, which check
-// friendship, blocks and what each person shares before anything comes back.
+// following, blocks and what each person shares before anything comes back.
 
-export type Person = { id: string; username: string | null; name: string | null; avatar: string | null; relation: "self" | "friend" | "sent" | "received" | "blocked" | "none"; trusted?: boolean; at?: string; now?: Now | null };
 export type Now = { name: string; color: string; since: string };
+// Someone, from your side: following = you follow them; follows_me; requested = you asked to
+// follow them; requested_me; close = they're on your close friends. followers / following_count:
+// their counts.
+export type Person = {
+  id: string;
+  username: string | null;
+  name: string | null;
+  avatar: string | null;
+  relation?: "self" | "blocked" | "none";
+  following?: boolean;
+  follows_me?: boolean;
+  requested?: boolean;
+  requested_me?: boolean;
+  close?: boolean;
+  followers?: number;
+  following_count?: number;
+  at?: string;
+  now?: Now | null;
+};
 export type Share = { now: string; bar: string; stats: string; days: string; map: string };
 export type Social = {
   me: { id?: string; username: string | null; name: string | null; avatar: string | null; share: Partial<Share>; now?: Now | null } | null;
-  friends: Person[];
+  following: Person[];
+  followers: Person[];
   incoming: Person[];
   outgoing: Person[];
   blocked: Person[];
@@ -32,7 +51,7 @@ export type Profile = Person & {
 };
 
 type Done = { ok: true } | { ok: false; message: string };
-const NEEDS = "Run supabase/minute-by-minute/070_social.sql in Supabase first.";
+const NEEDS = "Run supabase/minute-by-minute/072_follows.sql in Supabase first.";
 const isId = (s: string) => /^[0-9a-f-]{36}$/i.test(s);
 const failed = (m: string): Done => ({ ok: false, message: /function .* does not exist|schema cache|column .* does not exist/i.test(m) ? NEEDS : m });
 
@@ -60,7 +79,8 @@ export async function loadProfile(username: string, day?: string): Promise<Profi
   const { data: who } = await client.rpc("search_users", { p_q: username.slice(0, 40) });
   const person = ((who as Person[] | null) ?? []).find((p) => p.username?.toLowerCase() === username.toLowerCase());
   const mine = person ? null : ((await client.rpc("my_social")).data as Social | null);
-  const id = person?.id ?? mine?.friends?.find((f) => f.username?.toLowerCase() === username.toLowerCase())?.id ?? (mine?.me?.username?.toLowerCase() === username.toLowerCase() ? mine?.me?.id : undefined);
+  const same = (p: { username: string | null }) => p.username?.toLowerCase() === username.toLowerCase();
+  const id = person?.id ?? [...(mine?.following ?? []), ...(mine?.followers ?? [])].find(same)?.id ?? (mine?.me && same(mine.me) ? mine.me.id : undefined);
   if (!id) return null;
   const { data } = await client.rpc("social_profile", { p_user: id, p_day: day && /^\d{4}-\d{2}-\d{2}$/.test(day) ? day : null, p_tz: mbmTz() });
   return (data as Profile | null) ?? null;
@@ -78,9 +98,9 @@ export async function setShare(share: Share): Promise<Done> {
   return call("set_share", { p_share: share });
 }
 
-export async function friendRequest(id: string): Promise<Done> {
+export async function follow(id: string): Promise<Done> {
   if (!isId(id)) return { ok: false, message: "Not found." };
-  const { data, error } = await (await mbm()).rpc("friend_request", { p_to: id });
+  const { data, error } = await (await mbm()).rpc("follow", { p_to: id });
   if (error) return failed(error.message);
   if (data === "not found") return { ok: false, message: "Not found." };
   revalidatePath("/mbm/social", "layout");
@@ -93,11 +113,14 @@ export async function answerRequest(id: string, accept: boolean): Promise<Done> 
 export async function cancelRequest(id: string): Promise<Done> {
   return isId(id) ? call("cancel_request", { p_to: id }) : { ok: false, message: "Not found." };
 }
-export async function unfriend(id: string): Promise<Done> {
-  return isId(id) ? call("unfriend", { p_them: id }) : { ok: false, message: "Not found." };
+export async function unfollow(id: string): Promise<Done> {
+  return isId(id) ? call("unfollow", { p_them: id }) : { ok: false, message: "Not found." };
 }
-export async function setTrusted(id: string, trusted: boolean): Promise<Done> {
-  return isId(id) ? call("set_trusted", { p_them: id, p_trusted: !!trusted }) : { ok: false, message: "Not found." };
+export async function removeFollower(id: string): Promise<Done> {
+  return isId(id) ? call("remove_follower", { p_them: id }) : { ok: false, message: "Not found." };
+}
+export async function setClose(id: string, close: boolean): Promise<Done> {
+  return isId(id) ? call("set_close", { p_them: id, p_close: !!close }) : { ok: false, message: "Not found." };
 }
 export async function blockUser(id: string): Promise<Done> {
   return isId(id) ? call("block_user", { p_them: id }) : { ok: false, message: "Not found." };

@@ -7,7 +7,7 @@ import { useRouter } from "next/navigation";
 import Avatar from "./Avatar";
 import { useNow } from "./useNow";
 import { clock, dayTitle, span } from "@/mbm/time";
-import { answerRequest, cancelRequest, friendRequest, type Profile } from "@/app/mbm/social/actions";
+import { answerRequest, cancelRequest, follow, unfollow, type Profile } from "@/app/mbm/social/actions";
 
 const FriendMap = dynamic(() => import("./FriendMap"), { ssr: false, loading: () => <div className="h-80 animate-pulse rounded-card bg-surface" /> });
 
@@ -33,28 +33,52 @@ export default function FriendProfile({ profile: p, tz, renderedAt }: { profile:
           Social
         </Link>
       </p>
-      <div className="mt-3 flex flex-wrap items-center gap-4">
-        <Avatar src={p.avatar} name={p.name} size={72} />
+      <div className="mt-4 flex flex-wrap items-center gap-5">
+        <Avatar src={p.avatar} name={p.name} size={88} />
         <div className="min-w-0 flex-1">
           <h1 className="truncate font-display text-3xl font-semibold tracking-tight">{p.name ?? p.username}</h1>
-          {p.username && <p className="text-muted">@{p.username}</p>}
+          <p className="flex flex-wrap items-center gap-2 text-muted">
+            {p.username && <span>@{p.username}</span>}
+            {p.follows_me && p.relation !== "self" && <span className="rounded-full bg-surface px-2 text-xs font-semibold">Follows you</span>}
+            {p.close && <span className="rounded-full bg-surface px-2 text-xs font-semibold">Close friend</span>}
+          </p>
+          <p className="mt-2 flex gap-5 text-sm">
+            <span>
+              <b className="font-display text-base tabular-nums">{p.followers ?? 0}</b> <span className="text-muted">{p.followers === 1 ? "follower" : "followers"}</span>
+            </span>
+            <span>
+              <b className="font-display text-base tabular-nums">{p.following_count ?? 0}</b> <span className="text-muted">following</span>
+            </span>
+          </p>
         </div>
-        {p.relation === "none" && (
-          <button type="button" disabled={pending} onClick={() => act(() => friendRequest(p.id))} className="rounded-control bg-accent px-4 py-2 font-semibold text-accent-ink disabled:opacity-50">
-            Add friend
-          </button>
+        {p.relation !== "self" && (
+          <div className="flex flex-wrap gap-2">
+            {p.requested_me && (
+              <>
+                <button type="button" disabled={pending} onClick={() => act(() => answerRequest(p.id, true))} className="rounded-control bg-accent px-4 py-2 text-sm font-semibold text-accent-ink disabled:opacity-50">
+                  Accept request
+                </button>
+                <button type="button" disabled={pending} onClick={() => act(() => answerRequest(p.id, false))} className="rounded-control bg-surface px-4 py-2 text-sm font-semibold hover:bg-line disabled:opacity-50">
+                  Decline
+                </button>
+              </>
+            )}
+            {p.following ? (
+              <button type="button" disabled={pending} onClick={() => act(() => unfollow(p.id))} className="group rounded-control bg-surface px-4 py-2 text-sm font-semibold hover:bg-line disabled:opacity-50">
+                <span className="group-hover:hidden">Following</span>
+                <span className="hidden group-hover:inline">Unfollow</span>
+              </button>
+            ) : p.requested ? (
+              <button type="button" disabled={pending} onClick={() => act(() => cancelRequest(p.id))} className="rounded-control bg-surface px-4 py-2 text-sm font-semibold hover:bg-line disabled:opacity-50">
+                Requested
+              </button>
+            ) : (
+              <button type="button" disabled={pending} onClick={() => act(() => follow(p.id))} className="rounded-control bg-accent px-4 py-2 text-sm font-semibold text-accent-ink disabled:opacity-50">
+                {p.follows_me ? "Follow back" : "Follow"}
+              </button>
+            )}
+          </div>
         )}
-        {p.relation === "sent" && (
-          <button type="button" disabled={pending} onClick={() => act(() => cancelRequest(p.id))} className="rounded-control px-4 py-2 text-sm font-semibold ring-1 ring-line">
-            Requested · cancel
-          </button>
-        )}
-        {p.relation === "received" && (
-          <button type="button" disabled={pending} onClick={() => act(() => answerRequest(p.id, true))} className="rounded-control bg-accent px-4 py-2 font-semibold text-accent-ink disabled:opacity-50">
-            Accept request
-          </button>
-        )}
-        {p.relation === "friend" && <span className="rounded-full bg-surface px-3 py-1 text-sm font-semibold">Friends{p.trusted ? " · trusted" : ""}</span>}
       </div>
       {message && <p className="mt-3 text-sm text-danger">{message}</p>}
 
@@ -100,7 +124,11 @@ export default function FriendProfile({ profile: p, tz, renderedAt }: { profile:
 
       {nothing && (
         <p className="mt-8 rounded-card bg-surface px-5 py-4 text-sm text-muted">
-          {p.relation === "friend" ? `${p.name ?? p.username} isn't sharing anything with you yet.` : `Only ${p.name ?? p.username}'s name and picture are shown. Add them as a friend to see more, if they share it.`}
+          {p.relation === "self"
+            ? "You're not sharing anything yet. Pick what others see with the gear on Social."
+            : p.following
+              ? `${p.name ?? p.username} isn't sharing anything with you yet.`
+              : `Only ${p.name ?? p.username}'s name and picture are shown. Follow them to see more, if they share it.`}
         </p>
       )}
     </div>

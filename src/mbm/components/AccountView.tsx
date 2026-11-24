@@ -30,7 +30,7 @@ export default function AccountView({
         <AboutYouForm profile={profile} />
       </Section>
       {social && (
-        <Section id="social" title="What others see" note="Your name and picture always show. Everything else is up to you, and starts as Nobody. Private jobs show as Busy (Jobs).">
+        <Section id="social" title="What others see" note="Your name and picture always show. Everything else is up to you, and starts as Nobody. Mutuals: people you follow who follow you back. Private jobs show as Busy (Jobs).">
           {social}
         </Section>
       )}

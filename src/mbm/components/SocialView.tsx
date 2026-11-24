@@ -8,22 +8,23 @@ import { useNow } from "./useNow";
 import { span } from "@/mbm/time";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
 import {
-  answerRequest, blockUser, cancelRequest, friendRequest, searchPeople, setTrusted, setUsername, unblockUser, unfriend,
+  answerRequest, blockUser, cancelRequest, follow, removeFollower, searchPeople, setClose, setUsername, unblockUser, unfollow,
   type Person, type Social,
 } from "@/app/mbm/social/actions";
 
 type Done = { ok: true } | { ok: false; message: string };
 type Run = (f: () => Promise<Done>) => void;
-type Tab = "friends" | "requests" | "find";
+type Tab = "following" | "followers" | "requests" | "find";
 
 
-// The Social tab, laid out like a social app: your profile on top, what friends are doing now,
-// then Friends / Requests / Find people. What others see of you is set in Your account.
+// The Social tab, laid out like a social app: your profile on top (tap it for how it looks; the
+// gear: what others see), what people you follow are doing now, then Following / Followers /
+// Requests / Find people. Following is one way, and each follower is approved (072).
 export default function SocialView({ social, renderedAt }: { social: Social; renderedAt: number }) {
   const router = useRouter();
   const [pending, start] = useTransition();
   const [message, setMessage] = useState<string | null>(null);
-  const [tab, setTab] = useState<Tab>(social.incoming.length > 0 ? "requests" : social.friends.length === 0 ? "find" : "friends");
+  const [tab, setTab] = useState<Tab>(social.incoming.length > 0 ? "requests" : social.following.length === 0 ? "find" : "following");
   const now = useNow(renderedAt);
   const run: Run = (f) =>
     start(async () => {
@@ -33,20 +34,36 @@ export default function SocialView({ social, renderedAt }: { social: Social; ren
     });
 
   const me = social.me;
-  const live = [...social.friends].sort((a, b) => Number(!!b.now) - Number(!!a.now));
+  const mine = me?.username ? `/social/${me.username}` : "/account#social";
+  const live = [...social.following].sort((a, b) => Number(!!b.now) - Number(!!a.now));
 
   return (
     <div>
       {/* You */}
       <section className="flex flex-col items-center gap-5 text-center sm:flex-row sm:items-start sm:gap-8 sm:text-left">
-        <Ring color={me?.now?.color} size={112}>
-          <Avatar src={me?.avatar} name={me?.name ?? me?.username} size={112} />
-        </Ring>
+        <Link href={mine} aria-label="Your profile" className="rounded-full hover:opacity-90">
+          <Ring color={me?.now?.color} size={112}>
+            <Avatar src={me?.avatar} name={me?.name ?? me?.username} size={112} />
+          </Ring>
+        </Link>
         <div className="min-w-0 flex-1">
-          <h1 className="truncate font-display text-3xl font-semibold tracking-tight">{me?.name || me?.username || "You"}</h1>
+          <div className="flex items-center justify-center gap-2 sm:justify-start">
+            <h1 className="min-w-0 truncate font-display text-3xl font-semibold tracking-tight">
+              <Link href={mine} className="hover:underline">
+                {me?.name || me?.username || "You"}
+              </Link>
+            </h1>
+            <Link href="/account#social" aria-label="What others see" title="What others see" className="grid size-9 shrink-0 place-items-center rounded-full text-muted hover:bg-surface hover:text-ink">
+              <svg viewBox="0 0 24 24" className="size-5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <circle cx="12" cy="12" r="3" />
+                <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z" />
+              </svg>
+            </Link>
+          </div>
           {me?.username ? <p className="text-muted">@{me.username}</p> : <PickUsername />}
           <dl className="mt-4 flex justify-center gap-8 sm:justify-start">
-            <Count n={social.friends.length} label={social.friends.length === 1 ? "friend" : "friends"} onClick={() => setTab("friends")} />
+            <Count n={social.followers.length} label={social.followers.length === 1 ? "follower" : "followers"} onClick={() => setTab("followers")} />
+            <Count n={social.following.length} label="following" onClick={() => setTab("following")} />
           </dl>
           {me?.now && <NowPill now={me.now} at={now} className="mt-4" />}
         </div>
@@ -58,9 +75,9 @@ export default function SocialView({ social, renderedAt }: { social: Social; ren
         </p>
       )}
 
-      {/* Friends right now, like stories */}
+      {/* People you follow, right now, like stories */}
       {live.length > 0 && (
-        <section aria-label="Friends right now" className="-mx-4 mt-8 overflow-x-auto px-4">
+        <section aria-label="People you follow, right now" className="-mx-4 mt-8 overflow-x-auto px-4">
           <ul className="flex gap-5 pb-2">
             {live.map((p) => (
               <li key={p.id} className="w-20 shrink-0">
@@ -79,8 +96,11 @@ export default function SocialView({ social, renderedAt }: { social: Social; ren
 
       {/* Tabs */}
       <nav className="mt-8 flex border-b border-line" role="tablist">
-        <TabButton on={tab === "friends"} onClick={() => setTab("friends")}>
-          Friends
+        <TabButton on={tab === "following"} onClick={() => setTab("following")}>
+          Following
+        </TabButton>
+        <TabButton on={tab === "followers"} onClick={() => setTab("followers")}>
+          Followers
         </TabButton>
         <TabButton on={tab === "requests"} onClick={() => setTab("requests")} badge={social.incoming.length}>
           Requests
@@ -91,19 +111,19 @@ export default function SocialView({ social, renderedAt }: { social: Social; ren
       </nav>
 
       <div className="mt-5">
-        {tab === "friends" && (
+        {tab === "following" && (
           <>
-            {social.friends.length === 0 ? (
+            {social.following.length === 0 ? (
               <Empty>
-                No friends yet.{" "}
+                You don&apos;t follow anyone yet.{" "}
                 <button type="button" onClick={() => setTab("find")} className="font-semibold text-ink underline underline-offset-2">
                   Find people
                 </button>
               </Empty>
             ) : (
               <ul className="grid gap-3 sm:grid-cols-2">
-                {social.friends.map((p) => (
-                  <FriendCard key={p.id} person={p} at={now} pending={pending} run={run} />
+                {social.following.map((p) => (
+                  <FollowingCard key={p.id} person={p} at={now} pending={pending} run={run} />
                 ))}
               </ul>
             )}
@@ -123,6 +143,20 @@ export default function SocialView({ social, renderedAt }: { social: Social; ren
             )}
           </>
         )}
+
+        {tab === "followers" &&
+          (social.followers.length === 0 ? (
+            <Empty>No followers yet. When someone asks to follow you, it shows under Requests.</Empty>
+          ) : (
+            <>
+              <p className="mb-3 text-sm text-muted">Close friends see your map, if you share it.</p>
+              <ul className="divide-y divide-line rounded-card border border-line">
+                {social.followers.map((p) => (
+                  <FollowerRow key={p.id} person={p} pending={pending} run={run} />
+                ))}
+              </ul>
+            </>
+          ))}
 
         {tab === "requests" && (
           <>
@@ -164,8 +198,8 @@ export default function SocialView({ social, renderedAt }: { social: Social; ren
   );
 }
 
-// A friend: picture, name, and what they're doing right now (if they share it).
-function FriendCard({ person: p, at, pending, run }: { person: Person; at: number; pending: boolean; run: Run }) {
+// Someone you follow: picture, name, and what they're doing right now (if they share it).
+function FollowingCard({ person: p, at, pending, run }: { person: Person; at: number; pending: boolean; run: Run }) {
   const confirm = useConfirm();
   const who = p.name ?? p.username ?? "them";
   return (
@@ -175,41 +209,80 @@ function FriendCard({ person: p, at, pending, run }: { person: Person; at: numbe
           <Avatar src={p.avatar} name={p.name} size={52} />
         </Ring>
         <span className="min-w-0">
-          <span className="flex items-center gap-1.5">
-            <span className="truncate font-semibold">{who}</span>
-            {p.trusted && (
-              <span title="Trusted: sees your map, if you share it" className="shrink-0 rounded-full bg-surface px-1.5 text-[11px] font-semibold text-muted">
-                Trusted
-              </span>
-            )}
-          </span>
+          <span className="block truncate font-semibold">{who}</span>
           {p.now ? <NowPill now={p.now} at={at} small /> : <span className="block truncate text-sm text-muted">{p.username ? `@${p.username}` : ""}</span>}
         </span>
       </Link>
       <Menu label={`Options for ${who}`}>
-        <MenuItem disabled={pending} onClick={() => run(() => setTrusted(p.id, !p.trusted))}>
-          {p.trusted ? "Stop trusting" : "Make trusted"}
-          <span className="block text-xs font-normal text-muted">Trusted friends see your map, if you share it</span>
-        </MenuItem>
         <MenuItem
           disabled={pending}
           onClick={async () => {
-            if (await confirm({ title: `Unfriend ${who}?`, body: "They won't be told. You can add them again later.", confirmLabel: "Unfriend" })) run(() => unfriend(p.id));
+            if (await confirm({ title: `Unfollow ${who}?`, body: "They won't be told. To follow again, you'd ask again.", confirmLabel: "Unfollow" })) run(() => unfollow(p.id));
           }}
         >
-          Unfriend
+          Unfollow
         </MenuItem>
-        <MenuItem
-          danger
-          disabled={pending}
-          onClick={async () => {
-            if (await confirm({ title: `Block ${who}?`, body: "You stop being friends, and neither of you can find the other.", confirmLabel: "Block" })) run(() => blockUser(p.id));
-          }}
-        >
-          Block
-        </MenuItem>
+        <BlockItem who={who} id={p.id} pending={pending} run={run} />
       </Menu>
     </li>
+  );
+}
+
+// Someone who follows you: follow them back, put them on close friends, or remove them.
+function FollowerRow({ person: p, pending, run }: { person: Person; pending: boolean; run: Run }) {
+  const confirm = useConfirm();
+  const who = p.name ?? p.username ?? "them";
+  return (
+    <Row person={p} href={p.username ? `/social/${p.username}` : undefined} badge={p.close ? "Close friend" : undefined}>
+      <FollowButton person={p} onAction={run} />
+      <Menu label={`Options for ${who}`}>
+        <MenuItem disabled={pending} onClick={() => run(() => setClose(p.id, !p.close))}>
+          {p.close ? "Remove from close friends" : "Add to close friends"}
+          <span className="block text-xs font-normal text-muted">Close friends see your map, if you share it</span>
+        </MenuItem>
+        <MenuItem
+          disabled={pending}
+          onClick={async () => {
+            if (await confirm({ title: `Remove ${who}?`, body: "They stop following you. They won't be told.", confirmLabel: "Remove" })) run(() => removeFollower(p.id));
+          }}
+        >
+          Remove follower
+        </MenuItem>
+        <BlockItem who={who} id={p.id} pending={pending} run={run} />
+      </Menu>
+    </Row>
+  );
+}
+
+function BlockItem({ who, id, pending, run }: { who: string; id: string; pending: boolean; run: Run }) {
+  const confirm = useConfirm();
+  return (
+    <MenuItem
+      danger
+      disabled={pending}
+      onClick={async () => {
+        if (await confirm({ title: `Block ${who}?`, body: "Neither of you follows the other anymore, and you can't find each other.", confirmLabel: "Block" })) run(() => blockUser(id));
+      }}
+    >
+      Block
+    </MenuItem>
+  );
+}
+
+// Follow / Follow back / Requested (tap to take it back) / Following.
+function FollowButton({ person: p, onAction, onDone }: { person: Person; onAction: Run; onDone?: (change: Partial<Person>) => void }) {
+  if (p.relation === "self") return null;
+  if (p.following) return <span className="px-2 text-sm text-muted">Following</span>;
+  if (p.requested)
+    return (
+      <Btn onClick={() => onAction(async () => { const r = await cancelRequest(p.id); onDone?.({ requested: false }); return r; })}>
+        Requested
+      </Btn>
+    );
+  return (
+    <Btn primary onClick={() => onAction(async () => { const r = await follow(p.id); onDone?.({ requested: true }); return r; })}>
+      {p.follows_me ? "Follow back" : "Follow"}
+    </Btn>
   );
 }
 
@@ -358,7 +431,6 @@ function Search({ onAction }: { onAction: Run }) {
     };
   }, [q]);
   const shown = q.trim().length < 2 ? null : found;
-  const mark = (id: string, relation: Person["relation"]) => setFound((f) => f?.map((x) => (x.id === id ? { ...x, relation } : x)) ?? f);
   return (
     <section>
       <input
@@ -376,18 +448,7 @@ function Search({ onAction }: { onAction: Run }) {
           {shown.length === 0 && <li className="px-5 py-4 text-sm text-muted">Nobody found.</li>}
           {shown.map((p) => (
             <Row key={p.id} person={p} href={p.username ? `/social/${p.username}` : undefined}>
-              {p.relation === "none" && (
-                <Btn primary onClick={() => onAction(async () => { const r = await friendRequest(p.id); mark(p.id, "sent"); return r; })}>
-                  Add friend
-                </Btn>
-              )}
-              {p.relation === "sent" && <span className="text-sm text-muted">Requested</span>}
-              {p.relation === "received" && (
-                <Btn primary onClick={() => onAction(async () => { const r = await answerRequest(p.id, true); mark(p.id, "friend"); return r; })}>
-                  Accept
-                </Btn>
-              )}
-              {p.relation === "friend" && <span className="text-sm text-muted">Friends ✓</span>}
+              <FollowButton person={p} onAction={onAction} onDone={(change) => setFound((f) => f?.map((x) => (x.id === p.id ? { ...x, ...change } : x)) ?? f)} />
             </Row>
           ))}
         </ul>
@@ -396,12 +457,15 @@ function Search({ onAction }: { onAction: Run }) {
   );
 }
 
-function Row({ person, href, sub, children }: { person: Person; href?: string; sub?: string; children?: ReactNode }) {
+function Row({ person, href, sub, badge, children }: { person: Person; href?: string; sub?: string; badge?: string; children?: ReactNode }) {
   const who = (
     <span className="flex min-w-[11rem] flex-1 items-center gap-3">
       <Avatar src={person.avatar} name={person.name} size={44} />
       <span className="min-w-0">
-        <span className="block truncate font-semibold">{person.name ?? person.username}</span>
+        <span className="flex items-center gap-1.5">
+          <span className="truncate font-semibold">{person.name ?? person.username}</span>
+          {badge && <span className="shrink-0 rounded-full bg-surface px-1.5 text-[11px] font-semibold text-muted">{badge}</span>}
+        </span>
         <span className="block truncate text-sm text-muted">
           {person.username && `@${person.username}`}
           {sub && ` · ${sub}`}

@@ -7,12 +7,11 @@ import { pinDay, setShare, setUsername, type Share } from "@/app/mbm/social/acti
 const ITEMS: { key: keyof Share; label: string; note: string }[] = [
   { key: "now", label: "What you're doing now", note: "Your current job and how long it's been going." },
   { key: "bar", label: "Your day bar", note: "Today's jobs, start to finish." },
-  { key: "stats", label: "Where your time went", note: "Today's time per job." },
-  { key: "days", label: "Days you pin", note: "Past days you choose, below (with your bar and stats)." },
+  { key: "days", label: "Days you pin", note: "Past days you choose, below (with their bar)." },
 ];
 
 // Your account → What others see: your username, who sees each thing (name and picture always
-// show), the map (trusted friends only), and days you pin. Private jobs show as "Busy" (Jobs).
+// show), the map (close friends only), and days you pin. Private jobs show as "Busy" (Jobs).
 export default function ShareSettings({ username, share, pinned, today }: { username: string | null; share: Partial<Share>; pinned: string[]; today: string }) {
   const router = useRouter();
   const [pending, start] = useTransition();
@@ -67,7 +66,8 @@ export default function ShareSettings({ username, share, pinned, today }: { user
             </span>
             <select value={value[it.key]} disabled={pending} onChange={(e) => change(it.key, e.target.value)} className={pick} style={{ outline: "none" }}>
               <option value="nobody">Nobody</option>
-              <option value="friends">Friends</option>
+              <option value="mutuals">Mutuals</option>
+              <option value="followers">Followers</option>
               <option value="anyone">Anyone</option>
             </select>
           </li>
@@ -75,11 +75,11 @@ export default function ShareSettings({ username, share, pinned, today }: { user
         <li className="flex items-center justify-between gap-3 text-sm">
           <span>
             <span className="block font-semibold">Your map</span>
-            <span className="text-muted">Where you went. Mark friends trusted on Social.</span>
+            <span className="text-muted">Where you went. Pick close friends from your followers on Social.</span>
           </span>
           <select value={value.map} disabled={pending} onChange={(e) => change("map", e.target.value)} className={pick} style={{ outline: "none" }}>
             <option value="nobody">Nobody</option>
-            <option value="trusted">Trusted friends</option>
+            <option value="close">Close friends</option>
           </select>
         </li>
       </ul>

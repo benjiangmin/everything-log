@@ -612,7 +612,7 @@ function Prefs({
   );
 }
 
-// Private: others (friends, anyone you share with) see it as "Busy", in grey. Saved right away.
+// Private: others (followers, anyone you share with) see it as "Busy", in grey. Saved right away.
 function PrivateSwitch({ kind, id, on, inherited = false }: { kind: "job" | "category"; id: string; on: boolean; inherited?: boolean }) {
   const router = useRouter();
   const [value, setValue] = useState(on);
