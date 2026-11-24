@@ -376,6 +376,7 @@ function JobSettings({
         parent={cat}
         places={places}
         calendar={<OnCalendar job={{ ...job, name: name.trim() || job.name, calendar_names: calNames }} jobs={jobs} events={events} names={calNames} onChange={setCalNames} />}
+        synced={calNames.length > 0 || events.some((e) => eventJobId(e.title, jobs.map((j) => (j.id === job.id ? { ...job, name: name.trim() || job.name, calendar_names: calNames } : j))) === job.id)}
       />
       <PrivateSwitch kind="job" id={job.id} on={!!job.private} inherited={!!cat?.private} />
       {deleting ? (
@@ -709,6 +710,7 @@ function Prefs({
   places: known,
   group = false,
   calendar = null,
+  synced = true,
 }: {
   name: string;
   value: JobPrefs;
@@ -717,6 +719,7 @@ function Prefs({
   places: Place[];
   group?: boolean;
   calendar?: ReactNode; // (a job's synced calendar events, right under its places)
+  synced?: boolean; // (any calendar events are this job: else "When the calendar event ends" is greyed out)
 }) {
   // (A place found in the search that wasn't yours yet: shown by name until the page reloads.)
   const [added, setAdded] = useState<Place[]>([]);
@@ -773,8 +776,9 @@ function Prefs({
       </Field>
 
       {value.stop_at_event_end !== undefined && (
-        <Field title="When the calendar event ends">
+        <Field title="When the calendar event ends" help={synced ? undefined : "Sync a calendar event above first: this is about its end."}>
           <Choices
+            disabled={!synced}
             value={value.stop_at_event_end === null ? null : value.stop_at_event_end ? "stop" : "keep"}
             onChange={(v) => onChange({ stop_at_event_end: v === null ? null : v === "stop" })}
             options={[
