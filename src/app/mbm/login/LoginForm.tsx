@@ -73,6 +73,11 @@ export default function LoginForm({ next, google = null, home = true }: { next: 
           </Link>
         )}
       </p>
+      <p className="text-center text-xs text-muted">
+        <a href={home ? "/privacy" : `${MBM_ORIGIN}/privacy`} className="hover:text-ink hover:underline">
+          Privacy
+        </a>
+      </p>
     </form>
     </>
   );

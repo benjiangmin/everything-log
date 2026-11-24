@@ -41,10 +41,13 @@ export default function AccountView({ email, profile }: { email: string | null; 
           </Link>
         ))}
       </nav>
-      <form action={signOut} className="mt-8">
+      <form action={signOut} className="mt-8 flex items-center justify-between gap-3">
         <button type="submit" className="rounded-control px-4 py-2.5 text-sm font-semibold text-muted ring-1 ring-line hover:bg-surface hover:text-ink">
           Sign out
         </button>
+        <Link href="/privacy" className="text-sm text-muted hover:text-ink hover:underline">
+          Privacy
+        </Link>
       </form>
     </div>
   );
