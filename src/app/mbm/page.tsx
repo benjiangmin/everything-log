@@ -12,6 +12,7 @@ import GoogleCard from "@/mbm/components/GoogleCard";
 import PhoneNote from "@/mbm/components/PhoneNote";
 import HomeSky from "@/mbm/components/HomeSky";
 import { googleStatus } from "@/mbm/google";
+import { isEverythingLogOwner } from "@/mbm/owner";
 
 export const metadata = { title: "Minute by Minute" };
 
@@ -42,6 +43,12 @@ async function Home({ day: asked, google }: { day?: string; google?: string }) {
 
   return (
     <>
+      {/* Back to your everything-log: only you see it (src/mbm/owner.ts). */}
+      {(await isEverythingLogOwner()) && (
+        <Link href="/" className="-mt-6 mb-3 inline-block text-sm text-muted transition-colors hover:text-ink sm:-mt-8">
+          <span aria-hidden="true">←</span> everything-log
+        </Link>
+      )}
       {/* The light outside, where you are (your latest stop; Madison until there is one). */}
       <HomeSky
         name={await firstName()}

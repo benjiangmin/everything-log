@@ -17,7 +17,7 @@ const TABS = [
   { href: "/mbm/plan", label: "Plan" },
   { href: "/mbm/stats", label: "Stats" },
 ];
-// (Future sits on its own at the right, next to the search.)
+// (Future sits on its own at the right, between the search and your profile.)
 const FUTURE = { href: "/mbm/future", label: "Future" };
 
 export default function MbmTopBar({
@@ -68,6 +68,9 @@ export default function MbmTopBar({
         )}
         {signedIn && (
           <div className="ml-auto flex min-w-0 flex-1 items-center justify-end gap-3">
+            <div className="hidden min-w-0 flex-1 justify-end md:flex md:max-w-md">
+              <TopSearch />
+            </div>
             <Link
               href={FUTURE.href}
               aria-current={active(FUTURE.href) ? "page" : undefined}
@@ -77,13 +80,11 @@ export default function MbmTopBar({
             >
               {FUTURE.label}
             </Link>
-            <div className="hidden min-w-0 flex-1 justify-end md:flex md:max-w-md">
-              <TopSearch />
-            </div>
           </div>
         )}
         <div className={`flex items-center gap-1 ${signedIn ? "md:ml-2" : ""} ml-auto`}>
-          {owner && (
+          {/* (The link back to your everything-log is on Home now, above the greeting.) */}
+          {owner && !signedIn && (
             <Link href="/" title="Back to your everything-log" className="whitespace-nowrap rounded-control px-3 py-2 text-sm text-muted transition-colors hover:bg-surface hover:text-ink">
               <span aria-hidden="true">←</span>
               <span className="hidden sm:inline"> everything-log</span>
