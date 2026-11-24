@@ -49,7 +49,55 @@ export async function buildingAt(lat: number, lng: number, log?: string[], withi
       log?.push(`${server}: ${e instanceof Error ? e.message : "failed"}`); // next server
     }
   }
-  return undefined;
+  // None answered: OpenStreetMap's own database (slower to search, but steadier).
+  const shapes = await fromOsmApi(lat, lng, within, log);
+  if (!shapes) return undefined;
+  if (!shapes.length) return null;
+  const inside = shapes.filter((s) => contains(s, lat, lng));
+  if (inside.length) return inside.sort((a, b) => area(a) - area(b))[0];
+  if (insideOnly) return null;
+  const near = shapes.filter((s) => edgeDistance(s, lat, lng) <= within);
+  return near.length ? near.sort((a, b) => edgeDistance(a, lat, lng) - edgeDistance(b, lat, lng))[0] : null;
+}
+
+// The buildings around a spot from OpenStreetMap's main database (its map call: everything in a
+// small box), for when the search servers (Overpass) are all busy. undefined: it didn't answer.
+async function fromOsmApi(lat: number, lng: number, within: number, log?: string[]): Promise<Outline[] | undefined> {
+  const dLat = (within + 30) / 110540;
+  const dLng = (within + 30) / (111320 * Math.cos((lat * Math.PI) / 180));
+  const box = [lng - dLng, lat - dLat, lng + dLng, lat + dLat].map((x) => x.toFixed(6)).join(",");
+  try {
+    const res = await fetch(`https://api.openstreetmap.org/api/0.6/map.json?bbox=${box}`, { signal: AbortSignal.timeout(15000), cache: "no-store" });
+    if (!res.ok) {
+      log?.push(`api.openstreetmap.org: HTTP ${res.status}`);
+      return undefined;
+    }
+    type N = { type: "node"; id: number; lat: number; lon: number };
+    type W = { type: "way"; id: number; nodes: number[]; tags?: Record<string, string> };
+    type R = { type: "relation"; id: number; members: { type: string; ref: number; role?: string }[]; tags?: Record<string, string> };
+    const body = (await res.json()) as { elements?: (N | W | R)[] };
+    const els = body.elements ?? [];
+    const nodes = new Map<number, [number, number]>();
+    const ways = new Map<number, W>();
+    for (const e of els) {
+      if (e.type === "node") nodes.set(e.id, [e.lat, e.lon]);
+      else if (e.type === "way") ways.set(e.id, e);
+    }
+    const geo = (w: W) => w.nodes.map((id) => nodes.get(id)).filter((p): p is [number, number] => !!p).map(([la, lo]) => ({ lat: la, lon: lo }));
+    const shaped: Element[] = [];
+    for (const w of ways.values()) if (w.tags?.building && w.nodes.length >= 4) shaped.push({ type: "way", geometry: geo(w) });
+    for (const e of els) {
+      if (e.type !== "relation" || !e.tags?.building) continue;
+      const members = e.members.filter((m) => m.type === "way" && ways.has(m.ref)).map((m) => ({ role: m.role || "outer", geometry: geo(ways.get(m.ref)!) }));
+      if (members.length) shaped.push({ type: "relation", members });
+    }
+    const shapes = shaped.flatMap(shapesOf).filter((s) => s.length >= 4);
+    log?.push(`api.openstreetmap.org: ${shapes.length} building(s)`);
+    return shapes;
+  } catch (e) {
+    log?.push(`api.openstreetmap.org: ${e instanceof Error ? (e.name === "TimeoutError" ? "no answer in 15s" : e.message) : "failed"}`);
+    return undefined;
+  }
 }
 
 type Geo = { lat: number; lon: number }[];
@@ -196,6 +244,10 @@ export async function nothingBetween(a: [number, number], b: [number, number]): 
 // Every building around a spot (within metres), for picking the right one by hand. undefined:
 // no server answered (log says what each did).
 export async function buildingsNear(lat: number, lng: number, within = 120, log?: string[]): Promise<Outline[] | undefined> {
+  // (You're waiting on this one: OpenStreetMap's own database first, it answers in a second or
+  // two; the search servers if it doesn't.)
+  const direct = await fromOsmApi(lat, lng, within, log);
+  if (direct) return direct;
   const at = `around:${within},${lat.toFixed(6)},${lng.toFixed(6)}`;
   const q = `[out:json][timeout:12];(way(${at})[building];relation(${at})[building];);out geom;`;
   for (const server of SERVERS) {
