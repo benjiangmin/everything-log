@@ -226,6 +226,16 @@ function DayMapAll({
       const there = (p: RoutePoint) => nearOutline(prev.outline, p.lat, p.lng, 0) || metres(prev.gps ?? prev, p) <= 2 * (p.accuracy_m ?? 20);
       if (since.length && since.every((p) => p.motion === "still" && there(p))) return { at: { lat: prev.lat, lng: prev.lng }, when: null };
     }
+    // Or you've just got back somewhere you were earlier today (Home!), before the phone has sent
+    // the stop: your two newest dots both standing still there (in its building, or as close to
+    // where the phone had it as they could be off by). No set distance, as above.
+    if (!open && points.length >= 2) {
+      const two = points.slice(-2);
+      const back = [...visits].reverse().find((v) =>
+        two.every((p) => p.motion === "still" && (nearOutline(v.outline, p.lat, p.lng, 0) || metres(v.gps ?? v, p) <= 2 * (p.accuracy_m ?? 20))),
+      );
+      if (back) return { at: { lat: back.lat, lng: back.lng }, when: null };
+    }
     return last ? { at: { lat: last.lat, lng: last.lng }, when: last.at } : null;
   }, [liveColor, points, visits]);
   const nothingLit = !pointed && lit !== null && lit.stops.size === 0 && lit.trip.size === 0;
