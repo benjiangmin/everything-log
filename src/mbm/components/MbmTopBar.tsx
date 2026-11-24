@@ -17,6 +17,7 @@ const TABS = [
   { href: "/day", label: "Day" },
   { href: "/plan", label: "Plan" },
   { href: "/stats", label: "Stats" },
+  { href: "/social", label: "Social" },
 ];
 // (Future sits on its own at the right, between the search and your profile.)
 const FUTURE = { href: "/future", label: "Future" };

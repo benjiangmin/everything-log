@@ -15,10 +15,12 @@ export default function AccountView({
   email,
   profile,
   connections,
+  social,
 }: {
   email: string | null;
   profile: (Profile & { avatar?: string | null }) | null;
   connections?: ReactNode;
+  social?: ReactNode; // What others see (070)
 }) {
   const router = useRouter();
   return (
@@ -27,6 +29,11 @@ export default function AccountView({
       <Section id="about" title="About you" note="Used on the Future page, to pick the right life table. All optional.">
         <AboutYouForm profile={profile} />
       </Section>
+      {social && (
+        <Section id="social" title="What others see" note="Your name and picture always show. Everything else is up to you, and starts as Nobody. Private jobs show as Busy (Jobs).">
+          {social}
+        </Section>
+      )}
       {connections && (
         <Section title="Connected">
           <div className="-m-1 [&>*]:mt-0">{connections}</div>

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition, type ReactNode } from "react";
 import { deleteCategory, deleteJob, jobEntryCount, placeIdFor, saveCategory, saveJob, type JobPrefs } from "@/app/mbm/actions";
 import PageMark from "./PageMark";
+import { setPrivate } from "@/app/mbm/social/actions";
 import Menu from "./IconMenu";
 import { reveal } from "./reveal";
 import PlaceSearch from "./PlaceSearch";
@@ -14,8 +15,8 @@ import { PALETTE } from "@/mbm/colors";
 // by itself when you arrive at Russell Labs…"), with an "In short" line that updates as you change
 // them. A category (School) gives its jobs its color, and settings they follow unless changed.
 
-export type Job = JobPrefs & { id: string; name: string; color: string; own_color?: string | null; category_id?: string | null; last_used_at?: string | null };
-export type Category = JobPrefs & { id: string; name: string; color: string };
+export type Job = JobPrefs & { id: string; name: string; color: string; own_color?: string | null; category_id?: string | null; last_used_at?: string | null; private?: boolean };
+export type Category = JobPrefs & { id: string; name: string; color: string; private?: boolean };
 type Place = { id: string; name: string };
 type Mode = "always" | "calendar" | "never";
 
@@ -348,6 +349,7 @@ function JobSettings({
         <JobColor color={color} onChange={setColor} category={cat} />
       </Field>
       <Prefs name={job.name} value={p} onChange={(v) => setP({ ...p, ...v })} parent={cat} places={places} />
+      <PrivateSwitch kind="job" id={job.id} on={!!job.private} inherited={!!cat?.private} />
       {deleting ? (
         <DeleteJob job={job} jobs={jobs} onCancel={() => setDeleting(false)} onDone={onDone} />
       ) : (
@@ -497,6 +499,7 @@ function CategoryCard({ category, jobs, places, open, onToggle, onDone }: { cate
           </Field>
           <p className="mt-6 text-sm text-muted">Settings for its jobs (a job can still choose differently):</p>
           <Prefs name={`${label}'s jobs`} value={p} onChange={(v) => setP({ ...p, ...v })} places={places} group />
+          {category && <PrivateSwitch kind="category" id={category.id} on={!!category.private} />}
           <Buttons pending={pending} onSave={save} onCancel={onDone} onDelete={category ? remove : undefined} deleteLabel="Delete category (its jobs stay)" message={message} />
         </div>
       )}
@@ -606,6 +609,45 @@ function Prefs({
         />
       </Field>
     </>
+  );
+}
+
+// Private: others (friends, anyone you share with) see it as "Busy", in grey. Saved right away.
+function PrivateSwitch({ kind, id, on, inherited = false }: { kind: "job" | "category"; id: string; on: boolean; inherited?: boolean }) {
+  const router = useRouter();
+  const [value, setValue] = useState(on);
+  const [message, setMessage] = useState<string | null>(null);
+  const [pending, start] = useTransition();
+  return (
+    <Field title="Private" help={inherited && !value ? "Its category is private, so it already shows as Busy." : undefined}>
+      <label className="flex cursor-pointer items-start gap-3 rounded-control px-3 py-2.5 ring-1 ring-line hover:bg-paper/70">
+        <input
+          type="checkbox"
+          checked={value}
+          disabled={pending}
+          onChange={(e) => {
+            const next = e.target.checked;
+            setValue(next);
+            start(async () => {
+              const res = await setPrivate(kind, id, next);
+              if (!res.ok) {
+                setValue(!next);
+                setMessage(res.message);
+              } else {
+                setMessage(null);
+                router.refresh();
+              }
+            });
+          }}
+          className="mt-1 size-4 accent-[var(--accent)]"
+        />
+        <span>
+          <span className="block font-semibold">{kind === "job" ? "Keep this job private" : "Keep these jobs private"}</span>
+          <span className="block text-sm text-muted">Others see it as &ldquo;Busy&rdquo; on anything you share. You still see it as it is.</span>
+        </span>
+      </label>
+      {message && <p className="mt-1.5 text-sm text-danger">{message}</p>}
+    </Field>
   );
 }
 

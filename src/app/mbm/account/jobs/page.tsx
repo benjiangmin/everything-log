@@ -44,7 +44,11 @@ async function Jobs() {
     const plain = await client.from("activities").select("id, name, color, last_used_at").order("last_used_at", { ascending: false });
     return <JobsView needsSql jobs={(plain.data ?? []).map((j) => ({ ...j, stop_on_commute: null, places: null, start_mode: null, weekly_goal_min: null, hide_from_stats: null })) as Job[]} categories={[]} places={(places.data ?? []) as { id: string; name: string }[]} />;
   }
-  return <JobsView now={await loadedAt()} jobs={(jobs.data ?? []) as Job[]} categories={(cats.data ?? []) as Category[]} places={(places.data ?? []) as { id: string; name: string }[]} />;
+  // (Private jobs and categories, 070: none until it's run.)
+  const [pj, pc] = await Promise.all([client.from("activities").select("id, private"), client.from("categories").select("id, private")]);
+  const priv = new Set([...((pj.data ?? []) as { id: string; private: boolean }[]), ...((pc.data ?? []) as { id: string; private: boolean }[])].filter((x) => x.private).map((x) => x.id));
+  const mark = <T extends { id: string }>(xs: T[]) => xs.map((x) => ({ ...x, private: priv.has(x.id) }));
+  return <JobsView now={await loadedAt()} jobs={mark((jobs.data ?? []) as Job[])} categories={mark((cats.data ?? []) as Category[])} places={(places.data ?? []) as { id: string; name: string }[]} />;
 }
 
 // (Outside the component: it reads the clock.)

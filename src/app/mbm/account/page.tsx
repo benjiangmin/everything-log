@@ -7,6 +7,10 @@ import type { Profile } from "@/mbm/life";
 import AccountView from "@/mbm/components/AccountView";
 import GoogleCard from "@/mbm/components/GoogleCard";
 import { googleStatus } from "@/mbm/google";
+import ShareSettings from "@/mbm/components/ShareSettings";
+import { loadSocial } from "../social/actions";
+import { mbmTz } from "@/mbm/data";
+import { dayKeyOf } from "@/mbm/time";
 
 export const metadata = { title: "Your account" };
 
@@ -32,5 +36,13 @@ async function Account() {
   if (res.error) res = await client.from("profiles").select("name, birthday, sex, race, state, skipped").maybeSingle();
   const profile = (res.data as (Profile & { avatar?: string | null }) | null) ?? null;
   const google = await googleStatus(client).catch(() => null);
-  return <AccountView email={user.email} profile={profile} connections={<GoogleCard status={google} />} />;
+  const social = await loadSocial();
+  const share = social.ok && social.social.me ? (
+    <ShareSettings username={social.social.me.username} share={social.social.me.share ?? {}} pinned={social.social.pinned} today={dayKeyOf(new Date(), mbmTz())} />
+  ) : social.ok ? (
+    <ShareSettings username={null} share={{}} pinned={[]} today={dayKeyOf(new Date(), mbmTz())} />
+  ) : (
+    <p className="text-sm text-muted">{social.message}</p>
+  );
+  return <AccountView email={user.email} profile={profile} connections={<GoogleCard status={google} />} social={share} />;
 }
