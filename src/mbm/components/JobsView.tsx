@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useTransition, type ReactNode } from "react";
 import Floating from "./Floating";
+import { useConfirm } from "@/components/ui/ConfirmDialog";
 import { deleteCategory, deleteJob, jobEntryCount, placeIdFor, saveCategory, saveJob, type JobPrefs } from "@/app/mbm/actions";
 import PageMark from "./PageMark";
 import { setPrivate } from "@/app/mbm/social/actions";
@@ -395,7 +396,7 @@ function OnCalendar({ job, jobs, events, names, onChange }: { job: Job; jobs: Jo
   const owner = (title: string) => jobs.find((j) => j.id === eventJobId(title, jobs))?.name;
   return (
     <Field title="Sync calendar event" help="Syncs a calendar event to this job, used for starting jobs automatically.">
-      <ListBox add={<AddEvent options={others} owner={owner} onAdd={(t) => onChange([...names, t])} empty={events.length === 0} />}>
+      <ListBox add={<AddEvent job={job.name} options={others} owner={owner} onAdd={(t) => onChange([...names, t])} empty={events.length === 0} />}>
         {names.map((n) => (
           <ListRow key={n} icon="calendar" name={n} onRemove={() => onChange(names.filter((x) => x !== n))} />
         ))}
@@ -464,7 +465,8 @@ function AddRow({ label, onClick }: { label: string; onClick: () => void }) {
 }
 
 // Search your calendar's names (or type one that isn't on it yet) to sync.
-function AddEvent({ options, owner, onAdd, empty }: { options: CalEvent[]; owner: (t: string) => string | undefined; onAdd: (t: string) => void; empty: boolean }) {
+function AddEvent({ job, options, owner, onAdd, empty }: { job: string; options: CalEvent[]; owner: (t: string) => string | undefined; onAdd: (t: string) => void; empty: boolean }) {
+  const confirm = useConfirm();
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
   const [lit, setLit] = useState(0);
@@ -475,7 +477,16 @@ function AddEvent({ options, owner, onAdd, empty }: { options: CalEvent[]; owner
   const hits = (t ? options.filter((o) => o.title.toLowerCase().includes(t)) : options).slice(0, 40);
   const typed = q.trim() && !options.some((o) => o.title.toLowerCase() === t) ? [{ title: q.trim(), n: 0 }] : [];
   const rows = [...hits, ...typed];
-  const pick = (title: string) => {
+  // (Already another job's: it moves here, once you say so.)
+  const pick = async (title: string) => {
+    const other = owner(title);
+    if (other) {
+      setOpen(false);
+      setQ("");
+      const yes = await confirm({ title: `Move “${title}” to ${job}?`, body: `It's synced to ${other} now. It'll start ${job} instead.`, confirmLabel: "Move it" });
+      if (yes) onAdd(title);
+      return;
+    }
     onAdd(title);
     setOpen(false);
     setQ("");
@@ -519,7 +530,7 @@ function AddEvent({ options, owner, onAdd, empty }: { options: CalEvent[]; owner
         <Floating anchor={field} popRef={pop}>
           <ul role="listbox" aria-label="Calendar events" onMouseDown={(e) => e.preventDefault()} className="max-h-72 w-96 max-w-[90vw] overflow-y-auto rounded-card bg-paper p-1.5 shadow-xl shadow-ink/15 ring-1 ring-line">
             {rows.map((o, i) => {
-              const now = o.n ? owner(o.title) : undefined;
+              const synced = o.n ? owner(o.title) : undefined;
               return (
                 <li
                   key={o.title + i}
@@ -530,7 +541,7 @@ function AddEvent({ options, owner, onAdd, empty }: { options: CalEvent[]; owner
                   className={`flex cursor-pointer items-center justify-between gap-3 rounded-control px-3 py-2 text-sm ${i === lit ? "bg-surface" : ""}`}
                 >
                   <span className="min-w-0 truncate">{o.n ? o.title : `Use “${o.title}”`}</span>
-                  <span className="shrink-0 text-xs text-muted">{o.n ? (now ? `now ${now}` : `${o.n}×`) : "not on your calendar yet"}</span>
+                  {(synced || !o.n) && <span className="shrink-0 text-xs text-muted">{synced ?? "not on your calendar yet"}</span>}
                 </li>
               );
             })}

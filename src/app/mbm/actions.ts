@@ -1089,11 +1089,21 @@ export async function saveJob(id: string, input: JobPrefs & { category_id: strin
   const category_id = input.category_id && isUuid(input.category_id) ? input.category_id : null;
   // (Its color: in a category it's the category's; this is kept as its own for if it leaves.)
   const color = typeof input.color === "string" && /^#[0-9a-f]{6}$/i.test(input.color) ? { color: input.color.toLowerCase() } : {};
-  const { error } = await (await mbm()).from("activities").update({ ...cleanPrefs(input), category_id, ...color, ...(name ? { name } : {}), ...names }).eq("id", id);
+  const client = await mbm();
+  const { error } = await client.from("activities").update({ ...cleanPrefs(input), category_id, ...color, ...(name ? { name } : {}), ...names }).eq("id", id);
   if (error) {
     if (error.code === "23505") return fail(`You already have a job called ${name}. Delete one of them and move its entries to the other instead.`);
     if (/calendar_names/.test(error.message)) return fail("Run supabase/minute-by-minute/073_calendar_names.sql in Supabase first.");
     return fail(missing043(error.message) ? NEEDS_043 : error.message);
+  }
+  // A calendar event synced here leaves any other job it was synced to (one job each).
+  if (names.calendar_names?.length) {
+    const mine = new Set(names.calendar_names.map((n) => n.toLowerCase()));
+    const { data } = await client.from("activities").select("id, calendar_names").neq("id", id);
+    for (const j of (data ?? []) as { id: string; calendar_names: string[] | null }[]) {
+      const kept = (j.calendar_names ?? []).filter((n) => !mine.has(n.trim().toLowerCase()));
+      if (kept.length !== (j.calendar_names ?? []).length) await client.from("activities").update({ calendar_names: kept }).eq("id", j.id);
+    }
   }
   refresh();
   return { ok: true };
