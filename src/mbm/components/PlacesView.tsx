@@ -56,7 +56,9 @@ export default function PlacesView({
   now,
   needsSql,
   keptApart = [],
+  openId = null,
 }: {
+  openId?: string | null; // (opened to start with: from a stop's ⚙ on the Day map)
   places: PlaceRow[];
   stops: StopRow[];
   tz: string;
@@ -72,7 +74,7 @@ export default function PlacesView({
   const [apart, setApart] = useState<string[]>(keptApart);
   const [, startApart] = useTransition();
   const [q, setQ] = useState("");
-  const [open, setOpen] = useState<string | null>(null);
+  const [open, setOpen] = useState<string | null>(openId && places.some((p) => p.id === openId) ? openId : null);
   // What you open scrolls to the middle of the screen.
   useEffect(() => {
     if (open) reveal(`row-${open}`);

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { readDark, readDarkServer, subscribeDark } from "@/components/ui/theme";
 import { createContext, Fragment, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, useTransition, type ReactNode } from "react";
 import { APIProvider, InfoWindow, Map, useMap, useMapsLibrary } from "@vis.gl/react-google-maps";
@@ -1698,7 +1699,23 @@ function NameStop({ visit, onDone, onMove }: { visit: Visit; onDone: () => void;
       }}
       className="flex w-72 flex-col gap-2 p-1 pr-4 font-sans"
     >
-      <p className={label}>{legacy ? (!visit.place && visit.auto_name ? "Name found by your phone" : "Name") : "Your name for it"}</p>
+      <div className="flex items-center justify-between gap-2">
+        <p className={label}>{legacy ? (!visit.place && visit.auto_name ? "Name found by your phone" : "Name") : "Your name for it"}</p>
+        {/* (One of your places: all its settings, its building too, on Places.) */}
+        {visit.placeId && (
+          <Link
+            href={`/account/places?open=${visit.placeId}`}
+            aria-label={`${visit.place ?? "This place"}'s settings`}
+            title="Place settings"
+            className="-my-1 grid size-7 place-items-center rounded-full text-[#86705f] hover:bg-[#f0e7db] hover:text-[#2b1c14]"
+          >
+            <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <circle cx="12" cy="12" r="3" />
+              <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z" />
+            </svg>
+          </Link>
+        )}
+      </div>
       <input
         value={own}
         onChange={(e) => setOwn(e.target.value)}

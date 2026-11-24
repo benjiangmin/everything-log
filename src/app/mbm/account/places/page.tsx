@@ -9,23 +9,26 @@ import PlacesView, { type PlaceRow, type StopRow } from "@/mbm/components/Places
 export const metadata = { title: "Places" };
 
 // All your places, and the stops you haven't named, in one spot.
-export default function PlacesPage() {
+export default function PlacesPage({ searchParams }: PageProps<"/mbm/account/places">) {
   return (
     <main className="mx-auto w-full max-w-4xl px-4 pb-24 pt-10 sm:pt-14">
       <Suspense fallback={<Loading tall />}>
-        <Places />
+        <Places searchParams={searchParams} />
       </Suspense>
     </main>
   );
 }
 
-async function Places() {
+async function Places({ searchParams }: { searchParams: PageProps<"/mbm/account/places">["searchParams"] }) {
   await connection();
+  // (?open=<place>: that place opened, from a stop's ⚙ on the Day map.)
+  const asked = (await searchParams).open;
+  const openId = typeof asked === "string" && /^[0-9a-f-]{36}$/i.test(asked) ? asked : null;
   if (!mbmReady()) return <p className="rounded-card bg-surface px-5 py-4 text-sm">Minute by Minute isn&apos;t connected yet.</p>;
   const user = await mbmUser();
   if (!user) redirect("/login?next=/account/places");
   const { places, stops, needsSql, now, keptApart } = await load();
-  return <PlacesView places={places} stops={stops} tz={mbmTz()} now={now} needsSql={needsSql} keptApart={keptApart} />;
+  return <PlacesView places={places} stops={stops} tz={mbmTz()} now={now} needsSql={needsSql} keptApart={keptApart} openId={openId} />;
 }
 
 // (Outside the component: it reads the clock.)
