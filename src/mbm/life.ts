@@ -39,7 +39,7 @@ export const EDUCATION: { id: Education; label: string; years: number }[] = [
   { id: "less_hs", label: "Didn't finish high school", years: -7.2 },
   { id: "hs", label: "High school or GED", years: -3.4 },
   { id: "some_college", label: "Some college or an associate degree", years: 1.4 },
-  { id: "bachelors", label: "Bachelor's or more (or working on one)", years: 3.5 },
+  { id: "bachelors", label: "Bachelor's", years: 3.5 },
 ];
 export const SMOKING: { id: Smoking; label: string; years: number }[] = [
   { id: "never", label: "Never smoked", years: 1.0 },
@@ -48,11 +48,11 @@ export const SMOKING: { id: Smoking; label: string; years: number }[] = [
 ];
 export const EXERCISE: { id: Exercise; label: string; years: number }[] = [
   { id: "none", label: "Hardly any", years: -2.6 },
-  { id: "lt75", label: "Under 75 minutes a week", years: -0.8 },
-  { id: "75_149", label: "75 to 150 minutes a week", years: -0.1 },
-  { id: "150_299", label: "150 to 300 minutes a week", years: 0.8 },
-  { id: "300_449", label: "300 to 450 minutes a week", years: 1.6 },
-  { id: "450", label: "More than 450 minutes a week", years: 1.9 },
+  { id: "lt75", label: "Under 75 min/week", years: -0.8 },
+  { id: "75_149", label: "75–150 min/week", years: -0.1 },
+  { id: "150_299", label: "150–300 min/week", years: 0.8 },
+  { id: "300_449", label: "300–450 min/week", years: 1.6 },
+  { id: "450", label: "450+ min/week", years: 1.9 },
 ];
 
 // The adjustments that apply, with what each is.
