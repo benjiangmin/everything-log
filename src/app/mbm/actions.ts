@@ -26,7 +26,7 @@ function refresh() {
 
 // ---------- Signing in ----------
 
-export type SignInState = { message: string | null; sent?: boolean };
+export type SignInState = { message: string | null; sent?: boolean; email?: string; next?: string };
 
 export async function signIn(_prev: SignInState, formData: FormData): Promise<SignInState> {
   if (!mbmReady()) return { message: "Minute by Minute isn't connected yet (MBM_SUPABASE_URL / MBM_SUPABASE_PUBLISHABLE_KEY)." };
@@ -53,8 +53,26 @@ export async function signUp(_prev: SignInState, formData: FormData): Promise<Si
   const next = asked.startsWith("/") && !asked.startsWith("//") ? asked : "/";
   const { data, error } = await (await mbm()).auth.signUp({ email, password, options: { emailRedirectTo: origin ? `${origin}/login?next=${encodeURIComponent(next)}` : undefined } });
   if (error) return { message: /registered/i.test(error.message) ? "There's already an account with that email. Sign in instead." : error.message };
-  if (!data.session) return { message: null, sent: true };
+  if (!data.session) return { message: null, sent: true, email, next };
   redirect(next);
+}
+
+// The code from the confirmation email (the link in it works too): right, and you're signed in
+// and on your way (into the setup).
+export async function confirmCode(prev: SignInState, formData: FormData): Promise<SignInState> {
+  const email = prev.email ?? String(formData.get("email") ?? "").trim().slice(0, 200);
+  const code = String(formData.get("code") ?? "").replace(/\D/g, "").slice(0, 10);
+  if (code.length < 6) return { ...prev, message: "Type the code from the email." };
+  const { error } = await (await mbm()).auth.verifyOtp({ email, token: code, type: "email" });
+  if (error) return { ...prev, message: /expired|invalid/i.test(error.message) ? "That code didn't work. Check it, or send a new one." : error.message };
+  const next = prev.next ?? "/";
+  redirect(next.startsWith("/") && !next.startsWith("//") ? next : "/");
+}
+
+// Another confirmation email (a new code), if the first didn't come or the code ran out.
+export async function resendCode(email: string): Promise<{ ok: boolean; message: string }> {
+  const { error } = await (await mbm()).auth.resend({ type: "signup", email: String(email).slice(0, 200) });
+  return error ? { ok: false, message: /rate|seconds/i.test(error.message) ? "Wait a minute, then try again." : error.message } : { ok: true, message: "Sent. Check your email." };
 }
 
 export async function signOut() {

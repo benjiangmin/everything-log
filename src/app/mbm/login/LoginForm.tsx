@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useActionState, useState } from "react";
 import { signIn, signUp, type SignInState } from "../actions";
 import { MBM_ORIGIN } from "@/mbm/paths";
+import CodeEntry from "@/mbm/components/CodeEntry";
 
 const field = "w-full rounded-control border border-line bg-paper px-3 py-2.5 text-ink placeholder:text-muted/70 focus:border-ink";
 
@@ -22,7 +23,8 @@ export default function LoginForm({ next, google = null, home = true }: { next: 
     return (
       <div className="mt-6 rounded-control bg-paper p-4 text-sm text-ink">
         <p className="font-semibold">Check your email.</p>
-        <p className="mt-1 text-muted">Tap the link we sent to confirm your account, then sign in here and in the phone app.</p>
+        <p className="mb-4 mt-1 text-muted">Type the code we sent to {upState.email ?? "you"} (or tap the button in the email).</p>
+        <CodeEntry sent={upState} />
         <button type="button" onClick={() => setMode("in")} className="mt-3 font-semibold text-accent hover:underline">
           Back to sign in
         </button>

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useActionState, useState } from "react";
 import { signUp, type SignInState } from "../actions";
+import CodeEntry from "@/mbm/components/CodeEntry";
 import { Badge, Clock, Dots, Points, Primary, Secondary, Slide, Stage } from "@/mbm/components/setup/Slides";
 
 const field = "w-full rounded-control border border-line bg-paper px-4 py-3 text-ink placeholder:text-muted/70 focus:border-ink";
@@ -35,11 +36,12 @@ export default function WelcomeFlow({ google = null }: { google?: string | null 
           title="Check your email"
           body={
             <>
-              We sent a link to <span className="font-semibold text-ink">{email || "your email"}</span>. Tap it to confirm your account, then sign in. You&apos;ll pick up right where you left off.
+              We sent a code to <span className="font-semibold text-ink">{state.email || email || "your email"}</span>. Type it here (or tap the button in the email) and you&apos;re in.
             </>
           }
-          actions={<Primary href="/login?next=/setup">I&apos;ve confirmed it: sign in</Primary>}
-        />
+        >
+          <CodeEntry sent={state} big />
+        </Slide>
       </Stage>
     );
 
