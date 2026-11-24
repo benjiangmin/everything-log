@@ -23,7 +23,21 @@ export async function withMbmSession(request: NextRequest): Promise<NextResponse
     },
   });
   try {
-    await client.auth.getClaims(); // renews the sign-in if it's due
+    const { data } = await client.auth.getClaims(); // renews the sign-in if it's due
+    // An account deleted somewhere else (the phone app): its sign-in still reads as good here until
+    // it's due to renew, up to an hour. Every couple of minutes, ask Supabase if it's still there;
+    // gone means signed out, to the sign-in page. (Supabase unreachable: carry on as before.)
+    if (data?.claims?.sub && Date.now() - Number(request.cookies.get("mbm_alive")?.value ?? 0) > 120_000) {
+      const { data: u, error } = await client.auth.getUser();
+      if (!u.user && error && /does not exist|user_not_found|not found/i.test(`${error.message} ${(error as { code?: string }).code ?? ""}`)) {
+        await client.auth.signOut({ scope: "local" });
+        const out = NextResponse.redirect(new URL("/mbm/login?gone=1", request.url));
+        for (const c of response.cookies.getAll()) out.cookies.set(c);
+        for (const c of request.cookies.getAll()) if (c.name.startsWith("sb-")) out.cookies.delete(c.name);
+        return out;
+      }
+      if (u.user) response.cookies.set("mbm_alive", String(Date.now()), { httpOnly: true, secure: true, sameSite: "lax", path: "/", maxAge: 3600 });
+    }
   } catch {
     // Supabase unreachable: the page shows its own message.
   }
