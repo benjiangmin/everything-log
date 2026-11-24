@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import Floating from "./Floating";
 
 // Date and time pickers in the app's own look (instead of the browser's calendar and clock).
 // Values are the same as the browser's: "2026-11-24" and "21:30".
@@ -17,9 +18,10 @@ const parse = (v: string) => {
 function usePopover(initial = false) {
   const [open, setOpen] = useState(initial);
   const box = useRef<HTMLDivElement>(null);
+  const pop = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!open) return;
-    const away = (e: MouseEvent) => !box.current?.contains(e.target as Node) && setOpen(false);
+    const away = (e: MouseEvent) => !box.current?.contains(e.target as Node) && !pop.current?.contains(e.target as Node) && setOpen(false);
     const esc = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
     document.addEventListener("mousedown", away);
     document.addEventListener("keydown", esc);
@@ -28,7 +30,35 @@ function usePopover(initial = false) {
       document.removeEventListener("keydown", esc);
     };
   }, [open]);
-  return { open, setOpen, box };
+  return { open, setOpen, box, pop };
+}
+
+// Typed dates: 05/12/2004, 5/12/04, 2004-05-12, May 12 2004. Digits get their slashes as you type.
+function typed(text: string): string | null {
+  const t = text.trim();
+  let m = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(t);
+  if (m) return valid(+m[1], +m[2], +m[3]);
+  m = /^(\d{1,2})[/.\-\s](\d{1,2})[/.\-\s](\d{2}|\d{4})$/.exec(t);
+  if (m) {
+    let y = +m[3];
+    if (m[3].length === 2) y += y > (new Date().getFullYear() % 100) ? 1900 : 2000;
+    return valid(y, +m[1], +m[2]);
+  }
+  m = /^([a-z]+)\.?\s+(\d{1,2})(?:st|nd|rd|th)?,?\s+(\d{4})$/i.exec(t);
+  if (m) {
+    const i = LONG.findIndex((x) => x.toLowerCase().startsWith(m![1].toLowerCase().slice(0, 3)));
+    if (i >= 0) return valid(+m[3], i + 1, +m[2]);
+  }
+  return null;
+}
+function valid(y: number, m: number, d: number) {
+  if (y < 1900 || m < 1 || m > 12 || d < 1 || d > new Date(y, m, 0).getDate()) return null;
+  return key(y, m - 1, d);
+}
+function slashes(text: string) {
+  if (/[a-z]/i.test(text) || text.includes("-")) return text;
+  const d = text.replace(/\D/g, "").slice(0, 8);
+  return d.length <= 2 ? d : d.length <= 4 ? `${d.slice(0, 2)}/${d.slice(2)}` : `${d.slice(0, 2)}/${d.slice(2, 4)}/${d.slice(4)}`;
 }
 
 const fieldLook = (open: boolean) =>
@@ -72,7 +102,10 @@ export function DatePicker({
 }) {
   const [own, setOwn] = useState(defaultValue ?? "");
   const current = value ?? own;
-  const { open, setOpen, box } = usePopover();
+  const { open, setOpen, box, pop } = usePopover();
+  const field = useRef<HTMLDivElement>(null);
+  const [draft, setDraft] = useState<string | null>(null); // while typing
+  const [bad, setBad] = useState(false);
   const at = parse(current) ?? parse(max ?? "") ?? { y: 2000, m: 0, d: 1 };
   const [year, setYear] = useState(at.y);
   const [month, setMonth] = useState(at.m);
@@ -86,14 +119,35 @@ export function DatePicker({
   const pick = (v: string) => {
     if (value === undefined) setOwn(v);
     onChange?.(v);
+    setDraft(null);
+    setBad(false);
     setOpen(false);
   };
-  const toggle = () => {
-    if (open) return setOpen(false);
+  const show = () => {
     setYear(at.y);
     setMonth(at.m);
     setView("days");
     setOpen(true);
+  };
+  const toggle = () => (open ? setOpen(false) : show());
+  // A typed date counts once it's whole (and in range); the calendar follows along.
+  const type = (text: string) => {
+    const t = slashes(text);
+    setDraft(t);
+    setBad(false);
+    const v = typed(t);
+    if (v && !out(+v.slice(0, 4), +v.slice(5, 7) - 1, +v.slice(8))) {
+      setYear(+v.slice(0, 4));
+      setMonth(+v.slice(5, 7) - 1);
+      setView("days");
+    }
+  };
+  const settle = () => {
+    if (draft === null) return;
+    if (draft.trim() === "") return pick("");
+    const v = typed(draft);
+    if (v && !out(+v.slice(0, 4), +v.slice(5, 7) - 1, +v.slice(8))) pick(v);
+    else setBad(true);
   };
   const step = (dir: 1 | -1) => {
     if (view === "years") return setYear(year + dir * 12);
@@ -112,27 +166,52 @@ export function DatePicker({
   return (
     <div ref={box} className={`relative ${className}`}>
       {name && <input type="hidden" name={name} value={current} />}
-      <button
-        type="button"
-        disabled={disabled}
-        aria-label={label}
-        aria-expanded={open}
-        aria-haspopup="dialog"
-        onClick={toggle}
+      <div
+        ref={field}
         className={
           big
-            ? `flex w-full items-center justify-between border-b bg-transparent py-3 text-left font-display text-3xl font-semibold transition-colors ${open ? "border-ink" : "border-line"} ${shown ? "text-ink" : "text-muted/60"}`
-            : `${fieldLook(open)} ${shown ? "text-ink" : "text-muted"}`
+            ? `flex w-full items-center gap-2 border-b transition-colors ${open ? "border-ink" : "border-line"}`
+            : `flex w-full items-center gap-1 rounded-control border bg-paper pr-1.5 transition-colors ${open ? "border-ink" : "border-line hover:border-ink/40"} ${disabled ? "opacity-50" : ""}`
         }
       >
-        <span className="truncate">{shown || placeholder}</span>
-        <Icon>
-          <rect x="3.5" y="5" width="17" height="15" rx="3" />
-          <path d="M3.5 10h17M8 3v4M16 3v4" />
-        </Icon>
-      </button>
+        <input
+          type="text"
+          inputMode="text"
+          disabled={disabled}
+          aria-label={label}
+          value={draft ?? shown}
+          placeholder={big ? placeholder : `${placeholder} (MM/DD/YYYY)`}
+          onFocus={() => {
+            setDraft(sel ? `${pad(sel.m + 1)}/${pad(sel.d)}/${sel.y}` : "");
+            if (!open) show();
+          }}
+          onChange={(e) => type(e.target.value)}
+          onBlur={settle}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              settle();
+            }
+            if (e.key === "Escape") setOpen(false);
+          }}
+          className={
+            big
+              ? "min-w-0 flex-1 bg-transparent py-3 font-display text-3xl font-semibold text-ink placeholder:text-muted/50"
+              : "num min-w-0 flex-1 bg-transparent px-3 py-2.5 text-sm text-ink placeholder:text-muted"
+          }
+          style={{ outline: "none" }}
+        />
+        <button type="button" disabled={disabled} onClick={toggle} aria-label="Open the calendar" aria-expanded={open} className="grid size-8 shrink-0 place-items-center rounded-full hover:bg-surface">
+          <Icon>
+            <rect x="3.5" y="5" width="17" height="15" rx="3" />
+            <path d="M3.5 10h17M8 3v4M16 3v4" />
+          </Icon>
+        </button>
+      </div>
+      {bad && <p className="mt-1.5 text-sm text-danger">That date doesn&apos;t look right. Try MM/DD/YYYY.</p>}
       {open && (
-        <div role="dialog" aria-label={label ?? "Pick a day"} className="absolute left-0 top-full z-40 mt-1.5 w-72 rounded-card bg-paper p-4 font-sans text-base font-normal shadow-xl shadow-ink/15 ring-1 ring-line">
+        <Floating anchor={field} popRef={pop} match={false}>
+        <div role="dialog" aria-label={label ?? "Pick a day"} onMouseDown={(e) => e.preventDefault()} className="w-72 rounded-card bg-paper p-4 font-sans text-base font-normal shadow-xl shadow-ink/15 ring-1 ring-line">
           <div className="mb-3 flex items-center justify-between">
             <Step dir={-1} disabled={!canPrev} onClick={() => step(-1)} />
             <button
@@ -197,6 +276,7 @@ export function DatePicker({
             </button>
           )}
         </div>
+        </Floating>
       )}
     </div>
   );
@@ -218,7 +298,8 @@ export function TimePicker({
   defaultOpen?: boolean;
   disabled?: boolean;
 }) {
-  const { open, setOpen, box } = usePopover(defaultOpen);
+  const { open, setOpen, box, pop } = usePopover(defaultOpen);
+  const btn = useRef<HTMLButtonElement>(null);
   const m = /^(\d{1,2}):(\d{2})/.exec(value);
   const h24 = m ? +m[1] : 9;
   const min = m ? +m[2] : 0;
@@ -229,7 +310,7 @@ export function TimePicker({
 
   return (
     <div ref={box} className={`relative ${className}`}>
-      <button type="button" disabled={disabled} aria-label={label} aria-expanded={open} onClick={() => setOpen(!open)} className={`${fieldLook(open)} num ${m ? "text-ink" : "text-muted"}`}>
+      <button ref={btn} type="button" disabled={disabled} aria-label={label} aria-expanded={open} onClick={() => setOpen(!open)} className={`${fieldLook(open)} num ${m ? "text-ink" : "text-muted"}`}>
         <span>{shown}</span>
         <Icon>
           <circle cx="12" cy="12" r="8.5" />
@@ -237,11 +318,13 @@ export function TimePicker({
         </Icon>
       </button>
       {open && (
-        <div role="dialog" aria-label={label ?? "Pick a time"} className="absolute left-0 top-full z-40 mt-1.5 flex gap-1 rounded-card bg-paper p-1.5 shadow-xl shadow-ink/15 ring-1 ring-line">
+        <Floating anchor={btn} popRef={pop} match={false}>
+        <div role="dialog" aria-label={label ?? "Pick a time"} className="flex gap-1 rounded-card bg-paper p-1.5 shadow-xl shadow-ink/15 ring-1 ring-line">
           <Column items={Array.from({ length: 12 }, (_, i) => i + 1)} on={h12} show={(h) => String(h)} pick={(h) => set(h, min, pm)} />
           <Column items={Array.from({ length: 60 }, (_, i) => i)} on={min} show={pad} pick={(mm) => set(h12, mm, pm)} />
           <Column items={[0, 1]} on={pm ? 1 : 0} show={(x) => (x ? "PM" : "AM")} pick={(x) => set(h12, min, x === 1)} />
         </div>
+        </Floating>
       )}
     </div>
   );

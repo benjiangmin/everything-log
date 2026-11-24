@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useId, useRef, useState } from "react";
+import Floating from "./Floating";
 
 export type Option = { value: string; label: string };
 
@@ -34,12 +35,14 @@ export default function Select({
   const [lit, setLit] = useState(0);
   const box = useRef<HTMLDivElement>(null);
   const list = useRef<HTMLUListElement>(null);
+  const btn = useRef<HTMLButtonElement>(null);
+  const pop = useRef<HTMLDivElement>(null);
   const id = useId();
   const chosen = options.find((o) => o.value === current);
 
   useEffect(() => {
     if (!open) return;
-    const away = (e: MouseEvent) => !box.current?.contains(e.target as Node) && setOpen(false);
+    const away = (e: MouseEvent) => !box.current?.contains(e.target as Node) && !pop.current?.contains(e.target as Node) && setOpen(false);
     document.addEventListener("mousedown", away);
     return () => document.removeEventListener("mousedown", away);
   }, [open]);
@@ -61,6 +64,7 @@ export default function Select({
     <div ref={box} className={`relative ${className || "w-full"}`}>
       {name && <input type="hidden" name={name} value={current} />}
       <button
+        ref={btn}
         type="button"
         disabled={disabled}
         aria-haspopup="listbox"
@@ -99,12 +103,13 @@ export default function Select({
         </svg>
       </button>
       {open && (
+        <Floating anchor={btn} popRef={pop}>
         <ul
           ref={list}
           id={id}
           role="listbox"
           aria-label={label}
-          className="absolute left-0 top-full z-40 mt-1.5 max-h-72 min-w-full overflow-y-auto rounded-card bg-paper p-1.5 shadow-xl shadow-ink/15 ring-1 ring-line"
+          className="max-h-72 overflow-y-auto rounded-card bg-paper p-1.5 shadow-xl shadow-ink/15 ring-1 ring-line"
         >
           {options.map((o, i) => {
             const on = o.value === current;
@@ -130,6 +135,7 @@ export default function Select({
             );
           })}
         </ul>
+        </Floating>
       )}
     </div>
   );
