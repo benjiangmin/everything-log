@@ -6,7 +6,7 @@ import { signUp, type SignInState } from "../actions";
 import { Badge, Clock, Dots, Points, Primary, Secondary, Slide, Stage } from "@/mbm/components/setup/Slides";
 
 const field = "w-full rounded-control border border-line bg-paper px-4 py-3 text-ink placeholder:text-muted/70 focus:border-ink";
-const SLIDES = 4; // welcome, the hook, what it does, your account (then "check your email")
+const SLIDES = 5; // welcome, "what did you do yesterday?", the number, what it does, your account
 
 // Before there's an account: welcome, why, what it does, then making the account (Google, or an
 // email and password). Then the setup (/mbm/setup) asks about you. The phone's setup is the same
@@ -66,6 +66,22 @@ export default function WelcomeFlow({ google = null }: { google?: string | null 
         {at === 1 && (
           <Slide
             dir={dir}
+            title="What did you do yesterday?"
+            body="Someone asks, and you come up blank. Or you've wondered how much of your week goes to getting places."
+            actions={<Primary onClick={() => go(2)}>Next</Primary>}
+          >
+            <ul className="grid gap-3">
+              {["Where did the afternoon go?", "How long is my commute, really?", "When did I last get to the gym?"].map((q, i) => (
+                <li key={q} className="setup-rise rounded-card bg-paper px-4 py-3 font-semibold ring-1 ring-line" style={{ animationDelay: `${120 + i * 110}ms` }}>
+                  {q}
+                </li>
+              ))}
+            </ul>
+          </Slide>
+        )}
+        {at === 2 && (
+          <Slide
+            dir={dir}
             top={<p className="setup-count font-display text-7xl font-semibold tracking-tight text-accent sm:text-8xl">5–10%</p>}
             title="We don't know where our time goes"
             body={
@@ -77,16 +93,16 @@ export default function WelcomeFlow({ google = null }: { google?: string | null 
             actions={
               <>
                 <p className="text-xs text-muted">Source: U.S. Bureau of Labor Statistics, Monthly Labor Review (2011).</p>
-                <Primary onClick={() => go(2)}>Next</Primary>
+                <Primary onClick={() => go(3)}>Next</Primary>
               </>
             }
           />
         )}
-        {at === 2 && (
+        {at === 3 && (
           <Slide
             dir={dir}
             title="What it does"
-            actions={<Primary onClick={() => go(3)}>Next</Primary>}
+            actions={<Primary onClick={() => go(4)}>Next</Primary>}
           >
             <Points
               items={[
@@ -98,7 +114,7 @@ export default function WelcomeFlow({ google = null }: { google?: string | null 
             />
           </Slide>
         )}
-        {at === 3 && (
+        {at === 4 && (
           <Slide
             dir={dir}
             title="Make your account"
@@ -124,7 +140,6 @@ export default function WelcomeFlow({ google = null }: { google?: string | null 
               </svg>
               Continue with Google
             </a>
-            <p className="mt-2 text-center text-xs text-muted">Quickest: fills in your name and brings in your Google Calendar.</p>
             {google && google !== "connected" && (
               <p role="alert" className="mt-2 text-sm text-danger">
                 {google === "cancelled" ? "Google sign-in was cancelled." : google.startsWith("error:") ? google.slice(6) : "That didn't go through. Try again."}

@@ -20,7 +20,13 @@ export async function GET(req: Request) {
   const home = after?.startsWith("/mbm/") ? after : "/mbm";
   const backHome = (status: string) => Response.redirect(`${origin}${home}${home.includes("?") ? "&" : "?"}google=${encodeURIComponent(status)}`, 302);
   const backLogin = (status: string) => Response.redirect(`${origin}/mbm/login?google=${encodeURIComponent(status)}`, 302);
-  const back = signin ? backLogin : backHome;
+  // (From the phone app's sign-in sheet: everything goes back to the app, /mbm/google/phone.)
+  let phone = false;
+  try {
+    phone = !!signin && !!(JSON.parse(signin) as { phone?: boolean }).phone;
+  } catch {}
+  const toApp = (q: Record<string, string>) => Response.redirect(`minutebyminute://auth-callback#${new URLSearchParams(q)}`, 302);
+  const back = phone ? (status: string) => toApp({ error: status }) : signin ? backLogin : backHome;
 
   if (url.searchParams.get("error")) return back("cancelled");
   const code = url.searchParams.get("code");
@@ -29,10 +35,13 @@ export async function GET(req: Request) {
 
   if (signin) {
     const t = await exchangeCode(origin, code);
-    if (!t.id_token) return backLogin(`error:${t.error_description ?? t.error ?? "Google didn't say yes."}`);
+    if (!t.id_token) return phone ? toApp({ error: t.error_description ?? t.error ?? "Google didn't say yes." }) : backLogin(`error:${t.error_description ?? t.error ?? "Google didn't say yes."}`);
     const { error } = await client.auth.signInWithIdToken({ provider: "google", token: t.id_token, access_token: t.access_token });
+    if (error && phone) return toApp({ error: error.message });
     if (error) return backLogin(`error:${/provider is not enabled|not enabled/i.test(error.message) ? "Turn on Google in Supabase (Authentication → Sign In / Providers → Google) first." : error.message}`);
     if (grantedCalendar(t)) await saveTokens(client, t);
+    // The phone signs in with the same word from Google (and your calendar's now connected).
+    if (phone) return toApp({ id_token: t.id_token, ...(t.access_token ? { access_token: t.access_token } : {}) });
     let next = "/mbm";
     try {
       next = (JSON.parse(signin) as { next?: string }).next ?? "/mbm";
