@@ -1066,6 +1066,7 @@ export type JobPrefs = {
   weekly_goal_min: number | null; // the goal's amount, in minutes
   goal_per?: "day" | "week"; // (049) per day or per week
   hide_from_stats: boolean | null;
+  stop_at_event_end?: boolean | null; // (074) stop at its calendar event's end; undefined: not loaded, leave it
 };
 const NEEDS_043 = "Run the newest SQL files in Supabase first (043 through 049).";
 const cleanPrefs = (p: JobPrefs) => ({
@@ -1075,6 +1076,7 @@ const cleanPrefs = (p: JobPrefs) => ({
   weekly_goal_min: typeof p.weekly_goal_min === "number" && p.weekly_goal_min >= 1 ? Math.min(10080, Math.round(p.weekly_goal_min)) : null,
   hide_from_stats: typeof p.hide_from_stats === "boolean" ? p.hide_from_stats : null,
   ...(p.goal_per === "day" || p.goal_per === "week" ? { goal_per: p.goal_per } : {}),
+  ...(p.stop_at_event_end !== undefined ? { stop_at_event_end: typeof p.stop_at_event_end === "boolean" ? p.stop_at_event_end : null } : {}),
 });
 const missing043 = (msg: string) => /categor|stop_on_commute|start_mode|auto_start|weekly_goal|goal_per|hide_from_stats|own_color|delete_job|tuck_between/i.test(msg);
 
@@ -1094,6 +1096,7 @@ export async function saveJob(id: string, input: JobPrefs & { category_id: strin
   if (error) {
     if (error.code === "23505") return fail(`You already have a job called ${name}. Delete one of them and move its entries to the other instead.`);
     if (/calendar_names/.test(error.message)) return fail("Run supabase/minute-by-minute/073_calendar_names.sql in Supabase first.");
+    if (/stop_at_event_end/.test(error.message)) return fail("Run supabase/minute-by-minute/074_stop_at_event_end.sql in Supabase first.");
     return fail(missing043(error.message) ? NEEDS_043 : error.message);
   }
   // A calendar event synced here leaves any other job it was synced to (one job each).

@@ -249,7 +249,7 @@ export default function JobsView({ jobs, categories, places, needsSql = false, n
 
 // ---------- What the settings add up to, in plain words ----------
 
-type Effective = { stop: boolean; places: string[]; mode: Mode; hidden: boolean; goal: number | null; per: "day" | "week" };
+type Effective = { stop: boolean; places: string[]; mode: Mode; hidden: boolean; goal: number | null; per: "day" | "week"; eventEnd: boolean };
 const effective = (p: JobPrefs, parent: JobPrefs | null): Effective => ({
   stop: p.stop_on_commute ?? parent?.stop_on_commute ?? true,
   places: p.places ?? parent?.places ?? [],
@@ -257,6 +257,7 @@ const effective = (p: JobPrefs, parent: JobPrefs | null): Effective => ({
   hidden: p.hide_from_stats ?? parent?.hide_from_stats ?? false,
   goal: p.weekly_goal_min,
   per: p.goal_per ?? "week",
+  eventEnd: p.stop_at_event_end ?? parent?.stop_at_event_end ?? false,
 });
 const list = (names: string[]) => (names.length <= 1 ? (names[0] ?? "") : `${names.slice(0, -1).join(", ")} or ${names[names.length - 1]}`);
 const hours = (min: number) => (min < 60 ? `${min}m` : min % 60 === 0 ? `${min / 60}h` : `${(min / 60).toFixed(1)}h`);
@@ -281,6 +282,7 @@ function sentences(name: string, e: Effective, places: Place[], groupOf = false)
         : `${groupOf ? "Each" : name} keeps going when you leave, until you stop it.`,
     );
   }
+  if (e.eventEnd) out.push(`${groupOf ? "Each" : "It"} stops when its calendar event ends.`);
   if (e.goal) out.push(`Goal: ${hours(e.goal)} a ${e.per}${groupOf ? ", all together" : ""}.`);
   if (e.hidden) out.push(`Left out of Stats (${it === name ? "it still shows" : "they still show"} on the Day bar).`);
   return out;
@@ -293,6 +295,7 @@ function short(j: Job, c: Category | null, places: Place[]) {
   if (at) bits.push(at);
   if (at && e.mode === "always") bits.push("starts itself");
   if (at && e.mode === "calendar") bits.push("starts if planned");
+  if (e.eventEnd) bits.push("stops at event end");
   if (!e.stop) bits.push("doesn't stop when you leave");
   if (e.goal) bits.push(`${hours(e.goal)}/${e.per}`);
   if (e.hidden) bits.push("not in Stats");
@@ -326,6 +329,7 @@ function JobSettings({
     weekly_goal_min: job.weekly_goal_min ?? null,
     goal_per: job.goal_per ?? "week",
     hide_from_stats: job.hide_from_stats ?? null,
+    ...(job.stop_at_event_end !== undefined ? { stop_at_event_end: job.stop_at_event_end } : {}),
     category_id: job.category_id ?? null,
   });
   const [color, setColor] = useState(job.category_id ? (job.own_color ?? job.color) : job.color);
@@ -619,7 +623,7 @@ function CategoryCard({ category, jobs, places, open, onToggle, onDone }: { cate
   const [color, setColor] = useState(category?.color ?? PALETTE[3]);
   const [p, setP] = useState<JobPrefs>(
     category
-      ? { stop_on_commute: category.stop_on_commute, places: category.places, start_mode: category.start_mode, weekly_goal_min: category.weekly_goal_min, goal_per: category.goal_per, hide_from_stats: category.hide_from_stats }
+      ? { stop_on_commute: category.stop_on_commute, places: category.places, start_mode: category.start_mode, weekly_goal_min: category.weekly_goal_min, goal_per: category.goal_per, hide_from_stats: category.hide_from_stats, ...(category.stop_at_event_end !== undefined ? { stop_at_event_end: category.stop_at_event_end } : {}) }
       : blank,
   );
   const [message, setMessage] = useState<string | null>(null);
@@ -767,6 +771,20 @@ function Prefs({
           ]}
         />
       </Field>
+
+      {value.stop_at_event_end !== undefined && (
+        <Field title="When the calendar event ends">
+          <Choices
+            value={value.stop_at_event_end === null ? null : value.stop_at_event_end ? "stop" : "keep"}
+            onChange={(v) => onChange({ stop_at_event_end: v === null ? null : v === "stop" })}
+            options={[
+              ...same(parent?.stop_at_event_end ? "stops" : "keeps going"),
+              { v: "stop", label: `Stop ${it} then` },
+              { v: "keep", label: `Keep ${it} going` },
+            ]}
+          />
+        </Field>
+      )}
 
       <Field title="When you leave">
         <Choices
