@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { exchangeCode, grantedCalendar, saveTokens } from "@/mbm/google";
 import { mbm, mbmUser } from "@/mbm/supabase";
+import { baseFor } from "@/mbm/paths";
 
 // Back from Google. Two ways in:
 //   - connecting your calendar (you're signed in): save it, copy your events in;
@@ -10,16 +11,17 @@ import { mbm, mbmUser } from "@/mbm/supabase";
 export async function GET(req: Request) {
   const url = new URL(req.url);
   const origin = url.origin;
+  const base = baseFor(origin); // ("" on minutexminute.com, "/mbm" on the old address)
   const store = await cookies();
   const expected = store.get("mbm_google_state")?.value;
   const signin = store.get("mbm_google_signin")?.value;
   const after = store.get("mbm_google_next")?.value; // (connecting from the setup: back there)
-  store.delete({ name: "mbm_google_next", path: "/mbm/google" });
-  store.delete({ name: "mbm_google_state", path: "/mbm/google" });
-  store.delete({ name: "mbm_google_signin", path: "/mbm/google" });
-  const home = after?.startsWith("/mbm/") ? after : "/mbm";
+  store.delete({ name: "mbm_google_next", path: "/" });
+  store.delete({ name: "mbm_google_state", path: "/" });
+  store.delete({ name: "mbm_google_signin", path: "/" });
+  const home = after?.startsWith("/") && !after.startsWith("//") ? after : `${base}/`;
   const backHome = (status: string) => Response.redirect(`${origin}${home}${home.includes("?") ? "&" : "?"}google=${encodeURIComponent(status)}`, 302);
-  const backLogin = (status: string) => Response.redirect(`${origin}/mbm/login?google=${encodeURIComponent(status)}`, 302);
+  const backLogin = (status: string) => Response.redirect(`${origin}${base}/login?google=${encodeURIComponent(status)}`, 302);
   // (From the phone app's sign-in sheet: everything goes back to the app, /mbm/google/phone.)
   let phone = false;
   try {
@@ -42,14 +44,14 @@ export async function GET(req: Request) {
     if (grantedCalendar(t)) await saveTokens(client, t);
     // The phone signs in with the same word from Google (and your calendar's now connected).
     if (phone) return toApp({ id_token: t.id_token, ...(t.access_token ? { access_token: t.access_token } : {}) });
-    let next = "/mbm";
+    let next = `${base}/`;
     try {
-      next = (JSON.parse(signin) as { next?: string }).next ?? "/mbm";
+      next = (JSON.parse(signin) as { next?: string }).next ?? `${base}/`;
     } catch {}
     return Response.redirect(`${origin}${next}`, 302);
   }
 
-  if (!(await mbmUser())) return Response.redirect(`${origin}/mbm/login?next=/mbm`, 302);
+  if (!(await mbmUser())) return Response.redirect(`${origin}${base}/login?next=/`, 302);
   const problem = await saveTokens(client, await exchangeCode(origin, code));
   return backHome(problem ? `error:${problem}` : "connected");
 }

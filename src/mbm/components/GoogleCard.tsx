@@ -47,7 +47,7 @@ export default function GoogleCard({ status, note }: { status: { connected: bool
             {pending ? "Disconnecting…" : "Disconnect"}
           </button>
         ) : (
-          <a href="/mbm/google/connect" className="rounded-control bg-accent px-4 py-2 text-sm font-semibold text-accent-ink transition-opacity hover:opacity-90">
+          <a href="/google/connect" className="rounded-control bg-accent px-4 py-2 text-sm font-semibold text-accent-ink transition-opacity hover:opacity-90">
             Connect
           </a>
         ))}

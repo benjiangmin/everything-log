@@ -84,7 +84,7 @@ export function Points({ items }: { items: { icon: ReactNode; title: string; tex
 export function Primary({ children, onClick, href, disabled, type = "button" }: { children: ReactNode; onClick?: () => void; href?: string; disabled?: boolean; type?: "button" | "submit" }) {
   const cls = "flex h-12 items-center justify-center rounded-control bg-accent px-6 font-semibold text-accent-ink transition-[opacity,transform] hover:opacity-90 active:scale-[0.98] disabled:opacity-40";
   if (href)
-    return href.startsWith("/mbm/google") ? (
+    return href.startsWith("/google") ? (
       <a href={href} className={cls}>
         {children}
       </a>

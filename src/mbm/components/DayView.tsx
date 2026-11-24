@@ -117,7 +117,7 @@ export default function DayView({
         return res.ok ? null : res.message;
       }}
       onHoverPlan={setPin}
-      onSelectPlan={(p) => router.push(`/mbm/plan?event=${encodeURIComponent(p.id)}`)}
+      onSelectPlan={(p) => router.push(`/plan?event=${encodeURIComponent(p.id)}`)}
       phone={day.phone}
       slim={mapMode}
       zoomSlot={zoomSlot}

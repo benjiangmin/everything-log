@@ -37,10 +37,10 @@ export default function AccountView({
       </Section>
       <Section title="Setup" note="Go through the welcome and setup again, to change your answers or see what a new account sees.">
         <div className="flex flex-wrap gap-2">
-          <Link href="/mbm/setup" className="rounded-control px-4 py-2 text-sm font-semibold ring-1 ring-line hover:bg-surface">
+          <Link href="/setup" className="rounded-control px-4 py-2 text-sm font-semibold ring-1 ring-line hover:bg-surface">
             Replay setup
           </Link>
-          <Link href="/mbm/welcome?replay=1" className="rounded-control px-4 py-2 text-sm font-semibold text-muted hover:bg-surface hover:text-ink">
+          <Link href="/welcome?replay=1" className="rounded-control px-4 py-2 text-sm font-semibold text-muted hover:bg-surface hover:text-ink">
             See the welcome
           </Link>
         </div>

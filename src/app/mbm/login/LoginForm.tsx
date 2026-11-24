@@ -3,11 +3,14 @@
 import Link from "next/link";
 import { useActionState, useState } from "react";
 import { signIn, signUp, type SignInState } from "../actions";
+import { MBM_ORIGIN } from "@/mbm/paths";
 
 const field = "w-full rounded-control border border-line bg-paper px-3 py-2.5 text-ink placeholder:text-muted/70 focus:border-ink";
 
 // Sign in, or make an account (the same account works in the phone app).
-export default function LoginForm({ next, google = null }: { next: string; google?: string | null }) {
+// home: on Minute by Minute's own domain (else the everything-log home's sign-in on benbadobee.com,
+// where its pages are under /mbm and making an account is on the new address).
+export default function LoginForm({ next, google = null, home = true }: { next: string; google?: string | null; home?: boolean }) {
   const [mode, setMode] = useState<"in" | "up">("in");
   const [inState, inAction, inPending] = useActionState<SignInState, FormData>(signIn, { message: null });
   const [upState, upAction, upPending] = useActionState<SignInState, FormData>(signUp, { message: null });
@@ -29,7 +32,7 @@ export default function LoginForm({ next, google = null }: { next: string; googl
 
   return (
     <>
-    <GoogleButton next={next} note={google} />
+    <GoogleButton next={next} note={google} base={home ? "" : "/mbm"} />
     <div className="my-5 flex items-center gap-3 text-xs text-muted">
       <span className="h-px flex-1 bg-line" />
       or with email
@@ -65,7 +68,7 @@ export default function LoginForm({ next, google = null }: { next: string; googl
           </button>
         ) : (
           // (Making an account goes through the welcome: /mbm/welcome.)
-          <Link href="/mbm/welcome" className="font-semibold text-ink hover:underline">
+          <Link href={home ? "/welcome" : `${MBM_ORIGIN}/welcome`} className="font-semibold text-ink hover:underline">
             Create an account
           </Link>
         )}
@@ -76,8 +79,8 @@ export default function LoginForm({ next, google = null }: { next: string; googl
 }
 
 // "Continue with Google", your calendar connected in the same step (no box to tick).
-function GoogleButton({ next, note }: { next: string; note: string | null }) {
-  const href = `/mbm/google/signin?${new URLSearchParams({ next, calendar: "1" })}`;
+function GoogleButton({ next, note, base }: { next: string; note: string | null; base: string }) {
+  const href = `${base}/google/signin?${new URLSearchParams({ next, calendar: "1" })}`;
   const problem =
     note === "cancelled" ? "Google sign-in was cancelled." : note === "try-again" ? "That didn't go through. Try again." : note === "not-set-up" ? "Google sign-in isn't set up on this site yet." : note?.startsWith("error:") ? note.slice(6) : null;
   return (

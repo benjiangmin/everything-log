@@ -22,7 +22,7 @@ export default function ReflectButton({ dayKey, today }: { dayKey: string; today
     );
   }
   return (
-    <Link href={`/mbm/reflect?day=${dayKey}`} className={`${look} bg-accent text-accent-ink shadow-lg shadow-accent/20 transition-transform hover:scale-[1.03] active:scale-[0.98]`}>
+    <Link href={`/reflect?day=${dayKey}`} className={`${look} bg-accent text-accent-ink shadow-lg shadow-accent/20 transition-transform hover:scale-[1.03] active:scale-[0.98]`}>
       {moon}
       Reflect on this day
     </Link>

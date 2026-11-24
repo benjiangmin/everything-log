@@ -1,13 +1,16 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
+import { isMbmHost } from "./paths";
 
 // Minute by Minute's sign-in lasts an hour at a time and renews itself. Pages can't save the
 // renewed sign-in, so the proxy does it on every visit to a page that uses it (otherwise you'd
 // get signed out at random).
 export const usesMbm = (pathname: string) => pathname === "/" || pathname === "/mbm" || pathname.startsWith("/mbm/");
 
-export async function withMbmSession(request: NextRequest): Promise<NextResponse> {
-  let response = NextResponse.next({ request });
+// rewrite: on Minute by Minute's own domain, the /mbm page that a clean address shows.
+export async function withMbmSession(request: NextRequest, rewrite?: URL): Promise<NextResponse> {
+  const pass = () => (rewrite ? NextResponse.rewrite(rewrite, { request }) : NextResponse.next({ request }));
+  let response = pass();
   const url = process.env.MBM_SUPABASE_URL;
   const key = process.env.MBM_SUPABASE_PUBLISHABLE_KEY;
   if (!url || !key) return response;
@@ -16,7 +19,7 @@ export async function withMbmSession(request: NextRequest): Promise<NextResponse
       getAll: () => request.cookies.getAll(),
       setAll: (list, headers) => {
         for (const { name, value } of list) request.cookies.set(name, value); // this visit sees it
-        response = NextResponse.next({ request });
+        response = pass();
         for (const { name, value, options } of list) response.cookies.set(name, value, options); // and it's kept
         for (const [k, v] of Object.entries(headers ?? {})) response.headers.set(k, v);
       },
@@ -31,7 +34,7 @@ export async function withMbmSession(request: NextRequest): Promise<NextResponse
       const { data: u, error } = await client.auth.getUser();
       if (!u.user && error && /does not exist|user_not_found|not found/i.test(`${error.message} ${(error as { code?: string }).code ?? ""}`)) {
         await client.auth.signOut({ scope: "local" });
-        const out = NextResponse.redirect(new URL("/mbm/login?gone=1", request.url));
+        const out = NextResponse.redirect(new URL(isMbmHost(request.headers.get("host")) ? "/login?gone=1" : "/mbm/login?gone=1", request.url));
         for (const c of response.cookies.getAll()) out.cookies.set(c);
         for (const c of request.cookies.getAll()) if (c.name.startsWith("sb-")) out.cookies.delete(c.name);
         return out;

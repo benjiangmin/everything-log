@@ -34,13 +34,13 @@ export default function MbmStatsPage(props: PageProps<"/mbm/stats">) {
   );
 }
 
-const href = (range: Range, day?: string) => `/mbm/stats?range=${range}${day ? `&day=${day}` : ""}`;
+const href = (range: Range, day?: string) => `/stats?range=${range}${day ? `&day=${day}` : ""}`;
 
 async function StatsFor({ range, day: asked, q }: { range: Range; day?: string; q: string }) {
   await connection();
   if (!mbmReady()) return <p className="rounded-card bg-surface px-5 py-4 text-sm">Minute by Minute isn&apos;t connected yet.</p>;
   const user = await mbmUser();
-  if (!user) redirect(`/mbm/login?next=${encodeURIComponent(href(range, asked))}`);
+  if (!user) redirect(`/login?next=${encodeURIComponent(href(range, asked))}`);
 
   const tz = mbmTz();
   const today = todayKey(tz);

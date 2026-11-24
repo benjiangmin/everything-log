@@ -218,7 +218,7 @@ function Player({ day, today, title, name, prev, next }: { day: Day; today: bool
         else if (stage === "play") setPlaying((v) => !v);
       } else if (e.key === "ArrowRight" && stage === "play") go(pos.idx + 1);
       else if (e.key === "ArrowLeft" && stage === "play") go(pos.elapsed > 1200 ? pos.idx : pos.idx - 1);
-      else if (e.key === "Escape") router.push(`/mbm/day?day=${day.dayKey}`);
+      else if (e.key === "Escape") router.push(`/day?day=${day.dayKey}`);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -245,10 +245,10 @@ function Player({ day, today, title, name, prev, next }: { day: Day; today: bool
           <p className="font-display text-3xl font-semibold">Nothing to look back on yet</p>
           <p className="mt-2 text-sm opacity-70">Nothing was tracked on {title}. Fill in the day, then come back.</p>
           <div className="mt-6 flex gap-3">
-            <Link href={`/mbm/day?day=${day.dayKey}`} className="rounded-full bg-[#faf6f0] px-5 py-2.5 text-sm font-semibold text-[#2b1c14]">
+            <Link href={`/day?day=${day.dayKey}`} className="rounded-full bg-[#faf6f0] px-5 py-2.5 text-sm font-semibold text-[#2b1c14]">
               Open the day
             </Link>
-            <Link href={`/mbm/reflect?day=${prev}`} className="rounded-full px-5 py-2.5 text-sm font-semibold ring-1 ring-[#faf6f0]/30">
+            <Link href={`/reflect?day=${prev}`} className="rounded-full px-5 py-2.5 text-sm font-semibold ring-1 ring-[#faf6f0]/30">
               The day before
             </Link>
           </div>
@@ -272,11 +272,11 @@ function Player({ day, today, title, name, prev, next }: { day: Day; today: bool
         <div className="pointer-events-auto flex items-center gap-1 rounded-full bg-paper/85 p-1 pl-4 shadow-lg shadow-ink/10 ring-1 ring-ink/10 backdrop-blur-md">
           <MoonIcon />
           <span className="ml-1.5 mr-2 font-display text-sm font-semibold">{title}</span>
-          <Link href={`/mbm/reflect?day=${prev}`} aria-label="The day before" className="grid size-8 place-items-center rounded-full text-muted transition-colors hover:bg-surface hover:text-ink">
+          <Link href={`/reflect?day=${prev}`} aria-label="The day before" className="grid size-8 place-items-center rounded-full text-muted transition-colors hover:bg-surface hover:text-ink">
             <Chevron left />
           </Link>
           {next ? (
-            <Link href={`/mbm/reflect?day=${next}`} aria-label="The day after" className="grid size-8 place-items-center rounded-full text-muted transition-colors hover:bg-surface hover:text-ink">
+            <Link href={`/reflect?day=${next}`} aria-label="The day after" className="grid size-8 place-items-center rounded-full text-muted transition-colors hover:bg-surface hover:text-ink">
               <Chevron />
             </Link>
           ) : (
@@ -286,7 +286,7 @@ function Player({ day, today, title, name, prev, next }: { day: Day; today: bool
           )}
         </div>
         <Link
-          href={`/mbm/day?day=${day.dayKey}`}
+          href={`/day?day=${day.dayKey}`}
           className="pointer-events-auto flex items-center gap-2 rounded-full bg-paper/85 px-4 py-2 text-sm font-semibold shadow-lg shadow-ink/10 ring-1 ring-ink/10 backdrop-blur-md transition-colors hover:bg-paper"
         >
           Done
@@ -600,7 +600,7 @@ function Outro({ name, today, title, summary, onAgain, dayKey }: { name: string 
           <button type="button" onClick={onAgain} className="rounded-full bg-[#faf6f0] px-5 py-2.5 text-sm font-semibold text-[#2b1c14] transition-transform hover:scale-[1.03]">
             Watch again
           </button>
-          <Link href={`/mbm/day?day=${dayKey}`} className="rounded-full px-5 py-2.5 text-sm font-semibold ring-1 ring-[#faf6f0]/30 transition-colors hover:bg-[#faf6f0]/10">
+          <Link href={`/day?day=${dayKey}`} className="rounded-full px-5 py-2.5 text-sm font-semibold ring-1 ring-[#faf6f0]/30 transition-colors hover:bg-[#faf6f0]/10">
             Back to the day
           </Link>
         </div>
@@ -618,10 +618,10 @@ function Locked({ wait, at, prev }: { wait: number; at: string; prev: string }) 
         <h1 className="font-display text-3xl font-bold">Reflect opens at {atLabel(at)}</h1>
         <p className="num mt-2 opacity-70">in {span(wait)}. Live the rest of the day first.</p>
         <div className="mt-7 flex flex-wrap justify-center gap-3">
-          <Link href={`/mbm/reflect?day=${prev}`} className="rounded-full bg-[#faf6f0] px-5 py-2.5 text-sm font-semibold text-[#2b1c14]">
+          <Link href={`/reflect?day=${prev}`} className="rounded-full bg-[#faf6f0] px-5 py-2.5 text-sm font-semibold text-[#2b1c14]">
             Look back on yesterday
           </Link>
-          <Link href="/mbm/account#reflect" className="rounded-full px-5 py-2.5 text-sm font-semibold ring-1 ring-[#faf6f0]/30 transition-colors hover:bg-[#faf6f0]/10">
+          <Link href="/account#reflect" className="rounded-full px-5 py-2.5 text-sm font-semibold ring-1 ring-[#faf6f0]/30 transition-colors hover:bg-[#faf6f0]/10">
             Change the time
           </Link>
         </div>

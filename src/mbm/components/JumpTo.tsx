@@ -34,7 +34,7 @@ export default function JumpTo({ range, current, today, color }: { range: Range;
 
   const go = (day: string) => {
     setOpen(false);
-    router.push(`/mbm/stats?range=${range}&day=${day}`);
+    router.push(`/stats?range=${range}&day=${day}`);
   };
   const future = (y: number, m: number, d = 1) => key(y, m, d) > today;
 

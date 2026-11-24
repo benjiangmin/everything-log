@@ -24,7 +24,7 @@ export default function PlanSettings({ connected, calendarHidden, calendarIgnore
   if (!connected)
     return (
       <p className="rounded-control bg-surface px-4 py-2.5 text-sm text-muted">
-        <Link href="/mbm/google/connect" className="font-semibold text-ink underline underline-offset-2">
+        <Link href="/google/connect" className="font-semibold text-ink underline underline-offset-2">
           Connect Google Calendar
         </Link>{" "}
         to show your events on the Day bar and use them to start jobs.

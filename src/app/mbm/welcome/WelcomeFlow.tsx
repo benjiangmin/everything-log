@@ -38,7 +38,7 @@ export default function WelcomeFlow({ google = null }: { google?: string | null 
               We sent a link to <span className="font-semibold text-ink">{email || "your email"}</span>. Tap it to confirm your account, then sign in. You&apos;ll pick up right where you left off.
             </>
           }
-          actions={<Primary href="/mbm/login?next=/mbm/setup">I&apos;ve confirmed it: sign in</Primary>}
+          actions={<Primary href="/login?next=/setup">I&apos;ve confirmed it: sign in</Primary>}
         />
       </Stage>
     );
@@ -58,7 +58,7 @@ export default function WelcomeFlow({ google = null }: { google?: string | null 
             actions={
               <>
                 <Primary onClick={() => go(1)}>Get started</Primary>
-                <Secondary href="/mbm/login">I have an account</Secondary>
+                <Secondary href="/login">I have an account</Secondary>
               </>
             }
           />
@@ -122,14 +122,14 @@ export default function WelcomeFlow({ google = null }: { google?: string | null 
             actions={
               <p className="text-center text-sm text-muted">
                 Have an account?{" "}
-                <Link href="/mbm/login" className="font-semibold text-ink hover:underline">
+                <Link href="/login" className="font-semibold text-ink hover:underline">
                   Sign in
                 </Link>
               </p>
             }
           >
             <a
-              href="/mbm/google/signin?next=%2Fmbm%2Fsetup&calendar=1"
+              href="/google/signin?next=%2Fsetup&calendar=1"
               className="flex h-12 items-center justify-center gap-3 rounded-control border border-line bg-paper font-semibold text-ink transition-colors hover:bg-surface"
             >
               <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true">
@@ -151,7 +151,7 @@ export default function WelcomeFlow({ google = null }: { google?: string | null 
               <span className="h-px flex-1 bg-line" />
             </div>
             <form action={action} className="flex flex-col gap-3">
-              <input type="hidden" name="next" value="/mbm/setup" />
+              <input type="hidden" name="next" value="/setup" />
               <input name="email" type="email" required autoComplete="email" placeholder="Email" aria-label="Email" value={email} onChange={(e) => setEmail(e.target.value)} className={field} style={{ outline: "none" }} />
               <input name="password" type="password" required minLength={8} autoComplete="new-password" placeholder="Password (8+ characters)" aria-label="Password" className={field} style={{ outline: "none" }} />
               <Primary type="submit" disabled={pending}>

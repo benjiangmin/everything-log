@@ -33,7 +33,7 @@ async function ReflectFor({ day: asked }: { day?: string }) {
   await connection();
   if (!mbmReady()) return <p className="m-6 rounded-card bg-surface px-5 py-4 text-sm">Minute by Minute isn&apos;t connected yet.</p>;
   const user = await mbmUser();
-  if (!user) redirect(`/mbm/login?next=${encodeURIComponent(asked ? `/mbm/reflect?day=${asked}` : "/mbm/reflect")}`);
+  if (!user) redirect(`/login?next=${encodeURIComponent(asked ? `/reflect?day=${asked}` : "/reflect")}`);
   const tz = mbmTz();
   const today = dayKeyOf(new Date(), tz);
   const dayKey = isDayKey(asked) && asked <= today ? asked : today;

@@ -42,7 +42,7 @@ export default function SetupFlow({ name, email, calendar, phone, start }: { nam
             body="Your plans make the guesses better: a class on your calendar starts the right job when you get there."
             actions={
               <>
-                <Primary href="/mbm/google/connect?next=%2Fmbm%2Fsetup%3Fstep%3Dphone">Connect Google Calendar</Primary>
+                <Primary href="/google/connect?next=%2Fsetup%3Fstep%3Dphone">Connect Google Calendar</Primary>
                 <Secondary onClick={() => go(at + 1)}>Set up later</Secondary>
               </>
             }
@@ -87,7 +87,7 @@ export default function SetupFlow({ name, email, calendar, phone, start }: { nam
             top={<Clock />}
             title={name ? `You're all set, ${name.split(" ")[0]}` : "You're all set"}
             body="Your day starts filling in as soon as your phone is set up. Everything here can be changed later in Your account."
-            actions={<Primary href="/mbm">Go to today</Primary>}
+            actions={<Primary href="/">Go to today</Primary>}
           />
         )}
       </div>

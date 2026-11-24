@@ -25,7 +25,7 @@ async function Future() {
   await connection();
   if (!mbmReady()) return <p className="rounded-card bg-surface px-5 py-4 text-sm">Minute by Minute isn&apos;t connected yet.</p>;
   const user = await mbmUser();
-  if (!user) redirect("/mbm/login?next=/mbm/future");
+  if (!user) redirect("/login?next=/future");
   const client = await mbm();
   const [profile, avg, acts, renderedAt] = await Promise.all([
     // (039 adds education, smoking and exercise; until it's run, just the first ones.)

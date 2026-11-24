@@ -1,5 +1,6 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { baseFor } from "./paths";
 
 // Google Calendar, for Minute by Minute's best guesses (030_suggestions.sql). Each person signs in
 // with Google once ("Connect Google Calendar"); their events (all the calendars they have
@@ -18,7 +19,8 @@ const CALENDAR = "https://www.googleapis.com/auth/calendar.readonly";
 // (Adding, moving and deleting events from the Plan tab: 041_plan.sql.)
 export const WRITE = "https://www.googleapis.com/auth/calendar.events";
 const SCOPES = ["openid", "email", CALENDAR, WRITE];
-export const redirectUri = (origin: string) => `${origin}/mbm/google/callback`;
+// (Both are in Google Cloud: minutexminute.com/google/callback, and the old /mbm one.)
+export const redirectUri = (origin: string) => `${origin}${baseFor(origin)}/google/callback`;
 
 // Connecting the calendar (signed in already), or signing in with Google (calendar optional:
 // `calendar` false asks for just who you are).

@@ -31,14 +31,14 @@ export default function MbmHomePage(props: PageProps<"/mbm">) {
 
 async function Home({ day: asked, google }: { day?: string; google?: string }) {
   await connection(); // always fresh
-  if (isDayKey(asked)) redirect(`/mbm/day?day=${asked}`);
+  if (isDayKey(asked)) redirect(`/day?day=${asked}`);
   if (!mbmReady()) return <p className="rounded-card bg-surface px-5 py-4 text-sm">Minute by Minute isn&apos;t connected yet.</p>;
   const user = await mbmUser();
-  if (!user) redirect("/mbm/login?next=/mbm");
+  if (!user) redirect("/login?next=/");
   // A new account that hasn't been through the setup yet (no About you saved): the setup first.
   {
     const { data, error } = await (await mbm()).from("profiles").select("user_id").maybeSingle();
-    if (!error && !data) redirect("/mbm/setup");
+    if (!error && !data) redirect("/setup");
   }
 
   const tz = mbmTz();
@@ -50,7 +50,7 @@ async function Home({ day: asked, google }: { day?: string; google?: string }) {
     <>
       {/* Back to your everything-log: only you see it (src/mbm/owner.ts). */}
       {(await isEverythingLogOwner()) && (
-        <Link href="/" className="-mt-6 mb-3 inline-block text-sm text-muted transition-colors hover:text-ink sm:-mt-8">
+        <Link href="https://www.benbadobee.com/" className="-mt-6 mb-3 inline-block text-sm text-muted transition-colors hover:text-ink sm:-mt-8">
           <span aria-hidden="true">←</span> everything-log
         </Link>
       )}
@@ -88,7 +88,7 @@ async function FutureNote({ client }: { client: SupabaseClient }) {
   const { data, error } = await client.from("profiles").select("birthday").maybeSingle();
   if (error || data?.birthday) return null; // (038 not run, or done)
   return (
-    <Link href="/mbm/future" className="mt-5 flex items-center gap-4 rounded-card border border-line px-5 py-4 transition-colors hover:bg-surface">
+    <Link href="/future" className="mt-5 flex items-center gap-4 rounded-card border border-line px-5 py-4 transition-colors hover:bg-surface">
       <span aria-hidden="true" className="text-2xl">⏳</span>
       <div className="min-w-0 flex-1">
         <p className="font-semibold">See your life on one bar</p>

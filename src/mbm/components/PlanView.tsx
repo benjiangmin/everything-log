@@ -279,7 +279,7 @@ export default function PlanView({
         </div>
         <div className="flex items-center gap-1">
           <Link
-            href={`/mbm/plan?day=${shiftDay(day, -1)}`}
+            href={`/plan?day=${shiftDay(day, -1)}`}
             aria-label="The day before"
             className="grid size-10 place-items-center rounded-control hover:bg-surface"
           >
@@ -287,14 +287,14 @@ export default function PlanView({
           </Link>
           {!isToday && (
             <Link
-              href="/mbm/plan"
+              href="/plan"
               className="rounded-control px-3 py-2 text-sm font-semibold hover:bg-surface"
             >
               Today
             </Link>
           )}
           <Link
-            href={`/mbm/plan?day=${shiftDay(day, 1)}`}
+            href={`/plan?day=${shiftDay(day, 1)}`}
             aria-label="The day after"
             className="grid size-10 place-items-center rounded-control hover:bg-surface"
           >
@@ -738,7 +738,7 @@ function Editor({
             Add to Google Calendar
             {!canWrite && (
               <Link
-                href="/mbm/google/connect"
+                href="/google/connect"
                 className="font-semibold text-ink underline underline-offset-2"
               >
                 {googleConnected
@@ -799,7 +799,7 @@ function GoogleNote({
           Your Google Calendar shows here. To add plans to it and change its
           events from here, Google needs one more yes:{" "}
           <Link
-            href="/mbm/google/connect"
+            href="/google/connect"
             className="font-semibold text-ink underline underline-offset-2"
           >
             reconnect Google
@@ -809,7 +809,7 @@ function GoogleNote({
       ) : (
         <>
           <Link
-            href="/mbm/google/connect"
+            href="/google/connect"
             className="font-semibold text-ink underline underline-offset-2"
           >
             Connect Google Calendar

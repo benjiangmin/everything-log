@@ -7,6 +7,7 @@ import LiveRefresh from "./LiveRefresh";
 import NowStatus from "./NowStatus";
 import { layOut } from "./segments";
 import { useNow } from "./useNow";
+import { MBM_ORIGIN } from "@/mbm/paths";
 
 // The home page's Minute by Minute: what's running and today's bar (click it for the full day).
 export default function HomeMbmCard({ day, renderedAt }: { day: Day; renderedAt: number }) {
@@ -22,11 +23,11 @@ export default function HomeMbmCard({ day, renderedAt }: { day: Day; renderedAt:
       <LiveRefresh />
       <div className="mb-3 flex items-baseline justify-between">
         <h2 className="font-display text-lg font-semibold">Minute by Minute</h2>
-        <Link href="/mbm/day" className="text-sm text-muted underline-offset-4 hover:text-ink hover:underline">
+        <Link href={`${MBM_ORIGIN}/day`} className="text-sm text-muted underline-offset-4 hover:text-ink hover:underline">
           Open today →
         </Link>
       </div>
-      <Link href="/mbm/day" aria-label="Open today" className="mb-3 block">
+      <Link href={`${MBM_ORIGIN}/day`} aria-label="Open today" className="mb-3 block">
         <DayBar
           placed={placed}
           lanes={lanes}

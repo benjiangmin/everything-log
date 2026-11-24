@@ -129,7 +129,7 @@ export default function BlockEditor({
             {known && <ColorRow key={known.id} activity={known} />}
             {known && (
               <a
-                href={`/mbm/account/jobs#job-${known.id}`}
+                href={`/account/jobs#job-${known.id}`}
                 title={`${known.name}'s settings: when it stops, its places, goal`}
                 aria-label={`${known.name}'s settings`}
                 className="grid size-7 place-items-center rounded-full text-muted transition-colors hover:bg-surface hover:text-ink"

@@ -5,6 +5,7 @@ import { DEFAULT_TZ, dayKeyOf, isDayKey } from "@/mbm/time";
 import EntryPanel from "./EntryPanel";
 import NowPanel from "./NowPanel";
 import { MBM_OPEN, type MbmPanel } from "./open";
+import { clean } from "@/mbm/paths";
 
 // Lives in the sidebar: slides in whichever Minute by Minute panel was asked for (see open.ts).
 export default function MbmPanels() {
@@ -21,7 +22,7 @@ export default function MbmPanels() {
   if (panel.kind === "now") return <NowPanel key={panel.name ?? ""} switching={Boolean(panel.switch)} initial={panel.name} onClose={close} />;
   // Adding: on the day you're looking at (?day=…), otherwise today.
   const viewing = new URLSearchParams(window.location.search).get("day");
-  const dayKey = panel.dayKey ?? (window.location.pathname === "/mbm/day" && isDayKey(viewing) ? viewing : dayKeyOf(new Date(), DEFAULT_TZ));
+  const dayKey = panel.dayKey ?? (clean(window.location.pathname) === "/day" && isDayKey(viewing) ? viewing : dayKeyOf(new Date(), DEFAULT_TZ));
   return (
     <EntryPanel
       key={`${panel.kind}-${dayKey}`}

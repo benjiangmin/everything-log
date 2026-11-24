@@ -2,11 +2,41 @@ import { NextResponse, type NextRequest } from "next/server";
 import { AUTH_COOKIE, cookieOptions, fingerprint, sameText } from "@/lib/auth";
 import { getLockEpoch } from "@/lib/lock-epoch";
 import { usesMbm, withMbmSession } from "@/mbm/proxy-session";
+import { MBM_ORIGIN, clean, isMbmHost } from "@/mbm/paths";
 
 // Runs before every request. No valid unlock cookie → you get sent to /login.
 // This covers pages, saving (server actions), and the search APIs.
 export async function proxy(request: NextRequest) {
   const { pathname, search } = request.nextUrl;
+
+  // Minute by Minute's own domain (src/mbm/paths.ts): clean addresses for its pages, its own
+  // sign-in, never the everything-log's password, and none of the everything-log's pages.
+  if (isMbmHost(request.headers.get("host"))) {
+    if (pathname.startsWith("/mbm/api/")) return NextResponse.next(); // (the phone app)
+    if (pathname === "/mbm" || pathname.startsWith("/mbm/")) {
+      const to = request.nextUrl.clone();
+      to.pathname = clean(pathname);
+      return NextResponse.redirect(to, 308);
+    }
+    const to = request.nextUrl.clone();
+    to.pathname = pathname === "/" ? "/mbm" : `/mbm${pathname}`;
+    if (pathname.startsWith("/api/")) return NextResponse.rewrite(to);
+    // (Files in public/, like /apple-touch-icon.png: as they are.)
+    if (/\.[a-z0-9]+$/i.test(pathname)) return NextResponse.next();
+    return withMbmSession(request, to);
+  }
+  // The old address: on to the new one. Not the phone's API (apps not updated yet), Google's
+  // sign-in return (one already under way), or the sign-in the everything-log home links to.
+  if (
+    process.env.NODE_ENV === "production" &&
+    (pathname === "/mbm" || pathname.startsWith("/mbm/")) &&
+    !pathname.startsWith("/mbm/api/") &&
+    !pathname.startsWith("/mbm/google/") &&
+    !(pathname === "/mbm/login" && request.nextUrl.searchParams.get("next") === "/")
+  ) {
+    return NextResponse.redirect(`${MBM_ORIGIN}${clean(pathname)}${search}`, 308);
+  }
+
   // The login page, and the address Resend delivers emails to (it checks its own signature).
   if (pathname === "/login" || pathname === "/api/inbound-email") return NextResponse.next();
   // Minute by Minute's phone API: the phone signs in with its own Minute by Minute session (the

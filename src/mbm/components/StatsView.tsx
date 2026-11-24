@@ -64,10 +64,10 @@ export default function StatsView({
           label="Unmarked"
           value={hm(unmarked)}
           note={`${stats.gaps.length} stretch${stats.gaps.length === 1 ? "" : "es"} of 10m+`}
-          href={range === "day" && unmarked >= 60 ? `/mbm/day?day=${dayKey}&show=unmarked` : undefined}
+          href={range === "day" && unmarked >= 60 ? `/day?day=${dayKey}&show=unmarked` : undefined}
         />
         <Tile label="Screen time" value={hm(screen)} note={`${stats.apps.length} app${stats.apps.length === 1 ? "" : "s"}`} />
-        <Tile label="Distance" value={miles(stats.distance_m)} note="from your route dots" href={range === "day" ? `/mbm/day?day=${dayKey}&show=commutes` : undefined} />
+        <Tile label="Distance" value={miles(stats.distance_m)} note="from your route dots" href={range === "day" ? `/day?day=${dayKey}&show=commutes` : undefined} />
       </section>
 
       <div className="flex flex-col gap-8">
@@ -215,7 +215,7 @@ function AppIcon({ name, src, big = false }: { name: string; src?: string | null
     <span className={`${box} shrink-0 overflow-hidden bg-surface ring-1 ring-ink/10`}>
       {/* eslint-disable-next-line @next/next/no-img-element -- (a picture from the App Store, any size) */}
       <img
-        src={src ?? `/mbm/app-icon?name=${encodeURIComponent(name)}`}
+        src={src ?? `/app-icon?name=${encodeURIComponent(name)}`}
         alt=""
         width={big ? 36 : 24}
         height={big ? 36 : 24}
@@ -522,7 +522,7 @@ function TimeSpent({
       {hidden.length > 0 && !query && (
         <p className="mt-3 text-xs text-muted">
           Not shown: {hidden.map((a) => a.name).join(", ")} (
-          <a href="/mbm/account/jobs" className="underline underline-offset-2 hover:text-ink">
+          <a href="/account/jobs" className="underline underline-offset-2 hover:text-ink">
             settings
           </a>
           ).

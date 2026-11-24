@@ -20,6 +20,6 @@ export default function WelcomePage(props: PageProps<"/mbm/welcome">) {
 
 async function Welcome({ replay, google }: { replay: boolean; google: string | null }) {
   await connection();
-  if (!replay && (await mbmUser().catch(() => null))) redirect("/mbm");
+  if (!replay && (await mbmUser().catch(() => null))) redirect("/");
   return <WelcomeFlow google={google} />;
 }

@@ -33,7 +33,7 @@ async function MbmDay({ day: asked, show, showAt }: { day?: string; show: "unmar
   await connection(); // always fresh
   if (!mbmReady()) return <NotConnected />;
   const user = await mbmUser();
-  if (!user) redirect(`/mbm/login?next=${encodeURIComponent(asked ? `/mbm/day?day=${asked}` : "/mbm/day")}`);
+  if (!user) redirect(`/login?next=${encodeURIComponent(asked ? `/day?day=${asked}` : "/day")}`);
 
   const tz = mbmTz();
   const today = dayKeyOf(new Date(), tz);
@@ -72,18 +72,18 @@ async function MbmDay({ day: asked, show, showAt }: { day?: string; show: "unmar
         subtitle={isToday ? dayTitle(dayKey) : undefined}
         nav={
           <nav aria-label="Days" className="flex items-center gap-1">
-            <Link href={`/mbm/day?day=${shiftDay(dayKey, -1)}`} aria-label="The day before" className={arrow}>
+            <Link href={`/day?day=${shiftDay(dayKey, -1)}`} aria-label="The day before" className={arrow}>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                 <path d="M15 5l-7 7 7 7" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
             </Link>
             {!isToday && (
-              <Link href="/mbm/day" className="rounded-control px-3 py-2 text-sm font-semibold transition-colors hover:bg-surface">
+              <Link href="/day" className="rounded-control px-3 py-2 text-sm font-semibold transition-colors hover:bg-surface">
                 Today
               </Link>
             )}
             <Link
-              href={`/mbm/day?day=${shiftDay(dayKey, 1)}`}
+              href={`/day?day=${shiftDay(dayKey, 1)}`}
               aria-label="The day after"
               aria-disabled={isToday}
               className={`${arrow} ${isToday ? "pointer-events-none opacity-30" : ""}`}

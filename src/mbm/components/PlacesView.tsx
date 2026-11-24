@@ -149,7 +149,7 @@ export default function PlacesView({
     <div className="relative isolate">
       <PageMark kind="places" />
       <p className="text-sm font-semibold text-muted">
-        <Link href="/mbm/account" className="hover:text-ink">
+        <Link href="/account" className="hover:text-ink">
           Your account
         </Link>
       </p>
@@ -600,7 +600,7 @@ function NameStopRow({
         </button>
         <span className="ml-auto flex gap-1">
           <Link
-            href={`/mbm/day?day=${dayKeyOf(new Date(stop.arrived_at), tz)}`}
+            href={`/day?day=${dayKeyOf(new Date(stop.arrived_at), tz)}`}
             className="grid h-11 place-items-center rounded-control px-4 text-sm font-semibold text-ink hover:bg-surface"
           >
             Open the day

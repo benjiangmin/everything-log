@@ -125,7 +125,7 @@ export default function JobsView({ jobs, categories, places, needsSql = false, n
     <div className="relative isolate">
       <PageMark kind="jobs" />
       <p className="text-sm font-semibold text-muted">
-        <Link href="/mbm/account" className="hover:text-ink">
+        <Link href="/account" className="hover:text-ink">
           Your account
         </Link>
       </p>

@@ -506,3 +506,10 @@ select.select-field {
 @media (prefers-reduced-motion: reduce) {
   .setup-pop, .setup-rise, .setup-sweep, .setup-sweep-slow, .setup-count { animation: none; }
 }
+
+/* minutexminute.com: Minute by Minute on its own, so the everything-log's side bar never shows
+   (set before anything's drawn, in layout.tsx's first script). */
+html[data-app="mbm"] [data-side-nav] { display: none !important; }
+@media (min-width: 48rem) {
+  html[data-app="mbm"] body:has([data-side-nav]) { padding-left: 0 !important; }
+}

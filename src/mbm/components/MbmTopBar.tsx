@@ -8,17 +8,18 @@ import TopSearch from "./TopSearch";
 import Avatar from "./Avatar";
 import { Suspense, useEffect, useRef, useState } from "react";
 import { atLabel, useMinute, useReflectOpen } from "@/mbm/reflectAt";
+import { clean } from "@/mbm/paths";
 
 // Minute by Minute's top bar: its name, the three pages, and signing out. `owner`: you (signed in
 // to the everything-log on this browser) also get a link back to it; nobody else does.
 const TABS = [
-  { href: "/mbm", label: "Home" },
-  { href: "/mbm/day", label: "Day" },
-  { href: "/mbm/plan", label: "Plan" },
-  { href: "/mbm/stats", label: "Stats" },
+  { href: "/", label: "Home" },
+  { href: "/day", label: "Day" },
+  { href: "/plan", label: "Plan" },
+  { href: "/stats", label: "Stats" },
 ];
 // (Future sits on its own at the right, between the search and your profile.)
-const FUTURE = { href: "/mbm/future", label: "Future" };
+const FUTURE = { href: "/future", label: "Future" };
 
 export default function MbmTopBar({
   signedIn,
@@ -35,12 +36,12 @@ export default function MbmTopBar({
   phone?: { name: string | null; last_seen: string } | null;
   now?: number;
 }) {
-  const pathname = usePathname();
-  const active = (href: string) => (href === "/mbm" ? pathname === "/mbm" : pathname.startsWith(href));
+  const pathname = clean(usePathname()); // (the same on the server, /mbm/day, and here, /day)
+  const active = (href: string) => (href === "/" ? pathname === "/" : pathname.startsWith(href));
   return (
     <header data-covers-map className="sticky top-0 z-50 border-b border-line bg-paper/95 backdrop-blur">
       <div className="mx-auto flex h-16 w-full items-center gap-2 px-4 sm:w-[96%] sm:gap-4 sm:px-0">
-        <Link href="/mbm" className="mr-2 flex items-center gap-2 font-display text-lg font-semibold tracking-tight text-ink sm:mr-6">
+        <Link href="/" className="mr-2 flex items-center gap-2 font-display text-lg font-semibold tracking-tight text-ink sm:mr-6">
           <span aria-hidden="true" className="grid size-7 place-items-center rounded-full bg-accent text-accent-ink">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round">
               <circle cx="12" cy="12" r="8.5" />
@@ -63,7 +64,7 @@ export default function MbmTopBar({
                 {t.label}
               </Link>
             ))}
-            <ReflectTab active={active("/mbm/reflect")} />
+            <ReflectTab active={active("/reflect")} />
           </nav>
         )}
         {signedIn && (
@@ -85,7 +86,7 @@ export default function MbmTopBar({
         <div className={`flex items-center gap-1 ${signedIn ? "md:ml-2" : ""} ml-auto`}>
           {/* (The link back to your everything-log is on Home now, above the greeting.) */}
           {owner && !signedIn && (
-            <Link href="/" title="Back to your everything-log" className="whitespace-nowrap rounded-control px-3 py-2 text-sm text-muted transition-colors hover:bg-surface hover:text-ink">
+            <Link href="https://www.benbadobee.com/" title="Back to your everything-log" className="whitespace-nowrap rounded-control px-3 py-2 text-sm text-muted transition-colors hover:bg-surface hover:text-ink">
               <span aria-hidden="true">←</span>
               <span className="hidden sm:inline"> everything-log</span>
               <span className="sr-only sm:hidden">everything-log</span>
@@ -110,11 +111,11 @@ function ReflectTab({ active }: { active: boolean }) {
 
 // (On the Day tab looking at a day before today: Reflect opens on that day, whatever the time.)
 function ReflectTabWithDay({ active }: { active: boolean }) {
-  const path = usePathname();
+  const path = clean(usePathname());
   const day = useSearchParams().get("day");
   const minute = useMinute();
   const today = minute === null ? null : localDayKey(new Date(minute * 60000));
-  const pastDay = path === "/mbm/day" && day && /^\d{4}-\d{2}-\d{2}$/.test(day) && today && day < today ? day : null;
+  const pastDay = path === "/day" && day && /^\d{4}-\d{2}-\d{2}$/.test(day) && today && day < today ? day : null;
   return <ReflectTabFor active={active} pastDay={pastDay} />;
 }
 
@@ -136,7 +137,7 @@ function ReflectTabFor({ active, pastDay }: { active: boolean; pastDay: string |
   }
   return (
     <Link
-      href={pastDay ? `/mbm/reflect?day=${pastDay}` : "/mbm/reflect"}
+      href={pastDay ? `/reflect?day=${pastDay}` : "/reflect"}
       title={pastDay ? "Reflect on this day" : undefined}
       aria-current={active ? "page" : undefined}
       className={`${look} ${active ? "bg-accent text-accent-ink" : "reflect-glow text-ink hover:bg-surface"}`}
@@ -218,16 +219,16 @@ function ProfileMenu({
             <div className="px-3 pb-2 pt-1.5">
               <ThemeChoice app="mbm" />
             </div>
-            <Link href="/mbm/account" onClick={() => setOpen(false)} className={item} role="menuitem">
+            <Link href="/account" onClick={() => setOpen(false)} className={item} role="menuitem">
               Your account
             </Link>
-            <Link href="/mbm/account#about" onClick={() => setOpen(false)} className={item} role="menuitem">
+            <Link href="/account#about" onClick={() => setOpen(false)} className={item} role="menuitem">
               About you
             </Link>
-            <Link href="/mbm/account/jobs" onClick={() => setOpen(false)} className={item} role="menuitem">
+            <Link href="/account/jobs" onClick={() => setOpen(false)} className={item} role="menuitem">
               Jobs and categories
             </Link>
-            <Link href="/mbm/account/places" onClick={() => setOpen(false)} className={item} role="menuitem">
+            <Link href="/account/places" onClick={() => setOpen(false)} className={item} role="menuitem">
               Places
             </Link>
           </div>

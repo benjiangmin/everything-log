@@ -23,7 +23,7 @@ async function Setup({ step }: { step?: string }) {
   await connection();
   if (!mbmReady()) return <p className="m-8 rounded-card bg-surface px-5 py-4 text-sm">Minute by Minute isn&apos;t connected yet.</p>;
   const user = await mbmUser();
-  if (!user) redirect("/mbm/login?next=/mbm/setup");
+  if (!user) redirect("/login?next=/setup");
   const client = await mbm();
   const [profile, google, phone] = await Promise.all([
     client.from("profiles").select("name").maybeSingle(),

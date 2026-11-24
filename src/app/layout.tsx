@@ -43,7 +43,8 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
 // Which app you're in (Minute by Minute or everything-log), its setting (day / night / sun), and
 // for "sun", whether it's between sunset and sunrise where you are (theme.ts has the same rules).
 const THEME_SCRIPT = `try{
-var p=location.pathname,app=(p==="/mbm"||p.indexOf("/mbm/")===0)?"mbm":"log";
+var p=location.pathname,h=location.hostname,app=(p==="/mbm"||p.indexOf("/mbm/")===0||h==="minutexminute.com"||h==="www.minutexminute.com"||h==="mbm.localhost")?"mbm":"log";
+if(app==="mbm"&&p.indexOf("/mbm")!==0)document.documentElement.dataset.app="mbm";
 var m=localStorage.getItem("theme:"+app);
 if(m!=="day"&&m!=="night"&&m!=="sun")m=localStorage.getItem("theme")==="dark"?"night":"day";
 var d=m==="night";

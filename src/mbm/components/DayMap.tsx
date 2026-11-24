@@ -52,7 +52,7 @@ export default function DayMap({
             <p className="text-xs text-muted">
               Click a stop to rename, move or remove it; click a route that
               looks wrong to report it (
-              <a href="/mbm/route-reports" className="underline underline-offset-2 hover:text-ink">
+              <a href="/route-reports" className="underline underline-offset-2 hover:text-ink">
                 download reports
               </a>
               ).

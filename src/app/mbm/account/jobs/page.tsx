@@ -23,7 +23,7 @@ async function Jobs() {
   await connection();
   if (!mbmReady()) return <p className="rounded-card bg-surface px-5 py-4 text-sm">Minute by Minute isn&apos;t connected yet.</p>;
   const user = await mbmUser();
-  if (!user) redirect("/mbm/login?next=/mbm/account/jobs");
+  if (!user) redirect("/login?next=/account/jobs");
   const client = await mbm();
   const jobCols = "id, name, color, own_color, category_id, stop_on_commute, places, start_mode, weekly_goal_min, hide_from_stats, last_used_at";
   const catCols = "id, name, color, stop_on_commute, places, start_mode, weekly_goal_min, hide_from_stats";

@@ -3,6 +3,7 @@
 import { usePathname } from "next/navigation";
 import { useEffect, useSyncExternalStore } from "react";
 import { sunTimes } from "@/mbm/sun";
+import { isMbmHost } from "@/mbm/paths";
 
 // Day / night, kept in this browser, separately for Minute by Minute and for everything-log (the
 // same colors; each app has its own switch). Each is one of:
@@ -17,7 +18,8 @@ import { sunTimes } from "@/mbm/sun";
 export type ThemeMode = "day" | "night" | "sun";
 export type ThemeApp = "mbm" | "log";
 
-export const appOf = (path: string): ThemeApp => (path === "/mbm" || path.startsWith("/mbm/") ? "mbm" : "log");
+export const appOf = (path: string): ThemeApp =>
+  path === "/mbm" || path.startsWith("/mbm/") || (typeof location !== "undefined" && isMbmHost(location.host)) ? "mbm" : "log";
 const keyOf = (app: ThemeApp) => `theme:${app}`;
 const WHERE = "theme:where"; // [lat, lng]
 const MADISON: [number, number] = [43.0731, -89.4012];

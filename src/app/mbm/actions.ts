@@ -36,7 +36,7 @@ export async function signIn(_prev: SignInState, formData: FormData): Promise<Si
   const { error } = await (await mbm()).auth.signInWithPassword({ email, password });
   if (error) return { message: error.message === "Invalid login credentials" ? "That email and password don't match." : error.message };
   const next = String(formData.get("next") ?? "");
-  redirect(next.startsWith("/") && !next.startsWith("//") ? next : "/mbm");
+  redirect(next.startsWith("/") && !next.startsWith("//") ? next : "/");
 }
 
 // A new account. If the project asks people to confirm their email first, there's no session
@@ -50,8 +50,8 @@ export async function signUp(_prev: SignInState, formData: FormData): Promise<Si
   const origin = (await headers()).get("origin") ?? "";
   // (From the welcome: on into the setup, /mbm/setup, now or after confirming your email.)
   const asked = String(formData.get("next") ?? "");
-  const next = asked.startsWith("/mbm") && !asked.startsWith("//") ? asked : "/mbm";
-  const { data, error } = await (await mbm()).auth.signUp({ email, password, options: { emailRedirectTo: origin ? `${origin}/mbm/login?next=${encodeURIComponent(next)}` : undefined } });
+  const next = asked.startsWith("/") && !asked.startsWith("//") ? asked : "/";
+  const { data, error } = await (await mbm()).auth.signUp({ email, password, options: { emailRedirectTo: origin ? `${origin}/login?next=${encodeURIComponent(next)}` : undefined } });
   if (error) return { message: /registered/i.test(error.message) ? "There's already an account with that email. Sign in instead." : error.message };
   if (!data.session) return { message: null, sent: true };
   redirect(next);
@@ -59,7 +59,7 @@ export async function signUp(_prev: SignInState, formData: FormData): Promise<Si
 
 export async function signOut() {
   await (await mbm()).auth.signOut();
-  redirect("/mbm/login");
+  redirect("/login");
 }
 
 // ---------- For the side panels (they load when opened) ----------
@@ -548,7 +548,7 @@ export async function searchEverything(q: string): Promise<SearchHit[]> {
       kind: "activity",
       name: a.name,
       color: a.color,
-      href: `/mbm/stats?range=year&q=${encodeURIComponent(a.name)}`,
+      href: `/stats?range=year&q=${encodeURIComponent(a.name)}`,
       detail: a.last_used_at ? `Last ${when(a.last_used_at)}` : "Activity",
     });
   }
@@ -576,7 +576,7 @@ export async function searchEverything(q: string): Promise<SearchHit[]> {
       name: (b.activity_id && nameOf.get(b.activity_id)) || "Something",
       color: (b.activity_id && colorOf.get(b.activity_id)) || "#86705f",
       note: b.note || null,
-      href: `/mbm/day?day=${dayOf(b.started_at)}`,
+      href: `/day?day=${dayOf(b.started_at)}`,
       detail: `${when(b.started_at)} · ${new Date(b.started_at).toLocaleTimeString("en-US", { timeZone: tz, hour: "numeric", minute: "2-digit" })}`,
     });
   }
@@ -591,14 +591,14 @@ export async function searchEverything(q: string): Promise<SearchHit[]> {
     else places.set(place!, { last: v.arrived_at, n: 1 });
   }
   for (const [name, p] of [...places].slice(0, 5)) {
-    hits.push({ kind: "place", name, href: `/mbm/day?day=${dayOf(p.last)}`, detail: `${p.n} visit${p.n === 1 ? "" : "s"} · last ${when(p.last)}` });
+    hits.push({ kind: "place", name, href: `/day?day=${dayOf(p.last)}`, detail: `${p.n} visit${p.n === 1 ? "" : "s"} · last ${when(p.last)}` });
   }
 
   // Apps: when last used.
   const appsSeen = new Map<string, string>();
   for (const u of apps.data ?? []) if (u.app && wordStart(u.app) && !appsSeen.has(u.app)) appsSeen.set(u.app, u.started_at);
   for (const [name, last] of [...appsSeen].slice(0, 5)) {
-    hits.push({ kind: "app", name, href: `/mbm/stats?range=day&day=${dayOf(last)}`, detail: `App · last used ${when(last)}` });
+    hits.push({ kind: "app", name, href: `/stats?range=day&day=${dayOf(last)}`, detail: `App · last used ${when(last)}` });
   }
   return hits;
 }
@@ -951,7 +951,7 @@ export async function changeEmail(email: string): Promise<Result & { sent?: bool
   const e = email.trim().slice(0, 200);
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e)) return fail("That doesn't look like an email address.");
   const origin = (await headers()).get("origin") ?? "";
-  const { error } = await (await mbm()).auth.updateUser({ email: e }, { emailRedirectTo: origin ? `${origin}/mbm/account` : undefined });
+  const { error } = await (await mbm()).auth.updateUser({ email: e }, { emailRedirectTo: origin ? `${origin}/account` : undefined });
   if (error) return fail(error.message);
   return { ok: true, sent: true };
 }
@@ -971,7 +971,7 @@ export async function deleteMine(what: "data" | "account", typed: string): Promi
   if (error) return fail(/function .* does not exist|schema cache/i.test(error.message) ? "Run 040_account.sql first." : error.message);
   if (what === "account") {
     await client.auth.signOut();
-    redirect("/mbm/login");
+    redirect("/login");
   }
   revalidatePath("/mbm", "layout");
   return { ok: true };

@@ -25,7 +25,7 @@ async function Plan() {
   await connection();
   if (!mbmReady()) return <p className="rounded-card bg-surface px-5 py-4 text-sm">Minute by Minute isn&apos;t connected yet.</p>;
   const user = await mbmUser();
-  if (!user) redirect("/mbm/login?next=/mbm/plan");
+  if (!user) redirect("/login?next=/plan");
   const client = await mbm();
   await syncCalendar(client).catch(() => null); // (at most every 10 minutes)
   const [hidden, ignored, google] = await Promise.all([calendarHidden(client), calendarIgnored(client), googleStatus(client).catch(() => null)]);

@@ -25,7 +25,7 @@ async function Account() {
   await connection();
   if (!mbmReady()) return <p className="rounded-card bg-surface px-5 py-4 text-sm">Minute by Minute isn&apos;t connected yet.</p>;
   const user = await mbmUser();
-  if (!user) redirect("/mbm/login?next=/mbm/account");
+  if (!user) redirect("/login?next=/account");
   const client = await mbm();
   // (Newest columns first; older setups fall back to what they have.)
   let res = await client.from("profiles").select("name, birthday, sex, race, state, education, smoking, exercise, avatar, skipped").maybeSingle();
