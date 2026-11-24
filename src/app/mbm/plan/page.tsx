@@ -2,72 +2,45 @@ import { Suspense } from "react";
 import Loading from "@/mbm/components/Loading";
 import { connection } from "next/server";
 import { redirect } from "next/navigation";
-import { mbmTz } from "@/mbm/data";
-import { canWrite, googleStatus, syncCalendar } from "@/mbm/google";
+import { googleStatus, syncCalendar } from "@/mbm/google";
 import { mbm, mbmReady, mbmUser } from "@/mbm/supabase";
-import { dayKeyOf, dayRange } from "@/mbm/time";
-import PlanView from "@/mbm/components/PlanView";
-import { calendarHidden, calendarIgnored, eventsBetween, isGoogleEvent } from "@/mbm/plans";
+import PlanSettings from "@/mbm/components/PlanSettings";
+import { calendarHidden, calendarIgnored } from "@/mbm/plans";
 
 export const metadata = { title: "Plan" };
 
-// Plan: a day ahead (or any day) on one big bar, your Google Calendar on it, and new plans added
-// by clicking the bar, like Google Calendar.
-export default function PlanPage(props: PageProps<"/mbm/plan">) {
+// Plan, while it's being rebuilt: its two Google Calendar settings, and a note. (The day planner
+// is in PlanView.tsx, kept for when it comes back.)
+export default function PlanPage() {
   return (
-    <main className="mx-auto w-full px-4 pb-24 pt-6 sm:w-[96%] sm:px-0 sm:pt-8">
+    <main className="mx-auto flex min-h-[70vh] w-full flex-col px-4 pb-24 pt-6 sm:w-[96%] sm:px-0 sm:pt-8">
       <Suspense fallback={<Loading tall />}>
-        {props.searchParams.then((p) => (
-          <Plan day={typeof p.day === "string" ? p.day : undefined} open={typeof p.event === "string" ? p.event : undefined} />
-        ))}
+        <Plan />
       </Suspense>
     </main>
   );
 }
 
-async function Plan({ day: asked, open }: { day?: string; open?: string }) {
+async function Plan() {
   await connection();
   if (!mbmReady()) return <p className="rounded-card bg-surface px-5 py-4 text-sm">Minute by Minute isn&apos;t connected yet.</p>;
   const user = await mbmUser();
   if (!user) redirect("/mbm/login?next=/mbm/plan");
-  const tz = mbmTz();
-  const today = dayKeyOf(new Date(), tz);
-  const day = asked && /^\d{4}-\d{2}-\d{2}$/.test(asked) ? asked : today;
-  const { start, end } = dayRange(day, tz);
   const client = await mbm();
   await syncCalendar(client).catch(() => null); // (at most every 10 minutes)
-  const [all, hidden, ignored, places, google, write, acts, renderedAt] = await Promise.all([
-    eventsBetween(client, start, end),
-    calendarHidden(client),
-    calendarIgnored(client),
-    client.from("places").select("id, name, lat, lng").not("name", "is", null).limit(300),
-    googleStatus(client).catch(() => null),
-    canWrite(client).catch(() => false),
-    client.from("activities").select("name, color"),
-    loadedAt(),
-  ]);
-  const events = hidden ? all.filter((e) => !isGoogleEvent(e)) : all;
+  const [hidden, ignored, google] = await Promise.all([calendarHidden(client), calendarIgnored(client), googleStatus(client).catch(() => null)]);
   return (
-    <PlanView
-      calendarHidden={hidden}
-      calendarIgnored={ignored}
-      day={day}
-      today={today}
-      tz={tz}
-      dayStart={+start}
-      dayEnd={+end}
-      events={events.filter((e) => !e.all_day)}
-      allDay={events.filter((e) => e.all_day)}
-      places={(places.data ?? []) as { id: string; name: string; lat: number; lng: number }[]}
-      google={google}
-      canWrite={write}
-      colors={Object.fromEntries(((acts.data ?? []) as { name: string; color: string }[]).map((a) => [a.name.toLowerCase(), a.color]))}
-      openId={open ?? null}
-      renderedAt={renderedAt}
-    />
+    <>
+      <h1 className="font-display text-3xl font-semibold tracking-tight sm:text-4xl">Plan</h1>
+      <div className="mt-4">
+        <PlanSettings connected={!!google?.connected} calendarHidden={hidden} calendarIgnored={ignored} />
+      </div>
+      <div className="grid flex-1 place-items-center py-16 text-center">
+        <div>
+          <p className="font-display text-2xl font-semibold">Page under construction</p>
+          <p className="mt-2 text-muted">Planning your day is coming back here soon.</p>
+        </div>
+      </div>
+    </>
   );
-}
-
-async function loadedAt() {
-  return Date.now();
 }
