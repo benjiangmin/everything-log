@@ -1,5 +1,6 @@
 "use client";
 
+import { TimePicker } from "./DateTime";
 import { useEffect, useState, useTransition } from "react";
 import { bestGuesses, nowInfo, startEntry, type Guess } from "@/app/mbm/actions";
 import type { NowInfo } from "@/mbm/data";
@@ -136,15 +137,7 @@ export default function NowPanel({ switching = false, initial = "", onClose }: {
               <WhenRow icon="clock" title="Pick a time" on={since === "custom"} onPick={() => setSince("custom")} open={since === "custom"} />
             </div>
             {since === "custom" && (
-              <input
-                type="time"
-                value={custom}
-                onChange={(e) => setCustom(e.target.value)}
-                aria-label="Started at"
-                autoFocus
-                className="num mt-2 block w-full rounded-[14px] border border-line bg-paper px-4 py-2.5 text-ink focus:border-ink"
-                style={{ outline: "none" }}
-              />
+              <TimePicker value={custom} onChange={setCustom} label="Started at" defaultOpen className="mt-2 w-full" />
             )}
           </div>
 

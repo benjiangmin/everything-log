@@ -1,5 +1,6 @@
 "use client";
 
+import { DatePicker } from "./DateTime";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useTransition, type ReactNode } from "react";
 import { saveProfile } from "@/app/mbm/actions";
@@ -98,15 +99,7 @@ export default function AboutYouSteps({ initialName = "", onDone }: { initialNam
                 if (a.birthday) go(2);
               }}
             >
-              <input
-                ref={input}
-                type="date"
-                value={a.birthday}
-                max={new Date().toISOString().slice(0, 10)}
-                onChange={(e) => set("birthday", e.target.value)}
-                className="w-full border-b border-line bg-transparent py-3 font-display text-3xl font-semibold text-ink focus:border-ink"
-                style={{ outline: "none" }}
-              />
+              <DatePicker big value={a.birthday} max={new Date().toISOString().slice(0, 10)} onChange={(v) => set("birthday", v)} label="Birthday" placeholder="Pick your birthday" />
               <Next disabled={!a.birthday}>Continue</Next>
             </form>
             <Skip onClick={() => set("birthday", "", 2)}>Set up later</Skip>

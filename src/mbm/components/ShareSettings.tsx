@@ -1,5 +1,7 @@
 "use client";
 
+import { DatePicker } from "./DateTime";
+import Select from "./Select";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { pinDay, setShare, setUsername, type Share } from "@/app/mbm/social/actions";
@@ -30,8 +32,6 @@ export default function ShareSettings({ username, share, pinned, today }: { user
     setValue(next);
     run(() => setShare(next));
   };
-  const pick = "rounded-control border border-line bg-paper px-3 py-2 text-sm focus:border-ink";
-  const choose = `${pick} w-44 shrink-0 text-muted`; // (all the same width, and quieter than what they're for)
 
   return (
     <div className="grid gap-5">
@@ -65,12 +65,20 @@ export default function ShareSettings({ username, share, pinned, today }: { user
               <span className="block font-semibold">{it.label}</span>
               <span className="text-muted">{it.note}</span>
             </span>
-            <select value={value[it.key]} disabled={pending} onChange={(e) => change(it.key, e.target.value)} className={choose} style={{ outline: "none" }}>
-              <option value="nobody">Nobody</option>
-              <option value="mutuals">Mutuals</option>
-              <option value="followers">Followers</option>
-              <option value="anyone">Anyone</option>
-            </select>
+            <Select
+              value={value[it.key]}
+              disabled={pending}
+              onChange={(v) => change(it.key, v)}
+              label={it.label}
+              quiet
+              className="w-44 shrink-0"
+              options={[
+                { value: "nobody", label: "Nobody" },
+                { value: "mutuals", label: "Mutuals" },
+                { value: "followers", label: "Followers" },
+                { value: "anyone", label: "Anyone" },
+              ]}
+            />
           </li>
         ))}
         <li className="flex items-center justify-between gap-3 text-sm">
@@ -78,10 +86,18 @@ export default function ShareSettings({ username, share, pinned, today }: { user
             <span className="block font-semibold">Your map</span>
             <span className="text-muted">Where you went. Pick close friends from your followers on Social.</span>
           </span>
-          <select value={value.map} disabled={pending} onChange={(e) => change("map", e.target.value)} className={choose} style={{ outline: "none" }}>
-            <option value="nobody">Nobody</option>
-            <option value="close">Close friends</option>
-          </select>
+          <Select
+            value={value.map}
+            disabled={pending}
+            onChange={(v) => change("map", v)}
+            label="Your map"
+            quiet
+            className="w-44 shrink-0"
+            options={[
+              { value: "nobody", label: "Nobody" },
+              { value: "close", label: "Close friends" },
+            ]}
+          />
         </li>
       </ul>
 
@@ -96,7 +112,7 @@ export default function ShareSettings({ username, share, pinned, today }: { user
               </span>
             </button>
           ))}
-          <input type="date" value={day} max={today} onChange={(e) => setDay(e.target.value)} className={pick} aria-label="A day to pin" style={{ outline: "none" }} />
+          <DatePicker value={day} max={today} onChange={setDay} label="A day to pin" className="w-56" />
           <button
             type="button"
             disabled={pending || !day}

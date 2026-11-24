@@ -1,5 +1,7 @@
 "use client";
 
+import { DatePicker } from "./DateTime";
+import Select from "./Select";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { saveProfile } from "@/app/mbm/actions";
@@ -32,7 +34,7 @@ export default function AboutYouForm({ profile, onDone }: { profile: Profile | n
       </label>
       <label className="grid gap-1.5 text-sm font-semibold">
         Birthday
-        <input name="birthday" type="date" required defaultValue={profile?.birthday ?? ""} max={new Date().toISOString().slice(0, 10)} className={field} style={{ outline: "none" }} />
+        <DatePicker name="birthday" defaultValue={profile?.birthday ?? ""} max={new Date().toISOString().slice(0, 10)} label="Birthday" placeholder="Pick your birthday" />
       </label>
       <fieldset className="grid gap-1.5 text-sm font-semibold">
         <legend className="mb-1.5">Sex</legend>
@@ -47,25 +49,11 @@ export default function AboutYouForm({ profile, onDone }: { profile: Profile | n
       </fieldset>
       <label className="grid gap-1.5 text-sm font-semibold">
         Race or ethnicity
-        <select name="race" defaultValue={profile?.race ?? ""} className={`${field} select-field`} style={{ outline: "none" }}>
-          <option value="">Choose…</option>
-          {RACES.map((r) => (
-            <option key={r.id} value={r.id}>
-              {r.label}
-            </option>
-          ))}
-        </select>
+        <Select name="race" defaultValue={profile?.race ?? ""} options={[{ value: "", label: "Choose…" }, ...RACES.map((r) => ({ value: r.id, label: r.label }))]} />
       </label>
       <label className="grid gap-1.5 text-sm font-semibold sm:col-span-2">
         State you live in
-        <select name="state" defaultValue={profile?.state ?? ""} className={`${field} select-field`} style={{ outline: "none" }}>
-          <option value="">Choose…</option>
-          {Object.keys(STATES).map((s) => (
-            <option key={s} value={s}>
-              {s}
-            </option>
-          ))}
-        </select>
+        <Select name="state" defaultValue={profile?.state ?? ""} options={[{ value: "", label: "Choose…" }, ...Object.keys(STATES).map((s) => ({ value: s, label: s }))]} />
       </label>
       {(
         [
@@ -76,14 +64,7 @@ export default function AboutYouForm({ profile, onDone }: { profile: Profile | n
       ).map(([key, label, options, value]) => (
         <label key={key} className={`grid gap-1.5 text-sm font-semibold ${key === "exercise" ? "sm:col-span-2" : ""}`}>
           {label}
-          <select name={key} defaultValue={value ?? ""} className={`${field} select-field`} style={{ outline: "none" }}>
-            <option value="">Choose…</option>
-            {options.map((o) => (
-              <option key={o.id} value={o.id}>
-                {o.label}
-              </option>
-            ))}
-          </select>
+          <Select name={key} defaultValue={value ?? ""} options={[{ value: "", label: "Choose…" }, ...options.map((o) => ({ value: o.id, label: o.label }))]} />
         </label>
       ))}
       <p className="text-xs text-muted sm:col-span-2">

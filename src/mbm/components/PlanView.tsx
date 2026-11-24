@@ -1,5 +1,6 @@
 "use client";
 
+import { TimePicker } from "./DateTime";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
@@ -651,8 +652,6 @@ function Editor({
   const [d, setD] = useState(draft);
   const field =
     "w-full rounded-control border border-line bg-paper px-3 py-2.5 text-ink focus:border-ink";
-  const timeField =
-    "rounded-control border border-line bg-paper px-3 py-1.5 text-ink focus:border-ink";
   const hm = (t: number) => {
     const parts = new Intl.DateTimeFormat("en-GB", {
       timeZone: tz,
@@ -687,35 +686,31 @@ function Editor({
         />
         <div className="flex flex-wrap items-center gap-2 text-sm">
           <span className="text-muted">{dayTitle(day)}</span>
-          <input
-            type="time"
-            step={900}
+          <TimePicker
             value={hm(d.start)}
-            onChange={(e) =>
-              e.target.value &&
+            label="Starts"
+            className="w-32"
+            onChange={(v) =>
+              v &&
               setD({
                 ...d,
-                start: fromHm(e.target.value),
-                end: fromHm(e.target.value) + (d.end - d.start),
+                start: fromHm(v),
+                end: fromHm(v) + (d.end - d.start),
               })
             }
-            className={timeField}
-            style={{ outline: "none" }}
           />
           <span className="text-muted">to</span>
-          <input
-            type="time"
-            step={900}
+          <TimePicker
             value={hm(d.end)}
-            onChange={(e) =>
-              e.target.value &&
+            label="Ends"
+            className="w-32"
+            onChange={(v) =>
+              v &&
               setD({
                 ...d,
-                end: Math.max(fromHm(e.target.value), d.start + SNAP),
+                end: Math.max(fromHm(v), d.start + SNAP),
               })
             }
-            className={timeField}
-            style={{ outline: "none" }}
           />
         </div>
         <PlaceField

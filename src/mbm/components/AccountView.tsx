@@ -1,5 +1,6 @@
 "use client";
 
+import { TimePicker } from "./DateTime";
 import Link from "next/link";
 import { useRef, useState, useTransition, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
@@ -134,10 +135,8 @@ export function ReflectTime() {
   const at = useReflectAt();
   return (
     <div className="flex flex-wrap items-center gap-3">
-      <label htmlFor="reflect-at" className="text-sm font-semibold">
-        Opens at
-      </label>
-      <input id="reflect-at" type="time" value={at} onChange={(e) => e.target.value && setReflectAt(e.target.value)} className={`${field} num w-36`} />
+      <span className="text-sm font-semibold">Opens at</span>
+      <TimePicker value={at} onChange={(v) => v && setReflectAt(v)} label="Reflect opens at" />
       {at !== REFLECT_DEFAULT && (
         <button type="button" onClick={() => setReflectAt(REFLECT_DEFAULT)} className="text-sm text-muted underline-offset-2 hover:text-ink hover:underline">
           Back to {atLabel(REFLECT_DEFAULT)}

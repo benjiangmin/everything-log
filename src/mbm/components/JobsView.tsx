@@ -1,5 +1,6 @@
 "use client";
 
+import Select from "./Select";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition, type ReactNode } from "react";
@@ -336,14 +337,13 @@ function JobSettings({
     <div className="border-t border-line bg-surface/40 px-5 py-6 sm:px-6">
       <InShort lines={sentences(job.name, effective(p, cat), places)} />
       <Field title="Category" help={cat ? `${job.name} is ${cat.name}'s color. Anything below left on “Same as ${cat.name}” follows ${cat.name}'s settings.` : "Put it in a category to give it the category's color and settings."}>
-        <select value={p.category_id ?? ""} onChange={(e) => setP({ ...p, category_id: e.target.value || null })} className="select-field w-full max-w-sm rounded-control border border-line bg-paper px-3 py-2.5">
-          <option value="">No category</option>
-          {categories.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.name}
-            </option>
-          ))}
-        </select>
+        <Select
+          value={p.category_id ?? ""}
+          onChange={(v) => setP({ ...p, category_id: v || null })}
+          label="Category"
+          className="w-full max-w-sm"
+          options={[{ value: "", label: "No category" }, ...categories.map((c) => ({ value: c.id, label: c.name }))]}
+        />
       </Field>
       <Field title="Color">
         <JobColor color={color} onChange={setColor} category={cat} />
@@ -397,13 +397,7 @@ function DeleteJob({ job, jobs, onCancel, onDone }: { job: Job; jobs: Job[]; onC
           <label className="flex flex-wrap items-center gap-2.5">
             <input type="radio" checked={what === "move"} onChange={() => setWhat("move")} className="size-4 accent-[var(--accent)]" />
             Move {n === 1 ? "it" : "them"} to
-            <select value={to} onChange={(e) => setTo(e.target.value)} disabled={what !== "move"} className="select-field rounded-control border border-line bg-paper px-3 py-1.5">
-              {others.map((j) => (
-                <option key={j.id} value={j.id}>
-                  {j.name}
-                </option>
-              ))}
-            </select>
+            <Select value={to} onChange={setTo} disabled={what !== "move"} label="Move to" className="w-56" options={others.map((j) => ({ value: j.id, label: j.name }))} />
           </label>
           <label className="flex items-center gap-2.5">
             <input type="radio" checked={what === "delete"} onChange={() => setWhat("delete")} className="size-4 accent-[var(--accent)]" />
@@ -764,27 +758,33 @@ function Goal({ value, per, onChange }: { value: number | null; per: "day" | "we
   const [unit, setUnit] = useState<"min" | "h">(value && value < 60 ? "min" : "h");
   const shown = value ? (unit === "h" ? Math.round((value / 60) * 100) / 100 : value) : "";
   const set = (n: string, u = unit, p = per) => onChange(n === "" ? null : Math.max(1, Math.min(p === "day" ? 1440 : 10080, Math.round(Number(n) * (u === "h" ? 60 : 1)))) || null, p);
-  const sel = "select-field rounded-control border border-line bg-paper py-2.5 pl-3 text-sm";
   return (
     <span className="flex flex-wrap items-center gap-2 text-sm">
       <input type="number" min={0} step={unit === "h" ? 0.5 : 5} value={shown} onChange={(e) => set(e.target.value)} placeholder="None" aria-label="Goal amount" className="w-24 rounded-control border border-line bg-paper px-3 py-2.5" />
-      <select
+      <Select
         value={unit}
-        aria-label="Minutes or hours"
-        onChange={(e) => {
-          const u = e.target.value as "min" | "h";
+        label="Minutes or hours"
+        className="w-32"
+        onChange={(v) => {
+          const u = v as "min" | "h";
           setUnit(u);
           if (shown !== "") set(String(shown), u);
         }}
-        className={sel}
-      >
-        <option value="min">minutes</option>
-        <option value="h">hours</option>
-      </select>
-      <select value={per} aria-label="Per day or week" onChange={(e) => onChange(value, e.target.value as "day" | "week")} className={sel}>
-        <option value="day">a day</option>
-        <option value="week">a week</option>
-      </select>
+        options={[
+          { value: "min", label: "minutes" },
+          { value: "h", label: "hours" },
+        ]}
+      />
+      <Select
+        value={per}
+        label="Per day or week"
+        className="w-32"
+        onChange={(v) => onChange(value, v as "day" | "week")}
+        options={[
+          { value: "day", label: "a day" },
+          { value: "week", label: "a week" },
+        ]}
+      />
     </span>
   );
 }
