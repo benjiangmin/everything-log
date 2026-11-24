@@ -16,14 +16,6 @@ type Done = { ok: true } | { ok: false; message: string };
 type Run = (f: () => Promise<Done>) => void;
 type Tab = "friends" | "requests" | "find";
 
-const SHARE_LABELS: [keyof NonNullable<Social["me"]>["share"], string][] = [
-  ["now", "Doing now"],
-  ["bar", "Day bar"],
-  ["stats", "Time spent"],
-  ["days", "Pinned days"],
-  ["map", "Map"],
-];
-const WHO: Record<string, string> = { nobody: "Nobody", friends: "Friends", anyone: "Anyone", trusted: "Trusted friends" };
 
 // The Social tab, laid out like a social app: your profile on top, what friends are doing now,
 // then Friends / Requests / Find people. What others see of you is set in Your account.
@@ -55,30 +47,10 @@ export default function SocialView({ social, renderedAt }: { social: Social; ren
           {me?.username ? <p className="text-muted">@{me.username}</p> : <PickUsername />}
           <dl className="mt-4 flex justify-center gap-8 sm:justify-start">
             <Count n={social.friends.length} label={social.friends.length === 1 ? "friend" : "friends"} onClick={() => setTab("friends")} />
-            <Count n={social.incoming.length} label={social.incoming.length === 1 ? "request" : "requests"} onClick={() => setTab("requests")} />
-            <Count n={social.pinned.length} label={social.pinned.length === 1 ? "day shared" : "days shared"} />
           </dl>
           {me?.now && <NowPill now={me.now} at={now} className="mt-4" />}
-          <div className="mt-4 flex flex-wrap justify-center gap-2 sm:justify-start">
-            <Link href="/account#social" className="rounded-control bg-surface px-4 py-2 text-sm font-semibold hover:bg-line">
-              Edit what others see
-            </Link>
-            {me?.username && (
-              <Link href={`/social/${me.username}`} className="rounded-control bg-surface px-4 py-2 text-sm font-semibold hover:bg-line">
-                View my profile
-              </Link>
-            )}
-          </div>
         </div>
       </section>
-
-      <p className="mt-5 flex flex-wrap justify-center gap-x-4 gap-y-1 text-sm text-muted sm:justify-start">
-        {SHARE_LABELS.map(([key, label]) => (
-          <span key={key} className="whitespace-nowrap">
-            {label}: <span className="font-semibold text-ink">{WHO[me?.share?.[key] ?? "nobody"] ?? "Nobody"}</span>
-          </span>
-        ))}
-      </p>
 
       {message && (
         <p role="alert" className="mt-4 rounded-control bg-surface px-4 py-2.5 text-sm text-danger">
@@ -399,7 +371,6 @@ function Search({ onAction }: { onAction: Run }) {
         className="w-full rounded-full border border-line bg-surface/60 px-5 py-3 focus:border-ink focus:bg-paper [&::-webkit-search-cancel-button]:hidden"
         style={{ outline: "none" }}
       />
-      {!shown && <p className="mt-3 px-2 text-sm text-muted">Type at least two letters.</p>}
       {shown && (
         <ul className="mt-3 divide-y divide-line rounded-card border border-line">
           {shown.length === 0 && <li className="px-5 py-4 text-sm text-muted">Nobody found.</li>}

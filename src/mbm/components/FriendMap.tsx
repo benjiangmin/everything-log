@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { APIProvider, Map, useMap, useMapsLibrary } from "@vis.gl/react-google-maps";
 import { HtmlMarker, KEY, MAP_GROUND, stylesFor } from "./mapBits";
 import { clock } from "@/mbm/time";
@@ -20,12 +20,14 @@ export default function FriendMap({ stops, route, tz }: { stops: Stop[]; route: 
           <Fit points={all} />
           <Route route={route} />
           {stops.map((s, i) => (
-            <HtmlMarker key={i} position={{ lat: s.lat, lng: s.lng }} zIndex={5} passive>
-              <span className="pointer-events-none flex -translate-x-1/2 -translate-y-full flex-col items-center">
-                <span className="mb-1 whitespace-nowrap rounded-full bg-ink px-2 py-0.5 text-xs font-semibold text-paper">
+            // (HtmlMarker puts the bottom middle on the spot; the label floats above the dot,
+            // so the dot's middle is on it.)
+            <HtmlMarker key={i} position={{ lat: s.lat, lng: s.lng }} zIndex={5}>
+              <span className="group relative block size-3.5 translate-y-1/2 cursor-default rounded-full border-2 border-paper bg-ink shadow" aria-label={`${s.name ?? "Stop"} · ${clock(s.arrived, tz)}`}>
+                <span className="pointer-events-none absolute bottom-full left-1/2 mb-1.5 hidden -translate-x-1/2 whitespace-nowrap rounded-full bg-ink px-2.5 py-1 text-xs font-semibold text-paper shadow-md group-hover:block">
                   {s.name ?? "Stop"} · {clock(s.arrived, tz)}
+                  {s.departed ? ` – ${clock(s.departed, tz)}` : ""}
                 </span>
-                <span className="size-3 rounded-full border-2 border-paper bg-ink" />
               </span>
             </HtmlMarker>
           ))}
@@ -38,8 +40,11 @@ export default function FriendMap({ stops, route, tz }: { stops: Stop[]; route: 
 function Fit({ points }: { points: number[][] }) {
   const map = useMap();
   const core = useMapsLibrary("core");
+  const done = useRef(false);
+  // Once: after that the map stays where you move it (the page re-renders every minute).
   useEffect(() => {
-    if (!map || !core || points.length < 2) return;
+    if (!map || !core || points.length < 2 || done.current) return;
+    done.current = true;
     const b = new core.LatLngBounds();
     for (const p of points) b.extend({ lat: p[0], lng: p[1] });
     map.fitBounds(b, 48);

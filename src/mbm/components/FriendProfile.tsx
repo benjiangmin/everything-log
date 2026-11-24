@@ -24,7 +24,7 @@ export default function FriendProfile({ profile: p, tz, renderedAt }: { profile:
       setMessage(res.ok ? null : res.message);
       router.refresh();
     });
-  const nothing = !p.now && !p.bar && !p.stats && !p.stops;
+  const nothing = !p.now && !p.bar && !p.stops;
 
   return (
     <div>
@@ -54,7 +54,6 @@ export default function FriendProfile({ profile: p, tz, renderedAt }: { profile:
             Accept request
           </button>
         )}
-        {p.relation === "self" && <span className="rounded-full bg-surface px-3 py-1 text-sm font-semibold">You · you see everything; others see what you share</span>}
         {p.relation === "friend" && <span className="rounded-full bg-surface px-3 py-1 text-sm font-semibold">Friends{p.trusted ? " · trusted" : ""}</span>}
       </div>
       {message && <p className="mt-3 text-sm text-danger">{message}</p>}
@@ -89,34 +88,12 @@ export default function FriendProfile({ profile: p, tz, renderedAt }: { profile:
 
       {p.bar && (
         <Section title={p.today ? "Today" : dayTitle(p.day)}>
-          <Bar slices={p.bar} day={p.day} tz={tz} />
-        </Section>
-      )}
-
-      {p.stats && p.stats.length > 0 && (
-        <Section title="Where the time went">
-          <ul className="grid gap-2.5">
-            {p.stats.slice(0, 12).map((s) => {
-              const max = p.stats![0].seconds || 1;
-              return (
-                <li key={s.name} className="grid grid-cols-[minmax(0,9rem)_1fr_auto] items-center gap-3 text-sm">
-                  <span className="flex min-w-0 items-center gap-2">
-                    <span className="size-2.5 shrink-0 rounded-full" style={{ background: s.color }} />
-                    <span className="truncate font-semibold">{s.name}</span>
-                  </span>
-                  <span className="h-2.5 overflow-hidden rounded-full bg-surface">
-                    <span className="block h-full rounded-full" style={{ width: `${(s.seconds / max) * 100}%`, background: s.color }} />
-                  </span>
-                  <span className="tabular-nums text-muted">{span(s.seconds * 1000)}</span>
-                </li>
-              );
-            })}
-          </ul>
+          <Bar slices={p.bar} day={p.day} tz={tz} now={p.today ? now : null} />
         </Section>
       )}
 
       {p.stops && (
-        <Section title="Where they went">
+        <Section title="On the map">
           <FriendMap stops={p.stops} route={p.route ?? []} tz={tz} />
         </Section>
       )}
@@ -147,27 +124,57 @@ function Chip({ href, on, children }: { href: string; on: boolean; children: Rea
   );
 }
 
-// Their day on one bar, midnight to midnight.
-function Bar({ slices, day, tz }: { slices: Profile["bar"] & object; day: string; tz: string }) {
-  const first = slices.length ? Math.min(...slices.map((s) => +new Date(s.start))) : 0;
+// Their day on one bar, midnight to midnight, with a line at "now" (today). Hover it for what it
+// was (private jobs say Busy).
+function Bar({ slices, day, tz, now }: { slices: Profile["bar"] & object; day: string; tz: string; now: number | null }) {
+  const [hover, setHover] = useState<number | null>(null); // where the pointer is: 0 to 1
+  const first = slices.length ? Math.min(...slices.map((s) => +new Date(s.start))) : (now ?? 0);
   const dayStart = first ? dayStartOf(first, tz) : 0;
   const total = 24 * 3600_000;
+  const pct = (t: number) => (Math.min(total, Math.max(0, t - dayStart)) / total) * 100;
+  const at = hover == null ? null : dayStart + hover * total;
+  const lit = at == null ? null : (slices.findLast((s) => +new Date(s.start) <= at && at < +new Date(s.end)) ?? null);
   return (
     <div>
-      <div className="relative h-12 overflow-hidden rounded-control bg-surface">
-        {slices.map((s, i) => {
-          const a = Math.max(0, +new Date(s.start) - dayStart);
-          const b = Math.min(total, +new Date(s.end) - dayStart);
-          if (b <= a) return null;
-          return (
-            <span
-              key={i}
-              title={`${s.name} · ${clock(s.start, tz)} – ${clock(s.end, tz)}`}
-              className="absolute inset-y-0 border-r border-paper/60"
-              style={{ left: `${(a / total) * 100}%`, width: `${((b - a) / total) * 100}%`, background: s.color }}
-            />
-          );
-        })}
+      <div
+        className="relative h-12 rounded-control bg-surface"
+        onPointerMove={(e) => {
+          if (e.pointerType !== "mouse") return;
+          const r = e.currentTarget.getBoundingClientRect();
+          setHover(Math.min(1, Math.max(0, (e.clientX - r.left) / r.width)));
+        }}
+        onPointerLeave={() => setHover(null)}
+      >
+        <div className="absolute inset-0 overflow-hidden rounded-control">
+          {slices.map((s, i) => {
+            const a = pct(+new Date(s.start));
+            const b = pct(+new Date(s.end));
+            if (b <= a) return null;
+            return (
+              <span
+                key={i}
+                className={`absolute inset-y-0 border-r border-paper/60 transition-opacity ${lit && lit !== s ? "opacity-45" : ""}`}
+                style={{ left: `${a}%`, width: `${b - a}%`, background: s.color }}
+              />
+            );
+          })}
+        </div>
+        {now != null && <div aria-hidden="true" className="pointer-events-none absolute -inset-y-1 z-10 w-0.5 -translate-x-1/2 rounded-full bg-ink" style={{ left: `${pct(now)}%` }} />}
+        {lit && (
+          <div
+            role="tooltip"
+            className="pointer-events-none absolute bottom-full z-20 mb-3 w-max rounded-card bg-accent px-4 py-2.5 text-accent-ink shadow-xl shadow-ink/30"
+            style={{ left: `${Math.min(88, Math.max(12, (hover ?? 0) * 100))}%`, transform: "translateX(-50%)" }}
+          >
+            <p className="flex items-center gap-2 font-display text-base font-semibold">
+              <span className="size-2.5 rounded-full ring-1 ring-accent-ink/40" style={{ background: lit.color }} />
+              {lit.name}
+            </p>
+            <p className="num mt-0.5 text-sm opacity-80">
+              {clock(lit.start, tz)} – {now != null && +new Date(lit.end) >= now - 60_000 ? "now" : clock(lit.end, tz)} · {span(+new Date(lit.end) - +new Date(lit.start))}
+            </p>
+          </div>
+        )}
       </div>
       <div className="mt-1 flex justify-between text-xs text-muted">
         <span>12a</span>
