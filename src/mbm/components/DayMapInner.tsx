@@ -1762,19 +1762,21 @@ function NameStop({ visit, onDone, onMove }: { visit: Visit; onDone: () => void;
           )}
         </>
       )}
-      <div className="mt-1 flex gap-2">
-        <button type="submit" disabled={pending || !changed || (!own.trim() && !linked)} className="flex-1 rounded-[10px] bg-[#3e281b] py-2 text-sm font-semibold text-[#faf6f0] disabled:opacity-50">
-          {pending ? "Saving…" : "Save"}
-        </button>
-        <button type="button" onClick={onDone} className="rounded-[10px] px-3 py-2 text-sm text-[#86705f] hover:bg-[#f0e7db]">
-          Close
-        </button>
-      </div>
+      <button type="submit" disabled={pending || !changed || (!own.trim() && !linked)} className="mt-1 w-full rounded-[10px] bg-[#3e281b] py-2 text-sm font-semibold text-[#faf6f0] disabled:opacity-50">
+        {pending ? "Saving…" : "Save"}
+      </button>
       {/* Wrong spot, or not a real stop at all. */}
       <div className="flex gap-2 border-t border-[#e2d5c4] pt-2">
-        <button type="button" onClick={onMove} className="flex-1 rounded-[10px] py-1.5 text-sm text-[#3e281b] hover:bg-[#f0e7db]">
-          Move
+        <button type="button" onClick={onDone} className="flex-1 rounded-[10px] py-1.5 text-sm text-[#86705f] hover:bg-[#f0e7db]">
+          Close
         </button>
+        {/* (One of your places: its Google pin and building say where it is. Moving is for a stop
+            with no place yet.) */}
+        {!visit.placeId && (
+          <button type="button" onClick={onMove} className="flex-1 rounded-[10px] py-1.5 text-sm text-[#3e281b] hover:bg-[#f0e7db]">
+            Move
+          </button>
+        )}
         <button
           type="button"
           disabled={pending}
