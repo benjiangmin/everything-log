@@ -35,7 +35,8 @@ create policy "own ai_calls" on ai_calls for all to authenticated using (user_id
 create index if not exists ai_calls_at on ai_calls (at);
 
 -- suggest(), as in 030, with: where you are between stops (the phone's latest dot), and a
--- calendar event no longer suggests its job when you're far from where it happens.
+-- calendar event no longer suggests its job when you're far from where it happens (its places, and
+-- everywhere you've done it before).
 create or replace function suggest(
   p_at timestamptz default now(),
   p_lat double precision default null,
@@ -181,13 +182,23 @@ begin
     cross join totals t
     left join per p on p.aid = a.id
     left join cal_hit ch on ch.aid = a.id
-    -- Far from where it happens: more than 3 km from all of its places, or, with no places of its
-    -- own, more than 25 km from every place you've named (out of town).
+    -- Far from where it happens: more than 3 km from its places, everywhere you've done it before,
+    -- and everywhere you were for this event before (CS577 when you've gone home for the weekend). Nothing to go by yet: not far.
     left join lateral (
       select case
         when v_lat is null or ch.aid is null then false
-        when cardinality(jp.places) > 0 then coalesce((select min(meters_between(pl.lat, pl.lng, v_lat, v_lng)) from places pl where pl.id = any(jp.places)), 0) > 3000
-        else coalesce((select min(meters_between(pl.lat, pl.lng, v_lat, v_lng)) from places pl where pl.user_id = auth.uid()), 0) > 25000
+        else coalesce(least(
+          (select min(meters_between(pl.lat, pl.lng, v_lat, v_lng)) from places pl where pl.id = any(jp.places)),
+          (select min(meters_between(v.lat, v.lng, v_lat, v_lng))
+             from blocks b join visits v on v.user_id = auth.uid() and v.arrived_at <= b.started_at + interval '5 minutes'
+               and coalesce(v.departed_at, 'infinity') > b.started_at
+             where b.user_id = auth.uid() and b.activity_id = a.id and b.started_at > p_at - interval '120 days' and b.started_at < p_at),
+          -- (and where you were for this event before: a class that repeats every week)
+          (select min(meters_between(v.lat, v.lng, v_lat, v_lng))
+             from calendar_events e join visits v on v.user_id = auth.uid() and v.arrived_at < e.ends_at
+               and coalesce(v.departed_at, 'infinity') > e.starts_at + interval '10 minutes'
+             where e.user_id = auth.uid() and e.title = ch.title and e.ends_at < p_at and e.starts_at > p_at - interval '120 days')
+        ), 0) > 3000
       end as far
       from job_prefs(a.id) jp
     ) fa on true
