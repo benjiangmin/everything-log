@@ -56,6 +56,7 @@ async function tokenRequest(body: Record<string, string>): Promise<TokenAnswer> 
 export async function exchangeCode(origin: string, code: string) {
   return tokenRequest({ code, grant_type: "authorization_code", redirect_uri: redirectUri(origin) });
 }
+export const NO_CALENDAR = "Calendar access wasn't checked. Connect again and tick the calendar box on Google's screen.";
 export const grantedCalendar = (t: TokenAnswer & { scope?: string }) => (t.scope ?? "").split(" ").includes(CALENDAR);
 
 // After "Allow": swaps the code for tokens and saves them (yours only: row level security).
@@ -65,6 +66,8 @@ export async function finishConnect(client: SupabaseClient, origin: string, code
 
 export async function saveTokens(client: SupabaseClient, t: TokenAnswer): Promise<string | null> {
   if (!t.access_token) return t.error_description ?? t.error ?? "Google didn't say yes.";
+  // (Google shows each permission as a box to tick; left unticked, there's no calendar to read.)
+  if (!grantedCalendar(t)) return NO_CALENDAR;
   let email: string | null = null;
   try {
     email = (JSON.parse(Buffer.from((t.id_token ?? "").split(".")[1] ?? "", "base64url").toString()) as { email?: string }).email ?? null;

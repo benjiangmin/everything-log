@@ -1,5 +1,5 @@
 import { cookies } from "next/headers";
-import { exchangeCode, grantedCalendar, saveTokens } from "@/mbm/google";
+import { exchangeCode, grantedCalendar, NO_CALENDAR, saveTokens } from "@/mbm/google";
 import { mbm, mbmUser } from "@/mbm/supabase";
 import { baseFor } from "@/mbm/paths";
 
@@ -48,6 +48,8 @@ export async function GET(req: Request) {
     try {
       next = (JSON.parse(signin) as { next?: string }).next ?? `${base}/`;
     } catch {}
+    // (Signed in, but the calendar box was left unticked: say so on the home page.)
+    if (!grantedCalendar(t)) next = `${base}/?google=${encodeURIComponent(`error:${NO_CALENDAR}`)}`;
     return Response.redirect(`${origin}${next}`, 302);
   }
 
