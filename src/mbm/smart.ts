@@ -300,6 +300,12 @@ export async function pinnedJobs(client: SupabaseClient): Promise<string[]> {
   return error ? [] : ((data as { pinned_jobs?: string[] } | null)?.pinned_jobs ?? []);
 }
 
+// Jobs never to suggest (085); [] if none (or 085 isn't run yet).
+export async function neverSuggest(client: SupabaseClient): Promise<string[]> {
+  const { data, error } = await client.from("profiles").select("never_suggest").maybeSingle();
+  return error ? [] : ((data as { never_suggest?: string[] } | null)?.never_suggest ?? []);
+}
+
 // Home's "Right now?" (the phone's and the website's, the same 3): the best guesses for right now
 // (suggest(): calendar, time of day, where you are), then your most recent jobs, never what's
 // pinned or running or a Commute. With AI suggestions on, the AI keeps only the ones that fit right
@@ -309,17 +315,18 @@ export async function pinnedJobs(client: SupabaseClient): Promise<string[]> {
 export async function rightNow(client: SupabaseClient, opts: Opts & { guesses?: Guess[]; limit?: number; reuse?: boolean }): Promise<Pick[]> {
   const limit = opts.limit ?? 3;
   const was = opts.reuse ? await readState<{ at: string; ids: string[] }>(client, "right_now") : null;
-  const [g, acts, running, pins] = await Promise.all([
+  const [g, acts, running, pins, never] = await Promise.all([
     opts.guesses
       ? Promise.resolve({ data: opts.guesses })
       : client.rpc("suggest", { p_at: opts.at.toISOString(), p_lat: opts.lat ?? null, p_lng: opts.lng ?? null, p_tz: opts.tz, p_limit: 6 }),
     client.from("activities").select("id, name, color").order("last_used_at", { ascending: false, nullsFirst: false }).limit(40),
     client.from("blocks").select("activity_id").is("ended_at", null),
     pinnedJobs(client),
+    neverSuggest(client),
   ]);
   const all = (acts.data ?? []) as { id: string; name: string; color: string }[];
   const byId = new Map(all.map((a) => [a.id, a]));
-  const skip = new Set([...pins, ...((running.data ?? []) as { activity_id: string | null }[]).map((r) => r.activity_id ?? "")]);
+  const skip = new Set([...pins, ...never, ...((running.data ?? []) as { activity_id: string | null }[]).map((r) => r.activity_id ?? "")]);
   const ok = (id: string) => !skip.has(id) && byId.has(id) && !isMoving(byId.get(id)!.name);
   const picks = ((Array.isArray(g.data) ? g.data : []) as Guess[]).map((x) => x.activity_id).filter(ok);
   const recent = all.map((a) => a.id).filter(ok).slice(0, 14);
