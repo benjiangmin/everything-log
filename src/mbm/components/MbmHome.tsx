@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { bestGuesses, keepGoingOn, nudges, stopEntry, type Guess } from "@/app/mbm/actions";
+import { bestGuesses, keepGoingOn, nudges, stopEntry, usualOrder, type Guess } from "@/app/mbm/actions";
 import type { Nudge } from "@/mbm/smart";
 import type { Activity, Block, Day } from "@/mbm/data";
 import { clock, span } from "@/mbm/time";
@@ -25,6 +25,21 @@ export default function MbmHome({ day, renderedAt }: { day: Day; renderedAt: num
   const [guesses, setGuesses] = useState<Guess[]>([]);
   // (AI suggestions: a word about something that's been going a while. Gone once answered.)
   const [nudge, setNudge] = useState<Nudge[]>([]);
+  const [aiUsual, setAiUsual] = useState<string[] | null>(null);
+  const usualKey = day.activities
+    .filter((a) => !day.running.some((b) => b.activity_id === a.id) && !isMoving(a.name))
+    .slice(0, 14)
+    .map((a) => a.id)
+    .join(",");
+  useEffect(() => {
+    let live = true;
+    usualOrder(usualKey ? usualKey.split(",") : [])
+      .then((ids) => live && setAiUsual(ids))
+      .catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, [usualKey]);
 
   useEffect(() => {
     let live = true;
@@ -57,7 +72,9 @@ export default function MbmHome({ day, renderedAt }: { day: Day; renderedAt: num
 
   // Your usual jobs (most recently used first), not what's running, not Commute (that one comes from where you go).
   const runningIds = new Set(running.map((b) => b.activity_id));
-  const usual = day.activities.filter((a) => !runningIds.has(a.id) && !isMoving(a.name)).slice(0, 6);
+  const recent = day.activities.filter((a) => !runningIds.has(a.id) && !isMoving(a.name));
+  // (AI suggestions on: only the ones that fit right now, best first, from your 14 most recent.)
+  const usual = aiUsual ? aiUsual.map((id) => recent.find((a) => a.id === id)).filter((a): a is Activity => !!a) : recent.slice(0, 6);
   const suggested = guesses.filter((g) => !runningIds.has(g.activity_id));
 
   return (

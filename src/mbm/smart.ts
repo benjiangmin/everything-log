@@ -256,3 +256,38 @@ export async function keepGoing(client: SupabaseClient, blockId: string) {
   const st = await readState<OverState>(client, kind);
   await writeState(client, kind, { next_check: new Date(Date.now() + 90 * 60_000).toISOString(), nudge: null, kept_going: (st?.kept_going ?? 0) + 1 });
 }
+
+const USUAL_RULES = `A personal time tracker shows a row of quick picks: jobs (activities) the person can start with one tap. From their usual jobs below, pick the ones that could make sense to start right now, best first. Leave out:
+- anything they just finished (see today_so_far) or that's running,
+- anything whose name ties it to a place they aren't at or near (a restaurant, a store, someone's house),
+- anything that doesn't fit the time of day or day of week, judging by its name and when they usually do it (lunch at 2 AM, a class on a weekend).
+Fewer is fine. Answer with the ids, in order.`;
+
+// "Your usual" (Home's quick picks), checked by the AI when it's on: only the ones that fit right
+// now, best first. null: the AI's off (or didn't answer), so the row stays most recent first.
+export async function smartUsual(client: SupabaseClient, jobs: { id: string; name: string }[], opts: Opts & { limit: number }): Promise<string[] | null> {
+  if (!jobs.length || !(await aiOn(client))) return null;
+  const s = await situation(client, opts);
+  const ids = jobs.map((j) => j.id);
+  const key = hash({
+    ids,
+    here: s.placeId ?? (s.spot ? [s.spot.lat.toFixed(3), s.spot.lng.toFixed(3)] : null),
+    running: s.runningIds,
+    today: s.facts.today_so_far.length,
+    hour: `${dayKeyOf(opts.at, opts.tz)} ${Math.floor(minuteOfDay(opts.at, opts.tz) / 60)}`,
+  });
+  const was = await readState<{ key: string; keep: string[] }>(client, "usual");
+  if (was?.key === key) return was.keep;
+  const facts = await jobFacts(client, ids, s.places, s.spot, opts.at, opts.tz);
+  const out = await ask<{ keep: string[] }>(
+    client,
+    "usual",
+    USUAL_RULES + ` Pick at most ${opts.limit}.`,
+    JSON.stringify({ ...s.facts, usual_jobs: jobs.map((j) => ({ id: j.id, ...(facts.get(j.id) ?? { name: j.name }) })) }),
+    { type: "object", additionalProperties: false, required: ["keep"], properties: { keep: { type: "array", items: { type: "string" } } } },
+  );
+  if (!out) return null;
+  const keep = out.keep.filter((id) => ids.includes(id)).slice(0, opts.limit);
+  await writeState(client, "usual", { key, keep });
+  return keep;
+}

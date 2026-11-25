@@ -1,7 +1,7 @@
 "use server";
 
 import { googleStatus, syncCalendar } from "@/mbm/google";
-import { keepGoing, smartGuesses, smartOver, type Nudge, type Over } from "@/mbm/smart";
+import { keepGoing, smartGuesses, smartOver, smartUsual, type Nudge, type Over } from "@/mbm/smart";
 import { buildingAt, buildingsNear, contains, nothingBetween } from "@/mbm/buildings";
 
 import { revalidatePath } from "next/cache";
@@ -846,6 +846,17 @@ export async function bestGuesses(): Promise<Guess[]> {
   const { data, error } = await client.rpc("suggest", { p_at: at.toISOString(), p_tz: mbmTz(), p_limit: 6 });
   if (error || !Array.isArray(data)) return [];
   return smartGuesses(client, data as Guess[], { at, tz: mbmTz(), limit: 2 }).catch(() => (data as Guess[]).slice(0, 2));
+}
+
+// "Your usual" with AI suggestions on: which of these fit right now, best first (null: as is).
+export async function usualOrder(ids: string[]): Promise<string[] | null> {
+  const want = (Array.isArray(ids) ? ids : []).filter(isUuid).slice(0, 14);
+  if (!want.length) return null;
+  const client = await mbm();
+  const { data } = await client.from("activities").select("id, name").in("id", want);
+  const byId = new Map(((data ?? []) as { id: string; name: string }[]).map((a) => [a.id, a]));
+  const jobs = want.map((id) => byId.get(id)).filter((a): a is { id: string; name: string } => !!a);
+  return smartUsual(client, jobs, { at: new Date(), tz: mbmTz(), limit: 6 }).catch(() => null);
 }
 
 // Something running long that the AI thinks is worth a word (only with AI suggestions on).
