@@ -2,7 +2,8 @@
 
 import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { bestGuesses, keepGoingOn, nudges, stopEntry, usualOrder, type Guess } from "@/app/mbm/actions";
+import { keepGoingOn, nudges, rightNowPicks, setPinnedJobs, stopEntry } from "@/app/mbm/actions";
+import type { Pick } from "@/mbm/smart";
 import type { Nudge } from "@/mbm/smart";
 import type { Activity, Block, Day } from "@/mbm/data";
 import { clock, span } from "@/mbm/time";
@@ -15,39 +16,39 @@ import { useSeconds } from "./useSeconds";
 // (a ticking stopwatch and a round Stop), or a "Start something" card when nothing is; then your
 // usual jobs as tiles and the best guesses for right now as rows. Every start opens the side
 // panel (filled in), where you say when it started.
-export default function MbmHome({ day, renderedAt }: { day: Day; renderedAt: number }) {
+export default function MbmHome({ day, renderedAt, pins }: { day: Day; renderedAt: number; pins: string[] }) {
   const router = useRouter();
   const byId = new Map(day.activities.map((a) => [a.id, a]));
   const running = day.running;
   const [first, ...more] = running;
   const [stopping, runStop] = useTransition();
   const [stopped, setStopped] = useState<{ name: string; ms: number; color: string } | null>(null);
-  const [guesses, setGuesses] = useState<Guess[]>([]);
   // (AI suggestions: a word about something that's been going a while. Gone once answered.)
   const [nudge, setNudge] = useState<Nudge[]>([]);
-  const [aiUsual, setAiUsual] = useState<string[] | null>(null);
-  const [usualReady, setUsualReady] = useState(false); // (placeholders until the AI's had its say: no flash of the wrong ones)
-  const usualKey = day.activities
-    .filter((a) => !day.running.some((b) => b.activity_id === a.id) && !isMoving(a.name))
-    .slice(0, 14)
-    .map((a) => a.id)
-    .join(",");
+  // "Right now?": the same 3 as the phone's (src/mbm/smart.ts rightNow). Placeholders until
+  // they're in, so nothing flashes and changes.
+  const [picks, setPicks] = useState<Pick[] | null>(null);
+  const [pinned, setPinned] = useState<string[]>(pins);
+  const [pinPicking, setPinPicking] = useState(false);
+  const runningKey = running.map((b) => b.activity_id).join(",");
+  const pinsKey = pinned.join(",");
   useEffect(() => {
     let live = true;
-    usualOrder(usualKey ? usualKey.split(",") : [])
-      .then((ids) => live && setAiUsual(ids))
-      .catch(() => undefined)
-      .finally(() => live && setUsualReady(true));
+    rightNowPicks()
+      .then((p) => live && setPicks(p))
+      .catch(() => live && setPicks([]));
     return () => {
       live = false;
     };
-  }, [usualKey]);
+  }, [runningKey, pinsKey]);
+  const pin = (id: string, on: boolean) => {
+    const next = on ? [...pinned.filter((x) => x !== id), id] : pinned.filter((x) => x !== id);
+    setPinned(next);
+    void setPinnedJobs(next);
+  };
 
   useEffect(() => {
     let live = true;
-    bestGuesses()
-      .then((g) => live && setGuesses(g))
-      .catch(() => undefined);
     nudges()
       .then((n) => live && setNudge(n))
       .catch(() => undefined);
@@ -72,12 +73,10 @@ export default function MbmHome({ day, renderedAt }: { day: Day; renderedAt: num
 
   const start = (name?: string) => openMbm({ kind: "now", switch: running.length > 0, name });
 
-  // Your usual jobs (most recently used first), not what's running, not Commute (that one comes from where you go).
   const runningIds = new Set(running.map((b) => b.activity_id));
-  const recent = day.activities.filter((a) => !runningIds.has(a.id) && !isMoving(a.name));
-  // (AI suggestions on: only the ones that fit right now, best first, from your 14 most recent.)
-  const usual = aiUsual ? aiUsual.map((id) => recent.find((a) => a.id === id)).filter((a): a is Activity => !!a) : recent.slice(0, 6);
-  const suggested = guesses.filter((g) => !runningIds.has(g.activity_id));
+  // Pinned (yours, the same on the phone): up to 6, not what's running.
+  const pinnedJobs = pinned.map((id) => byId.get(id)).filter((a): a is Activity => !!a && !runningIds.has(a.id)).slice(0, 6);
+  const rightNow = (picks ?? []).filter((p) => !runningIds.has(p.activity_id) && !pinned.includes(p.activity_id));
 
   return (
     <section aria-label="Right now" className="mt-8 flex flex-col gap-6">
@@ -143,70 +142,93 @@ export default function MbmHome({ day, renderedAt }: { day: Day; renderedAt: num
         )}
       </div>
 
-      {!usualReady && recent.length > 0 && (
+      <div>
+        <Heading>Pinned</Heading>
+        <ul className="grid grid-cols-3 gap-3 sm:grid-cols-6">
+          {pinnedJobs.map((a, i) => (
+            <li key={a.id} className="home-pop group relative" style={{ animationDelay: `${i * 40}ms` }}>
+              <button
+                type="button"
+                onClick={() => start(a.name)}
+                title={running.length ? `Switch to ${a.name}` : `Start ${a.name}`}
+                className="flex h-full w-full min-w-0 flex-col items-center gap-2 rounded-[22px] bg-surface px-3 pb-2.5 pt-3.5 transition-[transform,background-color] hover:-translate-y-0.5 hover:bg-line/60 active:scale-[0.97]"
+              >
+                <Badge activity={a} />
+                <span className="line-clamp-2 h-8 w-full break-words text-center text-xs font-semibold leading-tight text-ink">{a.name}</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => pin(a.id, false)}
+                aria-label={`Unpin ${a.name}`}
+                title="Unpin"
+                className="absolute right-1.5 top-1.5 grid size-6 place-items-center rounded-full bg-paper text-muted opacity-0 shadow-sm transition-opacity hover:text-ink focus-visible:opacity-100 group-hover:opacity-100"
+              >
+                <svg viewBox="0 0 24 24" className="size-3.5" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden="true">
+                  <path d="M6 6l12 12M18 6L6 18" />
+                </svg>
+              </button>
+            </li>
+          ))}
+          {pinned.length < 6 && (
+            <li className="relative">
+              <button
+                type="button"
+                onClick={() => setPinPicking((x) => !x)}
+                aria-label="Pin a job"
+                className="grid h-full min-h-[112px] w-full place-items-center rounded-[22px] border-2 border-dashed border-line text-muted transition-colors hover:border-muted hover:text-ink"
+              >
+                <svg viewBox="0 0 24 24" className="size-6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+                  <path d="M12 5v14M5 12h14" />
+                </svg>
+              </button>
+              {pinPicking && (
+                <PinPicker
+                  jobs={day.activities.filter((a) => !pinned.includes(a.id) && !isMoving(a.name))}
+                  onPick={(id) => {
+                    pin(id, true);
+                    setPinPicking(false);
+                  }}
+                  onClose={() => setPinPicking(false)}
+                />
+              )}
+            </li>
+          )}
+        </ul>
+      </div>
+
+      {picks === null ? (
         <div aria-hidden="true">
-          <Heading>Recommended</Heading>
-          <ul className="grid grid-cols-3 gap-3 sm:grid-cols-6">
-            {recent.slice(0, 6).map((a) => (
-              <li key={a.id} className="h-[112px] animate-pulse rounded-[22px] bg-surface motion-reduce:animate-none" />
-            ))}
-          </ul>
-        </div>
-      )}
-      {usualReady && usual.length > 0 && (
-        <div>
-          <Heading>Recommended</Heading>
-          <ul className="grid grid-cols-3 gap-3 sm:grid-cols-6">
-            {usual.map((a, i) => (
-              <li key={a.id} className="home-pop" style={{ animationDelay: `${i * 40}ms` }}>
-                <button
-                  type="button"
-                  onClick={() => start(a.name)}
-                  title={running.length ? `Switch to ${a.name}` : `Start ${a.name}`}
-                  className="flex h-full w-full min-w-0 flex-col items-center gap-2 rounded-[22px] bg-surface px-3 pb-2.5 pt-3.5 transition-[transform,background-color] hover:-translate-y-0.5 hover:bg-line/60 active:scale-[0.97]"
-                >
-                  <Badge activity={a} />
-                  <span className="line-clamp-2 h-8 w-full break-words text-center text-xs font-semibold leading-tight text-ink">{a.name}</span>
-                </button>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      {suggested.length > 0 && (
-        <div>
-          <Heading>Right about now</Heading>
+          <Heading>Right now?</Heading>
           <ul className="flex flex-col gap-2">
-            {suggested.map((g) => (
-              <li key={g.activity_id}>
-                <button
-                  type="button"
-                  onClick={() => start(g.name)}
-                  className="flex min-h-14 w-full items-center gap-3.5 rounded-[18px] bg-surface px-3.5 py-2.5 text-left transition-[transform,background-color] hover:bg-line/60 active:scale-[0.99]"
-                >
-                  <Badge activity={{ name: g.name, color: g.color }} small />
-                  <span className="min-w-0 flex-1">
-                    <span className="block font-display font-semibold text-ink">{g.name}</span>
-                    {g.why[0] && <span className="block truncate text-xs text-muted">{g.why.slice(0, 2).join(" · ")}</span>}
-                  </span>
-                  <span aria-hidden="true" className="grid size-8 shrink-0 place-items-center rounded-full bg-paper text-ink">
-                    <Play />
-                  </span>
-                </button>
-              </li>
+            {[0, 1, 2].map((i) => (
+              <li key={i} className="h-14 animate-pulse rounded-[18px] bg-surface motion-reduce:animate-none" />
             ))}
           </ul>
         </div>
+      ) : (
+        rightNow.length > 0 && (
+          <div>
+            <Heading>Right now?</Heading>
+            <ul className="flex flex-col gap-2">
+              {rightNow.map((g, i) => (
+                <li key={g.activity_id} className="home-pop" style={{ animationDelay: `${i * 40}ms` }}>
+                  <button
+                    type="button"
+                    onClick={() => start(g.name)}
+                    className="flex min-h-14 w-full items-center gap-3.5 rounded-[18px] bg-surface px-3.5 py-2.5 text-left transition-[transform,background-color] hover:bg-line/60 active:scale-[0.99]"
+                  >
+                    <Badge activity={{ name: g.name, color: g.color }} small />
+                    <span className="min-w-0 flex-1 truncate font-display font-semibold text-ink">{g.name}</span>
+                    <span aria-hidden="true" className="grid size-8 shrink-0 place-items-center rounded-full bg-paper text-ink">
+                      <Play />
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )
       )}
-
-      <button
-        type="button"
-        onClick={() => openMbm({ kind: "add", dayKey: day.dayKey })}
-        className="self-start text-sm text-muted underline-offset-4 hover:text-ink hover:underline"
-      >
-        + Add a missed entry
-      </button>
 
       {/* Just stopped: how long it was, with Undo (like the phone's). */}
       {stopped && (
@@ -384,5 +406,34 @@ function Play() {
     <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
       <path d="M8 5.5v13l10.5-6.5z" />
     </svg>
+  );
+}
+
+// The pinned "+": pick a job to pin (search as you type).
+function PinPicker({ jobs, onPick, onClose }: { jobs: Activity[]; onPick: (id: string) => void; onClose: () => void }) {
+  const [q, setQ] = useState("");
+  const shown = jobs.filter((a) => a.name.toLowerCase().includes(q.trim().toLowerCase())).slice(0, 30);
+  return (
+    <div className="absolute left-0 top-full z-30 mt-2 w-64 rounded-[16px] bg-paper p-2 shadow-xl ring-1 ring-line">
+      <input
+        autoFocus
+        value={q}
+        onChange={(e) => setQ(e.target.value)}
+        onKeyDown={(e) => e.key === "Escape" && onClose()}
+        placeholder="Pin a job…"
+        className="w-full rounded-[10px] bg-surface px-3 py-2 text-sm outline-none ring-1 ring-line focus:ring-muted"
+      />
+      <ul className="mt-1 max-h-64 overflow-y-auto">
+        {shown.map((a) => (
+          <li key={a.id}>
+            <button type="button" onClick={() => onPick(a.id)} className="flex w-full items-center gap-2 rounded-[8px] px-2.5 py-2 text-left text-sm hover:bg-surface">
+              <span className="size-2.5 shrink-0 rounded-full" style={{ background: a.color }} />
+              <span className="truncate">{a.name}</span>
+            </button>
+          </li>
+        ))}
+        {!shown.length && <li className="px-2.5 py-2 text-sm text-muted">No job by that name.</li>}
+      </ul>
+    </div>
   );
 }

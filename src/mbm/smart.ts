@@ -5,6 +5,8 @@ import { aiReady, ask } from "./ai";
 import { dayKeyOf, dayRange } from "./time";
 import { isMoving } from "./moving";
 
+export type Pick = { activity_id: string; name: string; color: string };
+
 // AI suggestions (081_ai_suggestions.sql), for people who turned them on (Settings → Notifications).
 // The database's suggest() finds likely jobs from history, time of day, where you are and your
 // calendar; the AI then looks at the whole situation and keeps only the ones that make sense
@@ -257,7 +259,7 @@ export async function keepGoing(client: SupabaseClient, blockId: string) {
   await writeState(client, kind, { next_check: new Date(Date.now() + 90 * 60_000).toISOString(), nudge: null, kept_going: (st?.kept_going ?? 0) + 1 });
 }
 
-const USUAL_RULES = `A personal time tracker shows a row of quick picks: jobs (activities) the person can start with one tap. From their usual jobs below, pick the ones that could make sense to start right now, best first. Leave out:
+const USUAL_RULES = `A personal time tracker shows a few jobs (activities) the person might be starting right now, to start with one tap. From the jobs below (the app's guesses first, then their recent ones), pick the ones that could make sense to start right now, best first. Leave out:
 - anything they just finished (see today_so_far) or that's running,
 - anything whose name ties it to a place they aren't at or near (a restaurant, a store, someone's house),
 - anything that doesn't fit the time of day or day of week, judging by its name and when they usually do it (lunch at 2 AM, a class on a weekend).
@@ -290,4 +292,41 @@ export async function smartUsual(client: SupabaseClient, jobs: { id: string; nam
   const keep = out.keep.filter((id) => ids.includes(id)).slice(0, opts.limit);
   await writeState(client, "usual", { key, keep });
   return keep;
+}
+
+// Your pinned jobs (084), in order; [] if none (or 084 isn't run yet).
+export async function pinnedJobs(client: SupabaseClient): Promise<string[]> {
+  const { data, error } = await client.from("profiles").select("pinned_jobs").maybeSingle();
+  return error ? [] : ((data as { pinned_jobs?: string[] } | null)?.pinned_jobs ?? []);
+}
+
+// Home's "Right now?" (the phone's and the website's, the same 3): the best guesses for right now
+// (suggest(): calendar, time of day, where you are), then your most recent jobs, never what's
+// pinned or running or a Commute. With AI suggestions on, the AI keeps only the ones that fit right
+// now, best first (fewer is fine). guesses: suggest()'s list, if you have it already.
+export async function rightNow(client: SupabaseClient, opts: Opts & { guesses?: Guess[]; limit?: number }): Promise<Pick[]> {
+  const limit = opts.limit ?? 3;
+  const [g, acts, running, pins] = await Promise.all([
+    opts.guesses
+      ? Promise.resolve({ data: opts.guesses })
+      : client.rpc("suggest", { p_at: opts.at.toISOString(), p_lat: opts.lat ?? null, p_lng: opts.lng ?? null, p_tz: opts.tz, p_limit: 6 }),
+    client.from("activities").select("id, name, color").order("last_used_at", { ascending: false, nullsFirst: false }).limit(40),
+    client.from("blocks").select("activity_id").is("ended_at", null),
+    pinnedJobs(client),
+  ]);
+  const all = (acts.data ?? []) as { id: string; name: string; color: string }[];
+  const byId = new Map(all.map((a) => [a.id, a]));
+  const skip = new Set([...pins, ...((running.data ?? []) as { activity_id: string | null }[]).map((r) => r.activity_id ?? "")]);
+  const ok = (id: string) => !skip.has(id) && byId.has(id) && !isMoving(byId.get(id)!.name);
+  const picks = ((Array.isArray(g.data) ? g.data : []) as Guess[]).map((x) => x.activity_id).filter(ok);
+  const recent = all.map((a) => a.id).filter(ok).slice(0, 14);
+  const candidates = [...new Set([...picks, ...recent])].slice(0, 16);
+  const toPick = (id: string) => ({ activity_id: id, name: byId.get(id)!.name, color: byId.get(id)!.color });
+  const ai = await smartUsual(
+    client,
+    candidates.map((id) => ({ id, name: byId.get(id)!.name })),
+    { ...opts, limit },
+  ).catch(() => null);
+  const ids = ai ?? [...new Set([...picks.slice(0, 2), ...recent])];
+  return ids.filter(ok).slice(0, limit).map(toPick);
 }

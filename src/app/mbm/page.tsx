@@ -8,6 +8,7 @@ import { getDay, mbmTz } from "@/mbm/data";
 import { mbm, mbmReady, mbmUser } from "@/mbm/supabase";
 import { dayKeyOf, dayTitle, isDayKey } from "@/mbm/time";
 import MbmHome from "@/mbm/components/MbmHome";
+import { pinnedJobs } from "@/mbm/smart";
 import GoogleCard from "@/mbm/components/GoogleCard";
 import PhoneNote from "@/mbm/components/PhoneNote";
 import HomeSky from "@/mbm/components/HomeSky";
@@ -64,7 +65,7 @@ async function Home({ day: asked, google }: { day?: string; google?: string }) {
         dateLabel={dayTitle(today)}
       />
       <PhoneNote phone={await linkedPhone()} now={+new Date(day.loadedAt)} />
-      <MbmHome day={day} renderedAt={day.loadedAt} />
+      <MbmHome day={day} renderedAt={day.loadedAt} pins={await pinnedJobs(await mbm()).catch(() => [])} />
       {/* Connecting things lives on the home page until it's done (then: Your account). Just
           connected: shown once more, so you see it worked. */}
       {await (async () => {

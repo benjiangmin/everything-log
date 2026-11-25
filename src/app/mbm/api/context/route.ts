@@ -1,6 +1,6 @@
 import { phoneClient } from "@/mbm/phoneAuth";
 import { syncCalendar } from "@/mbm/google";
-import { smartGuesses, smartOver, type Guess, type Over } from "@/mbm/smart";
+import { pinnedJobs, rightNow, smartGuesses, smartOver, type Guess, type Over } from "@/mbm/smart";
 
 // For the phone: best guesses for right now (and whether something's probably over), plus your
 // calendar's next events (so it can remind you as each one starts). Brings the calendar up to
@@ -45,9 +45,12 @@ export async function POST(req: Request) {
   // With AI suggestions on: only the guesses that make sense, and only the long-running jobs worth
   // a word (each with the AI's own "message" and "action": "stop" or "break"). Off: as before.
   const opts = { at: now, tz, lat, lng };
-  const [suggestions, nudges] = await Promise.all([
+  // (recommended: Home's "Right now?", the same 3 as the website's. pins: your pinned jobs, 084.)
+  const [suggestions, nudges, recommended, pins] = await Promise.all([
     smartGuesses(client, (guess.data ?? []) as Guess[], { ...opts, limit: 2 }).catch(() => ((guess.data ?? []) as Guess[]).slice(0, 2)),
     smartOver(client, (over.data ?? []) as Over[], opts).catch(() => []),
+    rightNow(client, { ...opts, guesses: (guess.data ?? []) as Guess[] }).catch(() => []),
+    pinnedJobs(client),
   ]);
   // Untracked a while (083): nothing running, and your last entry ended at least your chosen
   // minutes ago. The phone asks what you're doing (once per stretch: keyed by "since").
@@ -65,5 +68,5 @@ export async function POST(req: Request) {
       if (minutes >= after) untracked = { since, minutes };
     }
   }
-  return Response.json({ suggestions, over: nudges, events, calendar: calendar.ok, untracked });
+  return Response.json({ suggestions, over: nudges, events, calendar: calendar.ok, untracked, recommended, pins });
 }

@@ -1,7 +1,7 @@
 "use server";
 
 import { googleStatus, syncCalendar } from "@/mbm/google";
-import { keepGoing, smartGuesses, smartOver, smartUsual, type Nudge, type Over } from "@/mbm/smart";
+import { keepGoing, rightNow, smartGuesses, smartOver, type Nudge, type Over, type Pick } from "@/mbm/smart";
 import { buildingAt, buildingsNear, contains, nothingBetween } from "@/mbm/buildings";
 
 import { revalidatePath } from "next/cache";
@@ -848,15 +848,22 @@ export async function bestGuesses(): Promise<Guess[]> {
   return smartGuesses(client, data as Guess[], { at, tz: mbmTz(), limit: 2 }).catch(() => (data as Guess[]).slice(0, 2));
 }
 
-// "Your usual" with AI suggestions on: which of these fit right now, best first (null: as is).
-export async function usualOrder(ids: string[]): Promise<string[] | null> {
-  const want = (Array.isArray(ids) ? ids : []).filter(isUuid).slice(0, 14);
-  if (!want.length) return null;
+// Home's "Right now?" (the same 3 as the phone's; src/mbm/smart.ts).
+export async function rightNowPicks(): Promise<Pick[]> {
   const client = await mbm();
-  const { data } = await client.from("activities").select("id, name").in("id", want);
-  const byId = new Map(((data ?? []) as { id: string; name: string }[]).map((a) => [a.id, a]));
-  const jobs = want.map((id) => byId.get(id)).filter((a): a is { id: string; name: string } => !!a);
-  return smartUsual(client, jobs, { at: new Date(), tz: mbmTz(), limit: 6 }).catch(() => null);
+  await syncCalendar(client).catch(() => null);
+  return rightNow(client, { at: new Date(), tz: mbmTz() }).catch(() => []);
+}
+
+// Your pinned jobs (Home's tiles, the phone's too; 084).
+export async function setPinnedJobs(ids: string[]): Promise<Result> {
+  const user = await mbmUser();
+  if (!user) return fail("Sign in first.");
+  const clean = [...new Set((Array.isArray(ids) ? ids : []).filter(isUuid))].slice(0, 12);
+  const { error } = await (await mbm()).from("profiles").upsert({ user_id: user.id, pinned_jobs: clean }, { onConflict: "user_id" });
+  if (error) return fail(/pinned_jobs/.test(error.message) ? "Run supabase/minute-by-minute/084_pinned_jobs.sql in Supabase first." : error.message);
+  refresh();
+  return { ok: true };
 }
 
 // Something running long that the AI thinks is worth a word (only with AI suggestions on).
