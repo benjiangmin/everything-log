@@ -78,15 +78,17 @@ export const DRAWINGS: Record<MarkKind, ReactNode> = {
   ),
 };
 
-// side: Settings' pages, whose first card starts right below the title and would cover it: big,
-// out to the right of the page's column on a wide screen; small beside the title on a narrow one.
-export default function PageMark({ kind, side = false }: { kind: MarkKind; side?: boolean }) {
+// (Pages whose first card starts right below a short title and would cover most of it: further
+// right, part of it past the page's column.)
+const SHIFTED = new Set<MarkKind>(["about", "reflect", "notifications"]);
+
+export default function PageMark({ kind }: { kind: MarkKind }) {
   return (
     <svg
       aria-hidden="true"
       viewBox="0 0 24 24"
       fill="none"
-      className={`pointer-events-none absolute -z-10 rotate-[-8deg] text-accent opacity-[0.07] ${side ? "-top-8 right-0 size-36 lg:-right-60 lg:-top-6 lg:size-72" : "-right-6 -top-14 size-64 sm:size-80"}`}
+      className={`pointer-events-none absolute -z-10 rotate-[-8deg] text-accent opacity-[0.07] -top-14 size-64 sm:size-80 ${SHIFTED.has(kind) ? "-right-32" : "-right-6"}`}
     >
       {DRAWINGS[kind]}
     </svg>
