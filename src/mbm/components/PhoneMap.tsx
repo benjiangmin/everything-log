@@ -20,6 +20,7 @@ export default function PhoneMap({ day, top }: { day: Day; top: number }) {
   // Where you are, up top: the stop you're at, and since when you've really been there (see stay()).
   const stayed = useMemo(() => stay(shown.visits, shown.points), [shown]);
   const [refit, setRefit] = useState(0);
+  const [pressed, setPressed] = useState(false);
 
   // (The whole screen; the app's tab bar floats over the bottom, so the day fits above it, and the
   // "whole day" button sits above it. The top: the phone's clock and battery.)
@@ -62,14 +63,17 @@ export default function PhoneMap({ day, top }: { day: Day; top: number }) {
         type="button"
         onClick={() => {
           setRefit((n) => n + 1);
+          setPressed(true);
+          setTimeout(() => setPressed(false), 160);
           // (A tap you can feel: the app turns this into a haptic, see MapCard.swift.)
           (window as unknown as { webkit?: { messageHandlers?: { mbm?: { postMessage: (m: string) => void } } } }).webkit?.messageHandlers?.mbm?.postMessage("tap");
         }}
         aria-label="Show the whole day"
-        className="absolute right-0 z-40 grid h-9 w-12 translate-x-1 place-items-center rounded-l-[12px] border border-line bg-surface pr-1 text-ink shadow-[-2px_2px_6px_rgba(62,40,27,0.12)] transition-[transform,background-color,color] duration-150 active:-translate-x-0.5 active:scale-90 active:bg-accent active:text-accent-ink"
+        className="absolute right-0 z-40 grid h-9 w-12 translate-x-1 place-items-center rounded-l-[12px] border border-line bg-surface pr-1 text-ink shadow-[-2px_2px_6px_rgba(62,40,27,0.12)]"
         style={{ top: top + 6 + 36 + 8 }}
       >
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        {/* (Tapped: just the icon shrinks for a moment; the tab stays as it is.) */}
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true" className={`transition-transform duration-150 ${pressed ? "scale-[0.7]" : ""}`}>
           <path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
       </button>
