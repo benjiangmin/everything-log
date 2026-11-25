@@ -13,8 +13,9 @@ export async function POST(req: Request) {
   const client = await mbm();
   const { error } = await client.auth.setSession({ access_token: token, refresh_token: "phone-app" });
   if (error) return new Response("Sign in first.", { status: 401 });
-  // (top: how far down the phone's clock and battery reach, in points, so the map's bubble and
-  // buttons line up with the app's laptop tab.)
-  const top = Math.round(Number(form?.get("top")));
-  return new Response(null, { status: 303, headers: { Location: Number.isFinite(top) && top > 0 && top < 200 ? `/embed/map?top=${top}` : "/embed/map" } });
+  // (top: how far the phone's clock and battery reach into this page, in points (0 when the page
+  // starts below them), so the map's bubble and buttons line up with the app's laptop tab.)
+  const raw = form?.get("top");
+  const top = typeof raw === "string" && raw.trim() !== "" ? Math.round(Number(raw)) : NaN;
+  return new Response(null, { status: 303, headers: { Location: Number.isFinite(top) && top >= 0 && top < 200 ? `/embed/map?top=${top}` : "/embed/map" } });
 }

@@ -26,7 +26,7 @@ export default function EmbedMapPage({ searchParams }: PageProps<"/mbm/embed/map
 async function Inner({ searchParams }: { searchParams: PageProps<"/mbm/embed/map">["searchParams"] }) {
   await connection();
   const t = Number((await searchParams).top);
-  const top = Number.isFinite(t) && t > 0 && t < 200 ? t : 54;
+  const top = (await searchParams).top !== undefined && Number.isFinite(t) && t >= 0 && t < 200 ? t : 54;
   if (!mbmReady() || !(await mbmUser())) return <p className="grid size-full place-items-center text-sm text-muted">Sign in on the phone first.</p>;
   const day = await getDay(dayKeyOf(new Date(), mbmTz()));
   return <PhoneMap day={day} top={top} />;
