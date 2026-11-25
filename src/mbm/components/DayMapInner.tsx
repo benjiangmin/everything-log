@@ -36,12 +36,17 @@ type Pin = { title: string; location: string | null; at: { lat: number; lng: num
 // Someone else's day (a profile on Social): just to look at. Nothing opens to change, and nothing of
 // yours is read or saved for it (your remembered routes, trails, saved drawings, buildings).
 const ViewOnly = createContext(false);
+// still: your own day, drawn exactly as here (your saved drawings, buildings), but only to look
+// at: nothing opens, no hover bubbles (the phone app's Map: /embed/map).
+const Others = createContext(false);
 
-export default function DayMapInner(props: Parameters<typeof DayMapAll>[0] & { viewOnly?: boolean }) {
-  const { viewOnly = false, ...rest } = props;
+export default function DayMapInner(props: Parameters<typeof DayMapAll>[0] & { viewOnly?: boolean; still?: boolean }) {
+  const { viewOnly = false, still = false, ...rest } = props;
   return (
-    <ViewOnly.Provider value={viewOnly}>
-      <DayMapAll {...rest} />
+    <ViewOnly.Provider value={viewOnly || still}>
+      <Others.Provider value={viewOnly}>
+        <DayMapAll {...rest} />
+      </Others.Provider>
     </ViewOnly.Provider>
   );
 }
@@ -150,7 +155,8 @@ function DayMapAll({
     }, 4000);
     return () => clearTimeout(t);
   }, [lockedNow, finished, dayKey, filled.settled, filled.trips]);
-  const buildings = usePlaceBuildings(viewOnly ? [] : visits);
+  const others = useContext(Others);
+  const buildings = usePlaceBuildings(others ? [] : visits);
   // What lights up for the hovered stretch: the trips (moving) or the stops (still) during it.
   const barLit = useMemo(() => {
     if (!focus) return null;
@@ -170,6 +176,7 @@ function DayMapAll({
 
   // Pointing at something on the map: light it up here, and tell the day bar its times.
   const point = (p: { trips: string[]; stops: string[]; guesses?: string[]; x: number; y: number; under?: number; gap?: number } | null) => {
+    if (p && viewOnly) return; // (just to look at: no bubbles)
     setPointed(p && { ...p, cover: coveredIn(box.current) });
     if (!onPointer) return;
     if (!p) return onPointer(null);
@@ -840,8 +847,8 @@ const LOOK_ONLY = {
 
 function useFilledTrips(trips: Trip[], points: RoutePoint[]): { trips: Trip[]; settled: boolean; redraw: (t: Trip, rated?: Spot[]) => Promise<void> } {
   // (Someone else's day: drawn from its own dots only, and nothing saved.)
-  const viewOnly = useContext(ViewOnly);
-  const io = viewOnly ? LOOK_ONLY : YOURS;
+  const others = useContext(Others);
+  const io = others ? LOOK_ONLY : YOURS;
   const [again, setAgain] = useState(0); // (bumped by redraw: work out the forgotten pieces)
   const [better, setBetter] = useState<Record<string, Spot[]>>({});
   const [doneKeys, setDoneKeys] = useState<Set<string>>(() => new Set()); // (pieces worked out, drawn better or not)

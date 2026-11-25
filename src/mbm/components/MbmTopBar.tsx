@@ -43,6 +43,7 @@ export default function MbmTopBar({
   const news = useSocialNews(signedIn);
   const socialNew = news.followers || news.requests || news.following;
   const active = (href: string) => (href === "/" ? pathname === "/" : pathname.startsWith(href));
+  if (pathname.startsWith("/embed")) return null; // (the phone app's map: just the map)
   return (
     <header data-covers-map className="sticky top-0 z-50 border-b border-line bg-paper/95 backdrop-blur">
       <div className="mx-auto flex h-16 w-full items-center gap-2 px-4 sm:w-[96%] sm:gap-4 sm:px-0">
