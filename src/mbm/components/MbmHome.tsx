@@ -26,6 +26,7 @@ export default function MbmHome({ day, renderedAt }: { day: Day; renderedAt: num
   // (AI suggestions: a word about something that's been going a while. Gone once answered.)
   const [nudge, setNudge] = useState<Nudge[]>([]);
   const [aiUsual, setAiUsual] = useState<string[] | null>(null);
+  const [usualReady, setUsualReady] = useState(false); // (placeholders until the AI's had its say: no flash of the wrong ones)
   const usualKey = day.activities
     .filter((a) => !day.running.some((b) => b.activity_id === a.id) && !isMoving(a.name))
     .slice(0, 14)
@@ -35,7 +36,8 @@ export default function MbmHome({ day, renderedAt }: { day: Day; renderedAt: num
     let live = true;
     usualOrder(usualKey ? usualKey.split(",") : [])
       .then((ids) => live && setAiUsual(ids))
-      .catch(() => undefined);
+      .catch(() => undefined)
+      .finally(() => live && setUsualReady(true));
     return () => {
       live = false;
     };
@@ -141,9 +143,19 @@ export default function MbmHome({ day, renderedAt }: { day: Day; renderedAt: num
         )}
       </div>
 
-      {usual.length > 0 && (
+      {!usualReady && recent.length > 0 && (
+        <div aria-hidden="true">
+          <Heading>Recommended</Heading>
+          <ul className="grid grid-cols-3 gap-3 sm:grid-cols-6">
+            {recent.slice(0, 6).map((a) => (
+              <li key={a.id} className="h-[112px] animate-pulse rounded-[22px] bg-surface motion-reduce:animate-none" />
+            ))}
+          </ul>
+        </div>
+      )}
+      {usualReady && usual.length > 0 && (
         <div>
-          <Heading>Your usual</Heading>
+          <Heading>Recommended</Heading>
           <ul className="grid grid-cols-3 gap-3 sm:grid-cols-6">
             {usual.map((a, i) => (
               <li key={a.id} className="home-pop" style={{ animationDelay: `${i * 40}ms` }}>
