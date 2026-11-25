@@ -28,8 +28,7 @@ const SECTIONS: { href: string; title: string; note: string; mark: MarkKind }[] 
 export default function AccountView({ email, profile }: { email: string | null; profile: (Profile & { avatar?: string | null }) | null }) {
   const router = useRouter();
   return (
-    <div className="relative isolate">
-      <PageMark kind="settings" />
+    <div>
       <Header email={email} profile={profile} onChange={() => router.refresh()} />
       <nav aria-label="Settings" className="mt-8 divide-y divide-line overflow-hidden rounded-card border border-line">
         {SECTIONS.map((x) => (
@@ -76,7 +75,7 @@ export function SubPage({
 }) {
   return (
     <div className="relative isolate">
-      {mark && <PageMark kind={mark} />}
+      {mark && <PageMark kind={mark} small />}
       <p className="text-sm font-semibold text-muted">
         <Link href={back.href} className="inline-flex items-center gap-1 hover:text-ink">
           <svg viewBox="0 0 20 20" className="size-4" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">

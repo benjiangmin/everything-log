@@ -78,13 +78,15 @@ export const DRAWINGS: Record<MarkKind, ReactNode> = {
   ),
 };
 
-export default function PageMark({ kind }: { kind: MarkKind }) {
+// small: kept beside the title (Settings' pages, whose first card starts right below it and
+// would cover a big one).
+export default function PageMark({ kind, small = false }: { kind: MarkKind; small?: boolean }) {
   return (
     <svg
       aria-hidden="true"
       viewBox="0 0 24 24"
       fill="none"
-      className="pointer-events-none absolute -right-6 -top-14 -z-10 size-64 rotate-[-8deg] text-accent opacity-[0.07] sm:size-80"
+      className={`pointer-events-none absolute -z-10 rotate-[-8deg] text-accent opacity-[0.07] ${small ? "-top-8 right-0 size-36 sm:size-40" : "-right-6 -top-14 size-64 sm:size-80"}`}
     >
       {DRAWINGS[kind]}
     </svg>
