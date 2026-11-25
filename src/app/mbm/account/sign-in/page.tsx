@@ -16,7 +16,7 @@ export default function SignInPage() {
         const google = await googleStatus(client).catch(() => null);
         const calendars = google?.connected ? await listCalendars(client).catch(() => null) : null;
         return (
-          <SubPage title="Sign-in and connections" note="How you sign in, and the accounts Minute by Minute reads from.">
+          <SubPage mark="sign-in" title="Sign-in and connections" note="How you sign in, and the accounts Minute by Minute reads from.">
             <Card title="Email and password">
               <EmailForm email={user.email ?? null} />
               <div className="my-6 h-px bg-line" />

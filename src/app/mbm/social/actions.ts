@@ -44,6 +44,7 @@ export type Profile = Person & {
   pinned: string[];
   sees: { now: boolean; bar: boolean; stats: boolean; map: boolean };
   now?: { name: string; color: string; since: string } | null;
+  idle_since?: string | null; // (nothing running: since their last entry ended, 082)
   bar?: Slice[];
   stats?: { name: string; color: string; seconds: number }[];
   stops?: { arrived: string; departed: string | null; lat: number; lng: number; name: string | null }[];
@@ -146,4 +147,15 @@ export async function setPrivate(kind: "job" | "category", id: string, on: boole
   if (error) return failed(error.message);
   revalidatePath("/mbm/account/jobs");
   return { ok: true };
+}
+
+// What's new on Social, for the blue dots (useSocialNews): the newest follower, follow request
+// and accepted request, by when. Nulls when there's nothing (or 072 isn't run yet).
+export type News = { followers: string | null; requests: string | null; following: string | null };
+export async function socialNews(): Promise<News> {
+  const client = await mbm();
+  const [recent, incoming] = await Promise.all([client.rpc("recent_follows"), client.rpc("incoming_requests")]);
+  const newest = (xs: { at?: string }[] | null | undefined) => (xs ?? []).map((x) => x.at ?? "").filter(Boolean).sort().at(-1) ?? null;
+  const r = recent.data as { accepted?: { at?: string }[]; followers?: { at?: string }[] } | null;
+  return { followers: newest(r?.followers), requests: newest(incoming.data as { at?: string }[] | null), following: newest(r?.accepted) };
 }

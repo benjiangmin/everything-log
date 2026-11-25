@@ -5,6 +5,7 @@ import { useEffect, useRef, useState, useTransition, type ReactNode } from "reac
 import { useRouter } from "next/navigation";
 import Avatar from "./Avatar";
 import { useNow } from "./useNow";
+import { markSocialSeen, NEWS_DOT, useSocialNews } from "@/mbm/useSocialNews";
 import { span } from "@/mbm/time";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
 import {
@@ -26,6 +27,11 @@ export default function SocialView({ social, renderedAt }: { social: Social; ren
   const [message, setMessage] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>(social.incoming.length > 0 ? "requests" : social.following.length === 0 ? "find" : "following");
   const now = useNow(renderedAt);
+  // Blue dots: what's new on each tab; opening a tab is seeing it.
+  const news = useSocialNews();
+  useEffect(() => {
+    if (tab !== "find") markSocialSeen(tab);
+  }, [tab]);
   const run: Run = (f) =>
     start(async () => {
       const res = await f().catch(() => ({ ok: false as const, message: "That didn't go through. Try again." }));
@@ -96,13 +102,13 @@ export default function SocialView({ social, renderedAt }: { social: Social; ren
 
       {/* Tabs */}
       <nav className="mt-8 flex border-b border-line" role="tablist">
-        <TabButton on={tab === "following"} onClick={() => setTab("following")}>
+        <TabButton on={tab === "following"} onClick={() => setTab("following")} fresh={news.following}>
           Following
         </TabButton>
-        <TabButton on={tab === "followers"} onClick={() => setTab("followers")}>
+        <TabButton on={tab === "followers"} onClick={() => setTab("followers")} fresh={news.followers}>
           Followers
         </TabButton>
-        <TabButton on={tab === "requests"} onClick={() => setTab("requests")} badge={social.incoming.length}>
+        <TabButton on={tab === "requests"} onClick={() => setTab("requests")} badge={social.incoming.length} fresh={news.requests}>
           Requests
         </TabButton>
         <TabButton on={tab === "find"} onClick={() => setTab("find")}>
@@ -280,7 +286,7 @@ function FollowButton({ person: p, onAction, onDone }: { person: Person; onActio
       </Btn>
     );
   return (
-    <Btn primary onClick={() => onAction(async () => { const r = await follow(p.id); onDone?.({ requested: true }); return r; })}>
+    <Btn primary onClick={() => onAction(async () => { const r = await follow(p.id); markSocialSeen("following"); onDone?.({ requested: true }); return r; })}>
       {p.follows_me ? "Follow back" : "Follow"}
     </Btn>
   );
@@ -326,7 +332,7 @@ function Count({ n, label, onClick }: { n: number; label: string; onClick?: () =
   );
 }
 
-function TabButton({ on, onClick, badge, children }: { on: boolean; onClick: () => void; badge?: number; children: ReactNode }) {
+function TabButton({ on, onClick, badge, fresh, children }: { on: boolean; onClick: () => void; badge?: number; fresh?: boolean; children: ReactNode }) {
   return (
     <button
       type="button"
@@ -338,7 +344,10 @@ function TabButton({ on, onClick, badge, children }: { on: boolean; onClick: () 
       }`}
     >
       {children}
-      {!!badge && <span className="grid min-w-5 place-items-center rounded-full bg-accent px-1.5 text-[11px] leading-5 text-accent-ink">{badge}</span>}
+      {fresh && !on && !badge && <span aria-label="Something new" className={NEWS_DOT} />}
+      {!!badge && (
+        <span className={`grid min-w-5 place-items-center rounded-full px-1.5 text-[11px] leading-5 ${fresh && !on ? "bg-[#3b82f6] text-white" : "bg-accent text-accent-ink"}`}>{badge}</span>
+      )}
     </button>
   );
 }

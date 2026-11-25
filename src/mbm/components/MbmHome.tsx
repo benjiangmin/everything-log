@@ -134,10 +134,10 @@ export default function MbmHome({ day, renderedAt }: { day: Day; renderedAt: num
                   type="button"
                   onClick={() => start(a.name)}
                   title={running.length ? `Switch to ${a.name}` : `Start ${a.name}`}
-                  className="flex h-full w-full flex-col items-center gap-2 rounded-[22px] bg-surface px-1.5 pb-2.5 pt-3.5 transition-[transform,background-color] hover:-translate-y-0.5 hover:bg-line/60 active:scale-[0.97]"
+                  className="flex h-full w-full min-w-0 flex-col items-center gap-2 rounded-[22px] bg-surface px-3 pb-2.5 pt-3.5 transition-[transform,background-color] hover:-translate-y-0.5 hover:bg-line/60 active:scale-[0.97]"
                 >
                   <Badge activity={a} />
-                  <span className="line-clamp-2 h-9 text-center text-[13px] font-semibold leading-tight text-ink">{a.name}</span>
+                  <span className="line-clamp-2 h-8 w-full break-words text-center text-xs font-semibold leading-tight text-ink">{a.name}</span>
                 </button>
               </li>
             ))}

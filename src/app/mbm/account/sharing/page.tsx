@@ -16,7 +16,7 @@ export default function SharingPage() {
         const today = dayKeyOf(new Date(), mbmTz());
         const me = social.ok ? social.social.me : null;
         return (
-          <SubPage
+          <SubPage mark="sharing"
             title="What others see"
             note="Your name and picture always show. Everything else is up to you, and starts as Nobody. Mutuals: people you follow who follow you back. Private jobs show as Busy (Jobs and categories)."
           >

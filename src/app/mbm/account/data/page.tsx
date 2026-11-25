@@ -8,7 +8,7 @@ export default function DataPage() {
     <AccountShell
       path="/account/data"
       render={async () => (
-        <SubPage title="Your data" note="What you've recorded is yours. Clearing it or deleting your account can't be undone.">
+        <SubPage mark="data" title="Your data" note="What you've recorded is yours. Clearing it or deleting your account can't be undone.">
           <Card>
             <Danger />
           </Card>

@@ -296,6 +296,15 @@ function partAt(visits: Day["visits"], points: Day["points"], t: number, from: n
     });
     s.end = first ? Math.max(s.end, +new Date(first.at)) : next;
   });
+  // Back-to-back stops at the same place (the phone split one stay at Home! in two): one.
+  for (let i = spans.length - 1; i > 0; i--) {
+    const a = spans[i - 1];
+    const b = spans[i];
+    if (a.where === b.where && a.where !== "a stop" && b.start - a.end <= 2 * 60_000) {
+      a.end = Math.max(a.end, b.end);
+      spans.splice(i, 1);
+    }
+  }
   // (Nothing to narrow down: no stop in it, or one stop for all of it.)
   if (!spans.length || (spans.length === 1 && spans[0].start <= from + 60_000 && spans[0].end >= to - 60_000)) return null;
   const hit = spans.find((s) => s.start <= t && t < s.end);

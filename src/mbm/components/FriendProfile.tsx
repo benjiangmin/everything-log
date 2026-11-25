@@ -99,6 +99,9 @@ export default function FriendProfile({ profile: p, tz, renderedAt }: { profile:
         </div>
       )}
 
+      {/* Nothing running: Untracked, and for how long (since their last entry ended). */}
+      {!p.now && p.today && p.sees.now && <Untracked since={p.idle_since ?? lastEnd(p.bar, now)} now={now} />}
+
       {p.now && (
         <section className="mt-6 flex items-center gap-4 rounded-card px-5 py-4 text-white" style={{ background: p.now.color }}>
           <span className="relative flex size-3">
@@ -177,3 +180,26 @@ function FriendBar({ slices, day, tz, now }: { slices: NonNullable<Profile["bar"
   return <DayBar placed={placed} lanes={lanes} gaps={gaps} dayKey={day} dayStart={dayStart} dayEnd={dayEnd} now={now} tz={tz} byId={new Map(activities.map((a) => [a.id, a]))} />;
 }
 
+
+// When the last thing on their bar ended, if it ended before now (the bar's fallback when 082
+// isn't run yet).
+function lastEnd(bar: Profile["bar"], now: number): string | null {
+  const end = Math.max(0, ...(bar ?? []).map((s) => +new Date(s.end)));
+  return end && end < now - 60_000 ? new Date(end).toISOString() : null;
+}
+
+function Untracked({ since, now }: { since: string | null; now: number }) {
+  return (
+    <section
+      className="mt-6 flex items-center gap-4 rounded-card px-5 py-4 text-ink ring-1 ring-line"
+      style={{ background: "repeating-linear-gradient(135deg, var(--surface) 0 10px, color-mix(in srgb, var(--line) 55%, var(--surface)) 10px 20px)" }}
+    >
+      <span className="size-3 rounded-full bg-muted/50" />
+      <div className="min-w-0 flex-1">
+        <p className="text-sm text-muted">Doing now</p>
+        <p className="truncate text-xl font-semibold">Untracked</p>
+      </div>
+      {since && <p className="font-semibold tabular-nums text-muted">{span(Math.max(0, now - +new Date(since)))}</p>}
+    </section>
+  );
+}

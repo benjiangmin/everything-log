@@ -1,5 +1,6 @@
 "use client";
 
+import { NEWS_DOT, useSocialNews } from "@/mbm/useSocialNews";
 import Link from "next/link";
 import ThemeChoice from "@/components/ui/ThemeChoice";
 import { usePathname, useSearchParams } from "next/navigation";
@@ -38,6 +39,9 @@ export default function MbmTopBar({
   now?: number;
 }) {
   const pathname = clean(usePathname()); // (the same on the server, /mbm/day, and here, /day)
+  // (A blue dot on Social when there's a new follower, request or accepted request.)
+  const news = useSocialNews(signedIn);
+  const socialNew = news.followers || news.requests || news.following;
   const active = (href: string) => (href === "/" ? pathname === "/" : pathname.startsWith(href));
   return (
     <header data-covers-map className="sticky top-0 z-50 border-b border-line bg-paper/95 backdrop-blur">
@@ -63,6 +67,7 @@ export default function MbmTopBar({
                 }`}
               >
                 {t.label}
+                {t.href === "/social" && socialNew && !active("/social") && <span aria-label="Something new" className={`${NEWS_DOT} -mt-2 ml-1 align-top`} />}
               </Link>
             ))}
             <ReflectTab active={active("/reflect")} />

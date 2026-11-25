@@ -13,7 +13,7 @@ export default function ColorsPage() {
       render={async () => {
         const { data, error } = await (await mbm()).from("profiles").select("color_theme").maybeSingle();
         return (
-          <SubPage back={{ href: "/account/jobs", label: "Jobs" }} title="Color theme" note="Every job and category takes the theme's colors, the busiest first. Colors you pick yourself stay when you switch.">
+          <SubPage mark="colors" back={{ href: "/account/jobs", label: "Jobs" }} title="Color theme" note="Every job and category takes the theme's colors, the busiest first. Colors you pick yourself stay when you switch.">
             <Card>
               {error ? (
                 <p className="text-sm text-muted">Run supabase/minute-by-minute/080_color_themes.sql in Supabase first.</p>

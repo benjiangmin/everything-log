@@ -8,7 +8,7 @@ export default function ReflectPage() {
     <AccountShell
       path="/account/reflect"
       render={async () => (
-        <SubPage title="Reflect and setup">
+        <SubPage mark="reflect" title="Reflect and setup">
           <Card title="Reflect" note="The Reflect tab walks you back through today. It opens in the evening, at this time (on this browser).">
             <ReflectTime />
           </Card>

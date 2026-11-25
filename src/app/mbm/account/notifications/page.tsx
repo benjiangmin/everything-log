@@ -14,7 +14,7 @@ export default function NotificationsPage() {
         const { data, error } = await (await mbm()).from("profiles").select("ai_suggestions").maybeSingle();
         const on = !error && !!(data as { ai_suggestions?: boolean } | null)?.ai_suggestions;
         return (
-          <SubPage title="Notifications" note="Suggestions, and the nudges you get on the phone and here.">
+          <SubPage mark="notifications" title="Notifications" note="Suggestions, and the nudges you get on the phone and here.">
             <Card
               title="AI suggestions"
               note="AI looks at where you are, the time, your calendar and your past days, and leaves out suggestions that don't fit. It also tells you when something's been going a while and it looks like you forgot to stop it."

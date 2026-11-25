@@ -1,5 +1,6 @@
 "use client";
 
+import PageMark, { DRAWINGS, type MarkKind } from "./PageMark";
 import { TimePicker } from "./DateTime";
 import Link from "next/link";
 import { useRef, useState, useTransition, type ReactNode } from "react";
@@ -13,25 +14,30 @@ const field = "w-full rounded-control border border-line bg-paper px-3 py-2.5 te
 
 // Your account: your picture and name on top, then a list of settings, each on its own page
 // (/account/<section>, with a way back here).
-const SECTIONS: { href: string; title: string; note: string }[] = [
-  { href: "/account/about", title: "About you", note: "Birthday and the rest, for the Future page" },
-  { href: "/account/sharing", title: "What others see", note: "Your username, and who sees what on Social" },
-  { href: "/account/jobs", title: "Jobs and categories", note: "Color theme, places, starting by themselves" },
-  { href: "/account/places", title: "Places", note: "Your places, and stops you haven't named" },
-  { href: "/account/notifications", title: "Notifications", note: "AI suggestions, and nudges" },
-  { href: "/account/sign-in", title: "Sign-in and connections", note: "Email, password, Google" },
-  { href: "/account/reflect", title: "Reflect and setup", note: "When Reflect opens, and the welcome again" },
-  { href: "/account/data", title: "Your data", note: "Clear what you've recorded, or delete your account" },
+const SECTIONS: { href: string; title: string; note: string; mark: MarkKind }[] = [
+  { href: "/account/about", title: "About you", note: "Birthday and the rest, for the Future page", mark: "about" },
+  { href: "/account/sharing", title: "What others see", note: "Your username, and who sees what on Social", mark: "sharing" },
+  { href: "/account/jobs", title: "Jobs and categories", note: "Color theme, places, starting by themselves", mark: "jobs" },
+  { href: "/account/places", title: "Places", note: "Your places, and stops you haven't named", mark: "places" },
+  { href: "/account/notifications", title: "Notifications", note: "AI suggestions, and nudges", mark: "notifications" },
+  { href: "/account/sign-in", title: "Sign-in and connections", note: "Email, password, Google", mark: "sign-in" },
+  { href: "/account/reflect", title: "Reflect and setup", note: "When Reflect opens, and the welcome again", mark: "reflect" },
+  { href: "/account/data", title: "Your data", note: "Clear what you've recorded, or delete your account", mark: "data" },
 ];
 
 export default function AccountView({ email, profile }: { email: string | null; profile: (Profile & { avatar?: string | null }) | null }) {
   const router = useRouter();
   return (
-    <div>
+    <div className="relative isolate">
+      <PageMark kind="settings" />
       <Header email={email} profile={profile} onChange={() => router.refresh()} />
       <nav aria-label="Settings" className="mt-8 divide-y divide-line overflow-hidden rounded-card border border-line">
         {SECTIONS.map((x) => (
-          <Link key={x.href} href={x.href} className="group flex items-center gap-4 px-5 py-4 transition-colors hover:bg-surface/60">
+          <Link key={x.href} href={x.href} className="group relative isolate flex items-center gap-4 overflow-hidden px-5 py-4 transition-colors hover:bg-surface/60">
+            {/* (Its drawing, faint, behind the row.) */}
+            <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" className="pointer-events-none absolute right-14 top-1/2 -z-10 size-20 -translate-y-1/2 rotate-[-8deg] text-accent opacity-[0.09]">
+              {DRAWINGS[x.mark]}
+            </svg>
             <span className="min-w-0 flex-1">
               <span className="block font-semibold">{x.title}</span>
               <span className="block truncate text-sm text-muted">{x.note}</span>
@@ -55,9 +61,22 @@ export default function AccountView({ email, profile }: { email: string | null; 
 }
 
 // One settings page: "Settings" to go back, its title, a line on what it's for, then the settings.
-export function SubPage({ title, note, children, back = { href: "/account", label: "Settings" } }: { title: string; note?: string; children: ReactNode; back?: { href: string; label: string } }) {
+export function SubPage({
+  title,
+  note,
+  mark,
+  children,
+  back = { href: "/account", label: "Settings" },
+}: {
+  title: string;
+  note?: string;
+  mark?: MarkKind; // (its big faint drawing behind the title)
+  children: ReactNode;
+  back?: { href: string; label: string };
+}) {
   return (
-    <div>
+    <div className="relative isolate">
+      {mark && <PageMark kind={mark} />}
       <p className="text-sm font-semibold text-muted">
         <Link href={back.href} className="inline-flex items-center gap-1 hover:text-ink">
           <svg viewBox="0 0 20 20" className="size-4" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
