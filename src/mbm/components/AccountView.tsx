@@ -18,6 +18,7 @@ const SECTIONS: { href: string; title: string; note: string }[] = [
   { href: "/account/sharing", title: "What others see", note: "Your username, and who sees what on Social" },
   { href: "/account/jobs", title: "Jobs and categories", note: "Color theme, places, starting by themselves" },
   { href: "/account/places", title: "Places", note: "Your places, and stops you haven't named" },
+  { href: "/account/notifications", title: "Notifications", note: "AI suggestions, and nudges" },
   { href: "/account/sign-in", title: "Sign-in and connections", note: "Email, password, Google" },
   { href: "/account/reflect", title: "Reflect and setup", note: "When Reflect opens, and the welcome again" },
   { href: "/account/data", title: "Your data", note: "Clear what you've recorded, or delete your account" },

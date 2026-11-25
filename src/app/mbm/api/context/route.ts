@@ -1,5 +1,6 @@
 import { phoneClient } from "@/mbm/phoneAuth";
 import { syncCalendar } from "@/mbm/google";
+import { smartGuesses, smartOver, type Guess, type Over } from "@/mbm/smart";
 
 // For the phone: best guesses for right now (and whether something's probably over), plus your
 // calendar's next events (so it can remind you as each one starts). Brings the calendar up to
@@ -21,7 +22,7 @@ export async function POST(req: Request) {
   await client.rpc("start_for_you");
   const now = new Date();
   const [guess, over, upcoming] = await Promise.all([
-    client.rpc("suggest", { p_at: now.toISOString(), p_lat: lat, p_lng: lng, p_tz: tz, p_limit: 2 }),
+    client.rpc("suggest", { p_at: now.toISOString(), p_lat: lat, p_lng: lng, p_tz: tz, p_limit: 6 }),
     client.rpc("probably_over", { p_at: now.toISOString(), p_tz: tz }),
     client
       .from("calendar_events")
@@ -41,5 +42,12 @@ export async function POST(req: Request) {
       return { ...e, suggestions: g.data ?? [] };
     }),
   );
-  return Response.json({ suggestions: guess.data ?? [], over: over.data ?? [], events, calendar: calendar.ok });
+  // With AI suggestions on: only the guesses that make sense, and only the long-running jobs worth
+  // a word (each with the AI's own "message" and "action": "stop" or "break"). Off: as before.
+  const opts = { at: now, tz, lat, lng };
+  const [suggestions, nudges] = await Promise.all([
+    smartGuesses(client, (guess.data ?? []) as Guess[], { ...opts, limit: 2 }).catch(() => ((guess.data ?? []) as Guess[]).slice(0, 2)),
+    smartOver(client, (over.data ?? []) as Over[], opts).catch(() => []),
+  ]);
+  return Response.json({ suggestions, over: nudges, events, calendar: calendar.ok });
 }

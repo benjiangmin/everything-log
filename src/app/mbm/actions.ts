@@ -1,13 +1,14 @@
 "use server";
 
 import { googleStatus, syncCalendar } from "@/mbm/google";
+import { keepGoing, smartGuesses, smartOver, type Nudge, type Over } from "@/mbm/smart";
 import { buildingAt, buildingsNear, contains, nothingBetween } from "@/mbm/buildings";
 
 import { revalidatePath } from "next/cache";
 import { after } from "next/server";
 import { redirect } from "next/navigation";
 import { headers } from "next/headers";
-import { mbm, mbmReady } from "@/mbm/supabase";
+import { mbm, mbmReady, mbmUser } from "@/mbm/supabase";
 import { getDay, getNowInfo, mbmTz, type Day, type LockedTrip, type NowInfo } from "@/mbm/data";
 import { PALETTE, themeById } from "@/mbm/colors";
 import { dayKeyOf, dayRange } from "@/mbm/time";
@@ -837,12 +838,42 @@ export type Guess = { activity_id: string; name: string; color: string; confiden
 
 // Up to two best guesses for right now (where you are: the stop you're at). Brings Google
 // Calendar up to date first, at most every 10 minutes. [] if there's nothing to go on yet.
+// With AI suggestions on, the AI keeps only the ones that make sense (src/mbm/smart.ts).
 export async function bestGuesses(): Promise<Guess[]> {
   const client = await mbm();
   await syncCalendar(client).catch(() => null);
-  const { data, error } = await client.rpc("suggest", { p_at: new Date().toISOString(), p_tz: mbmTz(), p_limit: 2 });
+  const at = new Date();
+  const { data, error } = await client.rpc("suggest", { p_at: at.toISOString(), p_tz: mbmTz(), p_limit: 6 });
   if (error || !Array.isArray(data)) return [];
-  return (data as Guess[]).slice(0, 2);
+  return smartGuesses(client, data as Guess[], { at, tz: mbmTz(), limit: 2 }).catch(() => (data as Guess[]).slice(0, 2));
+}
+
+// Something running long that the AI thinks is worth a word (only with AI suggestions on).
+export async function nudges(): Promise<Nudge[]> {
+  const client = await mbm();
+  const at = new Date();
+  const { data, error } = await client.rpc("probably_over", { p_at: at.toISOString(), p_tz: mbmTz() });
+  if (error || !Array.isArray(data) || !data.length) return [];
+  const out = await smartOver(client, data as Over[], { at, tz: mbmTz() }).catch(() => []);
+  return out.filter((n) => n.message);
+}
+
+// "Keep going" on one of those.
+export async function keepGoingOn(blockId: string): Promise<Result> {
+  if (!isUuid(blockId)) return fail("That's gone.");
+  await keepGoing(await mbm(), blockId);
+  return { ok: true };
+}
+
+// AI suggestions on or off (Settings → Notifications; 081).
+export async function setAiSuggestions(on: boolean): Promise<Result> {
+  const client = await mbm();
+  const user = await mbmUser();
+  if (!user) return fail("Sign in first.");
+  const { error } = await client.from("profiles").upsert({ user_id: user.id, ai_suggestions: !!on }, { onConflict: "user_id" });
+  if (error) return fail(/ai_suggestions/.test(error.message) ? "Run supabase/minute-by-minute/081_ai_suggestions.sql in Supabase first." : error.message);
+  refresh();
+  return { ok: true };
 }
 
 // Google Calendar: connected? (null: 030 isn't run yet)

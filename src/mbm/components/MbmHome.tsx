@@ -2,7 +2,8 @@
 
 import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { bestGuesses, stopEntry, type Guess } from "@/app/mbm/actions";
+import { bestGuesses, keepGoingOn, nudges, stopEntry, type Guess } from "@/app/mbm/actions";
+import type { Nudge } from "@/mbm/smart";
 import type { Activity, Block, Day } from "@/mbm/data";
 import { clock, span } from "@/mbm/time";
 import { undo, undoable } from "@/mbm/undo";
@@ -22,11 +23,16 @@ export default function MbmHome({ day, renderedAt }: { day: Day; renderedAt: num
   const [stopping, runStop] = useTransition();
   const [stopped, setStopped] = useState<{ name: string; ms: number; color: string } | null>(null);
   const [guesses, setGuesses] = useState<Guess[]>([]);
+  // (AI suggestions: a word about something that's been going a while. Gone once answered.)
+  const [nudge, setNudge] = useState<Nudge[]>([]);
 
   useEffect(() => {
     let live = true;
     bestGuesses()
       .then((g) => live && setGuesses(g))
+      .catch(() => undefined);
+    nudges()
+      .then((n) => live && setNudge(n))
       .catch(() => undefined);
     return () => {
       live = false;
@@ -62,6 +68,37 @@ export default function MbmHome({ day, renderedAt }: { day: Day; renderedAt: num
         ) : (
           <Idle onClick={() => start()} />
         )}
+        {nudge
+          .filter((n) => running.some((b) => b.id === n.block_id))
+          .map((n) => (
+            <div key={n.block_id} role="status" className="home-pop flex flex-wrap items-center gap-x-3 gap-y-2 rounded-[18px] bg-surface px-4 py-3 ring-1 ring-line">
+              <p className="min-w-0 flex-1 text-sm text-ink">{n.message}</p>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setNudge((x) => x.filter((y) => y.block_id !== n.block_id));
+                    void keepGoingOn(n.block_id);
+                  }}
+                  className="rounded-full px-3 py-1.5 text-sm font-semibold text-muted transition-colors hover:bg-line/60 hover:text-ink"
+                >
+                  Keep going
+                </button>
+                <button
+                  type="button"
+                  disabled={stopping}
+                  onClick={() => {
+                    const b = running.find((x) => x.id === n.block_id);
+                    setNudge((x) => x.filter((y) => y.block_id !== n.block_id));
+                    if (b) stop(b);
+                  }}
+                  className="rounded-full bg-accent px-3.5 py-1.5 text-sm font-semibold text-accent-ink transition-opacity hover:opacity-90"
+                >
+                  Stop {n.name}
+                </button>
+              </div>
+            </div>
+          ))}
         {/* More than one thing going on: the others, smaller, each with its own Stop. */}
         {more.map((b) => {
           const a = b.activity_id ? byId.get(b.activity_id) : undefined;

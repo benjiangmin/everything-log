@@ -52,8 +52,8 @@ export default function PrivacyPage() {
 
       <Part title="Google user data">
         <p>
-          Calendar events from Google are used only to suggest and time your jobs and to show your plan, for you. They aren&apos;t shared with anyone (friends on
-          Social never see your calendar), sold, used for ads, or used to train AI. Disconnecting Google Calendar in Settings → Sign-in and connections deletes the
+          Calendar events from Google are used only to suggest and time your jobs and to show your plan, for you. They aren&apos;t sold, used for ads, or used to train AI, and friends on
+          Social never see your calendar. The only place they go is OpenAI, and only if you turn on AI suggestions, to pick suggestions for you. Disconnecting Google Calendar in Settings → Sign-in and connections deletes the
           copied events and the access Google gave. Minute by Minute&apos;s use of information received from Google APIs adheres to the{" "}
           <a href="https://developers.google.com/terms/api-services-user-data-policy" className="font-semibold underline underline-offset-2">
             Google API Services User Data Policy
@@ -68,6 +68,10 @@ export default function PrivacyPage() {
             ["Supabase", "the database that holds your account and everything above. Each account can only read its own data."],
             ["Vercel", "runs the website."],
             ["Google", "Google Maps draws your maps, and Google Calendar and Google sign-in are used only if you choose them."],
+            [
+              "OpenAI",
+              "only if you turn on AI suggestions (Settings → Notifications, off unless you do): your job names, places, calendar events and recent days are sent to OpenAI to pick your suggestions and nudges. OpenAI doesn't use them to train its models.",
+            ],
             ["Your phone", "keeps recent location data before it's sent."],
           ]}
         />
