@@ -13,7 +13,8 @@ const Inner = dynamic(() => import("./DayMapInner"), { ssr: false, loading: () =
 // Today's map for the phone app (/embed/map): the Day page's own map, still (nothing opens, no
 // hover bubbles), with where you are now pulsing in the color of what's running.
 // top: where the phone's clock and battery end (points), from the app.
-export default function PhoneMap({ day, top }: { day: Day; top: number }) {
+// bottom: the phone's home-bar space (points), from the app.
+export default function PhoneMap({ day, top, bottom }: { day: Day; top: number; bottom: number }) {
   const shown = useMemo(() => withArrival(day, day.loadedAt), [day]);
   const running = day.running[0]?.activity_id ? day.activities.find((a) => a.id === day.running[0].activity_id) : undefined;
   const now = useNow(day.loadedAt);
@@ -21,6 +22,9 @@ export default function PhoneMap({ day, top }: { day: Day; top: number }) {
   const stayed = useMemo(() => stay(shown.visits, shown.points), [shown]);
   const [refit, setRefit] = useState(0);
   const [pressed, setPressed] = useState(false);
+  const [moving, setMoving] = useState(false); // (the map panning or zooming: the bubble steps aside)
+  // The app's tab bar: 46 tall, 6 above the home bar.
+  const overBar = bottom + 6 + 46 + 10;
 
   // (The whole screen; the app's tab bar floats over the bottom, so the day fits above it, and the
   // "whole day" button sits above it. The top: the phone's clock and battery.)
@@ -39,13 +43,17 @@ export default function PhoneMap({ day, top }: { day: Day; top: number }) {
         finished={shown.finished}
         locked={shown.locked}
         topCover={top + 46}
-        bottomCover={84}
+        bottomCover={overBar + 40}
+        onMoving={setMoving}
         refitFrom={refit}
         still
       />
-      {/* Always at the top, on the app's laptop tab's line: where you are. */}
+      {/* Where you are: just above the app's tab bar, centered. Fades while you move the map. */}
       {stayed && (
-        <div className="pointer-events-none absolute left-3 right-[60px] z-40 flex h-9 justify-center" style={{ top: top + 6 }}>
+        <div
+          className={`pointer-events-none absolute inset-x-3 z-40 flex h-9 justify-center transition-opacity duration-300 ${moving ? "opacity-0" : "opacity-100"}`}
+          style={{ bottom: overBar }}
+        >
           <p className="flex h-9 min-w-0 items-center whitespace-nowrap rounded-full bg-paper/95 px-3.5 text-[13px] text-ink shadow-lg shadow-ink/15 ring-1 ring-line backdrop-blur">
             {stayed.at ? (
               <>

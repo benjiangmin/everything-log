@@ -17,5 +17,11 @@ export async function POST(req: Request) {
   // starts below them), so the map's bubble and buttons line up with the app's laptop tab.)
   const raw = form?.get("top");
   const top = typeof raw === "string" && raw.trim() !== "" ? Math.round(Number(raw)) : NaN;
-  return new Response(null, { status: 303, headers: { Location: Number.isFinite(top) && top >= 0 && top < 200 ? `/embed/map?top=${top}` : "/embed/map" } });
+  // (bottom: the home bar's space at the bottom, so "At Home! since…" sits just above the tab bar.)
+  const rawB = form?.get("bottom");
+  const bottom = typeof rawB === "string" && rawB.trim() !== "" ? Math.round(Number(rawB)) : NaN;
+  const q = new URLSearchParams();
+  if (Number.isFinite(top) && top >= 0 && top < 200) q.set("top", String(top));
+  if (Number.isFinite(bottom) && bottom >= 0 && bottom < 100) q.set("bottom", String(bottom));
+  return new Response(null, { status: 303, headers: { Location: q.size ? `/embed/map?${q}` : "/embed/map" } });
 }

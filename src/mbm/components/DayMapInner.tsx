@@ -66,6 +66,7 @@ function DayMapAll({
   topCover = 0,
   bottomCover = 0,
   refitFrom,
+  onMoving,
   dayKey,
   finished = false,
   locked = null,
@@ -80,6 +81,7 @@ function DayMapAll({
   gestures?: "cooperative" | "greedy" | "none"; // none: just to watch (Reflect): nothing reacts to the pointer
   topCover?: number; // px at the top covered by something floating on the map: fit the day below it
   bottomCover?: number; // px at the bottom covered (the phone app's tab bar): fit above it, buttons above it
+  onMoving?: (moving: boolean) => void; // (the phone app's map: true while it pans or zooms, false once it's still)
   refitFrom?: number; // (the phone app's map: its own "whole day" button; bumping this zooms back out, and the map's own button is hidden)
   visits: Visit[];
   points: RoutePoint[];
@@ -275,6 +277,8 @@ function DayMapAll({
         backgroundColor={dark ? MAP_GROUND.night : MAP_GROUND.day}
         onTilesLoaded={() => setPainted(true)}
         onZoomChanged={(e) => setZoom(e.detail.zoom)}
+        onCameraChanged={onMoving ? () => onMoving(true) : undefined}
+        onIdle={onMoving ? () => onMoving(false) : undefined}
         defaultCenter={all[0] ?? { lat: 43.0731, lng: -89.4012 }}
         defaultZoom={15}
         gestureHandling={gestures}

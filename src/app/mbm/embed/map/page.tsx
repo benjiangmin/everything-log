@@ -29,5 +29,7 @@ async function Inner({ searchParams }: { searchParams: PageProps<"/mbm/embed/map
   const top = (await searchParams).top !== undefined && Number.isFinite(t) && t >= 0 && t < 200 ? t : 54;
   if (!mbmReady() || !(await mbmUser())) return <p className="grid size-full place-items-center text-sm text-muted">Sign in on the phone first.</p>;
   const day = await getDay(dayKeyOf(new Date(), mbmTz()));
-  return <PhoneMap day={day} top={top} />;
+  const b = Number((await searchParams).bottom);
+  const bottom = (await searchParams).bottom !== undefined && Number.isFinite(b) && b >= 0 && b < 100 ? b : 34;
+  return <PhoneMap day={day} top={top} bottom={bottom} />;
 }
