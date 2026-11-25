@@ -12,7 +12,8 @@ const Inner = dynamic(() => import("./DayMapInner"), { ssr: false, loading: () =
 
 // Today's map for the phone app (/embed/map): the Day page's own map, still (nothing opens, no
 // hover bubbles), with where you are now pulsing in the color of what's running.
-export default function PhoneMap({ day }: { day: Day }) {
+// top: where the phone's clock and battery end (points), from the app.
+export default function PhoneMap({ day, top }: { day: Day; top: number }) {
   const shown = useMemo(() => withArrival(day, day.loadedAt), [day]);
   const running = day.running[0]?.activity_id ? day.activities.find((a) => a.id === day.running[0].activity_id) : undefined;
   const now = useNow(day.loadedAt);
@@ -36,36 +37,38 @@ export default function PhoneMap({ day }: { day: Day }) {
         dayKey={shown.dayKey}
         finished={shown.finished}
         locked={shown.locked}
-        topCover={44}
+        topCover={top + 46}
         bottomCover={84}
         refitFrom={refit}
         still
       />
-      {/* Always at the top: where you are, and next to it, back to the whole day. */}
-      <div className="pointer-events-none absolute inset-x-0 top-[56px] z-40 flex items-center justify-center gap-2 px-14">
-        {stayed && (
-          <p className="min-w-0 truncate rounded-full bg-paper/95 px-4 py-2 text-sm text-ink shadow-lg shadow-ink/15 ring-1 ring-line backdrop-blur">
+      {/* Always at the top, on the app's laptop tab's line: where you are. */}
+      {stayed && (
+        <div className="pointer-events-none absolute left-3 right-[60px] z-40 flex h-9 justify-center" style={{ top: top + 6 }}>
+          <p className="flex h-9 min-w-0 items-center whitespace-nowrap rounded-full bg-paper/95 px-3.5 text-[13px] text-ink shadow-lg shadow-ink/15 ring-1 ring-line backdrop-blur">
             {stayed.at ? (
               <>
-                At <span className="font-semibold">{stayed.at}</span> since {clock(stayed.since, shown.tz)}
+                At&nbsp;<span className="min-w-0 truncate font-semibold">{stayed.at}</span>&nbsp;since {clock(stayed.since, shown.tz)}
               </>
             ) : (
               <>On the way since {clock(stayed.since, shown.tz)}</>
             )}
-            <span className="text-muted"> · {span(Math.max(0, now - +new Date(stayed.since)))}</span>
+            <span className="shrink-0 text-muted">&nbsp;· {span(Math.max(0, now - +new Date(stayed.since)))}</span>
           </p>
-        )}
-        <button
-          type="button"
-          onClick={() => setRefit((n) => n + 1)}
-          aria-label="Show the whole day"
-          className="pointer-events-auto grid size-9 shrink-0 place-items-center rounded-full bg-paper/95 text-ink shadow-lg shadow-ink/15 ring-1 ring-line backdrop-blur"
-        >
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-        </button>
-      </div>
+        </div>
+      )}
+      {/* Back to the whole day: a tab at the right edge under the app's laptop tab, in its style. */}
+      <button
+        type="button"
+        onClick={() => setRefit((n) => n + 1)}
+        aria-label="Show the whole day"
+        className="absolute right-0 z-40 grid h-9 w-12 translate-x-1 place-items-center rounded-l-[12px] border border-line bg-surface pr-1 text-ink shadow-[-2px_2px_6px_rgba(62,40,27,0.12)]"
+        style={{ top: top + 6 + 36 + 10 }}
+      >
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      </button>
     </div>
   );
 }

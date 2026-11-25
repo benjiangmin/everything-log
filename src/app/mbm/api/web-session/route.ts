@@ -13,5 +13,8 @@ export async function POST(req: Request) {
   const client = await mbm();
   const { error } = await client.auth.setSession({ access_token: token, refresh_token: "phone-app" });
   if (error) return new Response("Sign in first.", { status: 401 });
-  return new Response(null, { status: 303, headers: { Location: "/embed/map" } });
+  // (top: how far down the phone's clock and battery reach, in points, so the map's bubble and
+  // buttons line up with the app's laptop tab.)
+  const top = Math.round(Number(form?.get("top")));
+  return new Response(null, { status: 303, headers: { Location: Number.isFinite(top) && top > 0 && top < 200 ? `/embed/map?top=${top}` : "/embed/map" } });
 }
