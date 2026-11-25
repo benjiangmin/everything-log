@@ -85,6 +85,8 @@ function DayMapAll({
 }) {
   const viewOnly = useContext(ViewOnly);
   const [open, setOpen] = useState<Visit | null>(null);
+  // (Leaving the page closes it: a page kept for going back starts without it.)
+  useEffect(() => () => setOpen(null), []);
   const [refit, setRefit] = useState(0); // (bumped by "Whole day": zoom back out to all of it)
   const [moving, setMoving] = useState<Visit | null>(null); // "click where it really is"
   const [moveNote, setMoveNote] = useState<string | null>(null);
@@ -272,6 +274,7 @@ function DayMapAll({
           if (gestures === "none" || viewOnly) return;
           const at = e.detail.latLng;
           if (!moving) {
+            setOpen(null); // (a click off the stop closes its popup; a drag doesn't)
             // Clicked a trip: its menu (the untracked one first, where paths overlap).
             const under = pointed ? trips.filter((x) => pointed.trips.includes(x.key)) : [];
             const t = under.find((x) => tripRow(x, blocks, activities, tz).untracked) ?? under[0];
@@ -1762,23 +1765,21 @@ function NameStop({ visit, onDone, onMove }: { visit: Visit; onDone: () => void;
           )}
         </>
       )}
-      <button type="submit" disabled={pending || !changed || (!own.trim() && !linked)} className="mt-1 w-full rounded-[10px] bg-[#3e281b] py-2 text-sm font-semibold text-[#faf6f0] disabled:opacity-50">
-        {pending ? "Saving…" : "Save"}
-      </button>
-      {/* Wrong spot, or not a real stop at all. */}
-      <div className="flex gap-2 border-t border-[#e2d5c4] pt-2">
-        <button type="button" onClick={onDone} className="flex-1 rounded-[10px] py-1.5 text-sm text-[#86705f] hover:bg-[#f0e7db]">
-          Close
-        </button>
+      {/* Close, Move (wrong spot), Remove (not a real stop), Save: one row of icons. */}
+      <div className="mt-1 flex gap-1.5 border-t border-[#e2d5c4] pt-2">
+        <IconButton label="Close" onClick={onDone} className="text-[#86705f] hover:bg-[#f0e7db]">
+          <path d="M6 6l12 12M18 6L6 18" />
+        </IconButton>
         {/* (One of your places: its Google pin and building say where it is. Moving is for a stop
             with no place yet.) */}
         {!visit.placeId && (
-          <button type="button" onClick={onMove} className="flex-1 rounded-[10px] py-1.5 text-sm text-[#3e281b] hover:bg-[#f0e7db]">
-            Move
-          </button>
+          <IconButton label="Move" onClick={onMove} className="text-[#3e281b] hover:bg-[#f0e7db]">
+            <path d="M12 21s-6-5.3-6-10a6 6 0 1 1 12 0c0 4.7-6 10-6 10z" />
+            <circle cx="12" cy="11" r="2.2" />
+          </IconButton>
         )}
-        <button
-          type="button"
+        <IconButton
+          label="Remove"
           disabled={pending}
           onClick={async () => {
             const ok = await confirm({
@@ -1793,13 +1794,53 @@ function NameStop({ visit, onDone, onMove }: { visit: Visit; onDone: () => void;
               else setMessage(res.message);
             });
           }}
-          className="flex-1 rounded-[10px] py-1.5 text-sm text-[#a3473a] hover:bg-[#f0e7db]"
+          className="text-[#a3473a] hover:bg-[#f0e7db]"
         >
-          Remove
-        </button>
+          <path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3" />
+        </IconButton>
+        <IconButton
+          label={pending ? "Saving…" : "Save"}
+          submit
+          disabled={pending || !changed || (!own.trim() && !linked)}
+          className="bg-[#3e281b] text-[#faf6f0] disabled:opacity-50"
+        >
+          <path d="M5 12.5l4.5 4.5L19 7.5" />
+        </IconButton>
       </div>
       {message && <p className="text-xs text-[#a3473a]">{message}</p>}
     </form>
+  );
+}
+
+// A square-ish icon button for the stop popup's bottom row (its name shows on hover).
+function IconButton({
+  label,
+  onClick,
+  submit,
+  disabled,
+  className,
+  children,
+}: {
+  label: string;
+  onClick?: () => void;
+  submit?: boolean;
+  disabled?: boolean;
+  className: string;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      type={submit ? "submit" : "button"}
+      onClick={onClick}
+      disabled={disabled}
+      aria-label={label}
+      title={label}
+      className={`grid h-9 flex-1 place-items-center rounded-[10px] disabled:cursor-default ${className}`}
+    >
+      <svg viewBox="0 0 24 24" className="size-[18px]" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        {children}
+      </svg>
+    </button>
   );
 }
 
