@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { aiReady, ask } from "./ai";
 import { dayKeyOf, dayRange } from "./time";
+import { isMoving } from "./moving";
 
 // AI suggestions (081_ai_suggestions.sql), for people who turned them on (Settings → Notifications).
 // The database's suggest() finds likely jobs from history, time of day, where you are and your
@@ -210,7 +211,9 @@ Either way, say how many minutes from now to look again (15 to 240).`;
 
 // Jobs running long: which ones are worth a word, and what to say (when the AI is on; otherwise
 // all of them, as before, with no words of its own).
-export async function smartOver(client: SupabaseClient, over: Over[], opts: Opts): Promise<Nudge[]> {
+export async function smartOver(client: SupabaseClient, all: Over[], opts: Opts): Promise<Nudge[]> {
+  // (Never about a Commute: being on the way takes as long as it takes.)
+  const over = all.filter((o) => !isMoving(o.name));
   if (!over.length || !(await aiOn(client))) return over.map((o) => ({ ...o, message: null, action: null }));
   // (Old ones, for jobs long since stopped.)
   await client.from("ai_state").delete().like("kind", "over:%").lt("at", new Date(Date.now() - 3 * 86400_000).toISOString()).then(() => null, () => null);
