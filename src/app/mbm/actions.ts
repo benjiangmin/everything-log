@@ -855,6 +855,16 @@ export async function rightNowPicks(): Promise<Pick[]> {
   return rightNow(client, { at: new Date(), tz: mbmTz(), reuse: true }).catch(() => []);
 }
 
+// Jobs never to suggest (the phone's too; 085).
+export async function setNeverSuggest(ids: string[]): Promise<Result> {
+  const user = await mbmUser();
+  if (!user) return fail("Sign in first.");
+  const clean = [...new Set((Array.isArray(ids) ? ids : []).filter(isUuid))].slice(0, 200);
+  const { error } = await (await mbm()).from("profiles").upsert({ user_id: user.id, never_suggest: clean }, { onConflict: "user_id" });
+  if (error) return fail(/never_suggest/.test(error.message) ? "Run supabase/minute-by-minute/085_never_suggest.sql in Supabase first." : error.message);
+  return { ok: true };
+}
+
 // Your pinned jobs (Home's tiles, the phone's too; 084).
 export async function setPinnedJobs(ids: string[]): Promise<Result> {
   const user = await mbmUser();
