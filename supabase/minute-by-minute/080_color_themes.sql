@@ -83,7 +83,7 @@ begin
   -- Slots: categories and jobs not in one, busiest first; then jobs in categories (their color for
   -- if they leave it).
   create temp table if not exists _slots (kind text, id uuid, slot int) on commit drop;
-  delete from _slots;
+  delete from _slots where true; -- (Supabase refuses a delete without a where)
   with spent as (
     select activity_id, sum(extract(epoch from coalesce(ended_at, now()) - started_at)) as s
     from blocks where user_id = auth.uid() and activity_id is not null group by activity_id

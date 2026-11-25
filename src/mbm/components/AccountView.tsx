@@ -17,6 +17,7 @@ const SECTIONS: { href: string; title: string; note: string }[] = [
   { href: "/account/about", title: "About you", note: "Birthday and the rest, for the Future page" },
   { href: "/account/sharing", title: "What others see", note: "Your username, and who sees what on Social" },
   { href: "/account/jobs", title: "Jobs and categories", note: "Colors, places, starting by themselves" },
+  { href: "/account/colors", title: "Color theme", note: "One set of colors for every job and category" },
   { href: "/account/places", title: "Places", note: "Your places, and stops you haven't named" },
   { href: "/account/sign-in", title: "Sign-in and connections", note: "Email, password, Google" },
   { href: "/account/reflect", title: "Reflect and setup", note: "When Reflect opens, and the welcome again" },
