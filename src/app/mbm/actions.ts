@@ -9,7 +9,7 @@ import { redirect } from "next/navigation";
 import { headers } from "next/headers";
 import { mbm, mbmReady } from "@/mbm/supabase";
 import { getDay, getNowInfo, mbmTz, type Day, type LockedTrip, type NowInfo } from "@/mbm/data";
-import { PALETTE } from "@/mbm/colors";
+import { PALETTE, themeById } from "@/mbm/colors";
 import { dayKeyOf, dayRange } from "@/mbm/time";
 
 // NOTE: the whole site also sits behind the password lock (src/proxy.ts). On top of that,
@@ -1135,7 +1135,10 @@ export async function saveJob(id: string, input: JobPrefs & { category_id: strin
   // (Its color: in a category it's the category's; this is kept as its own for if it leaves.)
   const color = typeof input.color === "string" && /^#[0-9a-f]{6}$/i.test(input.color) ? { color: input.color.toLowerCase() } : {};
   const client = await mbm();
-  const { error } = await client.from("activities").update({ ...cleanPrefs(input), category_id, ...color, ...(name ? { name } : {}), ...names, ...ignore }).eq("id", id);
+  // (A color you pick yourself stays when the theme changes, 080.)
+  const row = { ...cleanPrefs(input), category_id, ...color, ...(name ? { name } : {}), ...names, ...ignore };
+  let { error } = await client.from("activities").update({ ...row, ...(color.color ? { color_by_hand: true } : {}) }).eq("id", id);
+  if (error && /color_by_hand/.test(error.message)) ({ error } = await client.from("activities").update(row).eq("id", id));
   if (error) {
     if (error.code === "23505") return fail(`You already have a job called ${name}. Delete one of them and move its entries to the other instead.`);
     if (/calendar_names/.test(error.message)) return fail("Run supabase/minute-by-minute/073_calendar_names.sql in Supabase first.");
@@ -1156,19 +1159,45 @@ export async function saveJob(id: string, input: JobPrefs & { category_id: strin
   return { ok: true };
 }
 
-export async function saveCategory(input: { id?: string; name: string; color: string } & JobPrefs): Promise<Result & { id?: string }> {
+export async function saveCategory(input: { id?: string; name: string; color: string; colorPicked?: boolean } & JobPrefs): Promise<Result & { id?: string }> {
   const name = input.name.trim().slice(0, 60);
   if (!name) return fail("Give it a name.");
   if (!/^#[0-9a-f]{6}$/i.test(input.color)) return fail("That isn't a color.");
   const client = await mbm();
-  const row = { name, color: input.color.toLowerCase(), ...cleanPrefs(input) };
-  const res = input.id && isUuid(input.id) ? await client.from("categories").update(row).eq("id", input.id).select("id").single() : await client.from("categories").insert(row).select("id").single();
+  // (A color you picked yourself stays when the theme changes, 080; otherwise its theme color.)
+  const row = { name, ...(input.colorPicked || !input.id ? { color: input.color.toLowerCase() } : {}), ...cleanPrefs(input) };
+  const go = (r: typeof row & { color_by_hand?: boolean }) =>
+    input.id && isUuid(input.id) ? client.from("categories").update(r).eq("id", input.id).select("id").single() : client.from("categories").insert(r).select("id").single();
+  let res = await go({ ...row, ...(input.colorPicked ? { color_by_hand: true } : {}) });
+  if (res.error && /color_by_hand/.test(res.error.message)) res = await go(row);
   if (res.error) {
     if (res.error.code === "23505") return fail(`You already have a category called ${name}.`);
     return fail(missing043(res.error.message) ? NEEDS_043 : res.error.message);
   }
   refresh();
   return { ok: true, id: (res.data as { id: string }).id };
+}
+
+// A color theme for every job and category (080). reset: colors you picked yourself go too.
+export async function applyColorTheme(id: string, reset: boolean): Promise<Result> {
+  const theme = themeById(id);
+  if (!theme) return fail("That isn't a theme.");
+  const { error } = await (await mbm()).rpc("apply_color_theme", { p_name: theme.id, p_colors: theme.colors, p_reset: !!reset });
+  if (error) return fail(/apply_color_theme/.test(error.message) ? "Run supabase/minute-by-minute/080_color_themes.sql in Supabase first." : error.message);
+  refresh();
+  return { ok: true };
+}
+
+// "Reset to theme": a job or category you colored yourself takes its theme color again.
+export async function resetColor(kind: "job" | "category", id: string): Promise<Result & { color?: string }> {
+  if (!isUuid(id)) return fail("That's gone.");
+  const client = await mbm();
+  const { error } = await client.rpc("reset_color", { p_kind: kind, p_id: id });
+  if (error) return fail(/reset_color/.test(error.message) ? "Run supabase/minute-by-minute/080_color_themes.sql in Supabase first." : error.message);
+  const { data } = kind === "category" ? await client.from("categories").select("color").eq("id", id).maybeSingle() : await client.from("activities").select("color, own_color, category_id").eq("id", id).maybeSingle();
+  const d = data as { color: string; own_color?: string | null; category_id?: string | null } | null;
+  refresh();
+  return { ok: true, color: d ? (d.category_id ? (d.own_color ?? d.color) : d.color) : undefined };
 }
 
 // (Its jobs stay, back to their own colors.)

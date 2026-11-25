@@ -3,26 +3,29 @@
 import Select from "./Select";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState, useTransition, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useRef, useState, useTransition, type ReactNode } from "react";
 import Floating from "./Floating";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
-import { deleteCategory, deleteJob, jobEntryCount, placeIdFor, saveCategory, saveJob, type JobPrefs } from "@/app/mbm/actions";
+import { applyColorTheme, deleteCategory, deleteJob, jobEntryCount, placeIdFor, resetColor, saveCategory, saveJob, type JobPrefs } from "@/app/mbm/actions";
 import PageMark from "./PageMark";
 import { setPrivate } from "@/app/mbm/social/actions";
 import Menu from "./IconMenu";
 import { reveal } from "./reveal";
 import PlaceSearch from "./PlaceSearch";
-import { PALETTE } from "@/mbm/colors";
+import { PALETTE, THEMES, themeById } from "@/mbm/colors";
 import { eventJobId, overlap } from "@/mbm/eventJob";
 
 // Jobs and categories. Each job's settings are written as what will actually happen ("Work starts
 // by itself when you arrive at Russell Labs…"), with an "In short" line that updates as you change
 // them. A category (School) gives its jobs its color, and settings they follow unless changed.
 
-export type Job = JobPrefs & { id: string; name: string; color: string; own_color?: string | null; category_id?: string | null; last_used_at?: string | null; private?: boolean; calendar_names?: string[]; calendar_ignore?: string[] };
+export type Job = JobPrefs & { id: string; name: string; color: string; own_color?: string | null; category_id?: string | null; last_used_at?: string | null; private?: boolean; calendar_names?: string[]; calendar_ignore?: string[]; color_by_hand?: boolean };
 // A name on your calendar (last 60 days and next 30): how many times.
 export type CalEvent = { title: string; n: number };
-export type Category = JobPrefs & { id: string; name: string; color: string; private?: boolean };
+export type Category = JobPrefs & { id: string; name: string; color: string; private?: boolean; color_by_hand?: boolean };
+
+// (The colors to pick from: your theme's, or the usual ones.)
+const Swatches = createContext<{ colors: string[]; theme: boolean }>({ colors: PALETTE, theme: false });
 type Place = { id: string; name: string };
 type Mode = "always" | "calendar" | "never";
 
@@ -30,7 +33,16 @@ const blank: JobPrefs = { stop_on_commute: null, places: null, start_mode: null,
 const RECENT = 5;
 const STALE_DAYS = 50; // (not used in this long: listed apart, below)
 
-export default function JobsView({ jobs, categories, places, needsSql = false, now = 0, events = [] }: { jobs: Job[]; categories: Category[]; places: Place[]; needsSql?: boolean; now?: number; events?: CalEvent[] }) {
+export default function JobsView(props: { jobs: Job[]; categories: Category[]; places: Place[]; needsSql?: boolean; now?: number; events?: CalEvent[]; theme?: string | null }) {
+  const t = themeById(props.theme);
+  return (
+    <Swatches.Provider value={{ colors: t?.colors ?? PALETTE, theme: !!t }}>
+      <JobsPage {...props} />
+    </Swatches.Provider>
+  );
+}
+
+function JobsPage({ jobs, categories, places, needsSql = false, now = 0, events = [], theme }: { jobs: Job[]; categories: Category[]; places: Place[]; needsSql?: boolean; now?: number; events?: CalEvent[]; theme?: string | null }) {
   const [openJob, setOpenJob] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null); // (opened straight at "Delete?")
   const [openCat, setOpenCat] = useState<string | null>(null);
@@ -143,6 +155,7 @@ export default function JobsView({ jobs, categories, places, needsSql = false, n
           Run 043_jobs_and_categories.sql, then 044_clearer_jobs.sql, in Supabase to use this page.
         </p>
       )}
+      {theme !== undefined && !needsSql && <ThemePicker current={theme} />}
 
       {/* Jobs: a search, with your 5 most recent before you type (or sort or filter them all). */}
       <section className="mt-8">
@@ -334,6 +347,7 @@ function JobSettings({
   });
   const [color, setColor] = useState(job.category_id ? (job.own_color ?? job.color) : job.color);
   const [name, setName] = useState(job.name);
+  const [byHand, setByHand] = useState(!!job.color_by_hand);
   const [calNames, setCalNames] = useState<string[]>(job.calendar_names ?? []);
   const [calIgnore, setCalIgnore] = useState<string[]>(job.calendar_ignore ?? []);
   const draft = { ...job, name: name.trim() || job.name, calendar_names: calNames, calendar_ignore: calIgnore };
@@ -370,7 +384,21 @@ function JobSettings({
         />
       </Field>
       <Field title="Color">
-        <JobColor color={color} onChange={setColor} category={cat} />
+        <JobColor
+          color={color}
+          onChange={setColor}
+          category={cat}
+          onReset={
+            byHand && color === (job.category_id ? (job.own_color ?? job.color) : job.color)
+              ? async () => {
+                  const res = await resetColor("job", job.id);
+                  if (res.ok && res.color) setColor(res.color);
+                  if (res.ok) setByHand(false);
+                  return res;
+                }
+              : undefined
+          }
+        />
       </Field>
       <Prefs
         name={job.name}
@@ -637,7 +665,10 @@ function DeleteJob({ job, jobs, onCancel, onDone }: { job: Job; jobs: Job[]; onC
 function CategoryCard({ category, jobs, places, open, onToggle, onDone }: { category?: Category; jobs: Job[]; places: Place[]; open: boolean; onToggle: () => void; onDone: () => void }) {
   const router = useRouter();
   const [name, setName] = useState(category?.name ?? "");
-  const [color, setColor] = useState(category?.color ?? PALETTE[3]);
+  const swatches = useContext(Swatches);
+  const [color, setColor] = useState(category?.color ?? swatches.colors[3 % swatches.colors.length]);
+  const [picked, setPicked] = useState(false); // (you chose its color: it stays when the theme changes)
+  const [byHand, setByHand] = useState(!!category?.color_by_hand);
   const [p, setP] = useState<JobPrefs>(
     category
       ? { stop_on_commute: category.stop_on_commute, places: category.places, start_mode: category.start_mode, weekly_goal_min: category.weekly_goal_min, goal_per: category.goal_per, hide_from_stats: category.hide_from_stats, ...(category.stop_at_event_end !== undefined ? { stop_at_event_end: category.stop_at_event_end } : {}) }
@@ -647,7 +678,7 @@ function CategoryCard({ category, jobs, places, open, onToggle, onDone }: { cate
   const [pending, start] = useTransition();
   const save = () =>
     start(async () => {
-      const res = await saveCategory({ id: category?.id, name, color, ...p });
+      const res = await saveCategory({ id: category?.id, name, color, colorPicked: picked, ...p });
       if (!res.ok) return setMessage(res.message);
       router.refresh();
       onDone();
@@ -680,30 +711,23 @@ function CategoryCard({ category, jobs, places, open, onToggle, onDone }: { cate
             <input autoFocus={!category} value={name} onChange={(e) => setName(e.target.value)} placeholder="School" className="w-full max-w-sm rounded-control border border-line bg-paper px-3 py-2.5" />
           </Field>
           <Field title="Color" help={`Every job in ${label} gets this color. A job taken out of it gets its own color back.`}>
-            <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Color">
-              {PALETTE.map((c) => (
-                <button
-                  key={c}
-                  type="button"
-                  role="radio"
-                  aria-checked={color === c}
-                  aria-label={c}
-                  onClick={() => setColor(c)}
-                  className={`grid size-8 place-items-center rounded-full transition-transform hover:scale-110 ${color === c ? "ring-2 ring-ink ring-offset-2 ring-offset-paper" : ""}`}
-                  style={{ background: c }}
-                >
-                  {color === c && <Tick />}
-                </button>
-              ))}
-              <label
-                className={`relative grid size-8 cursor-pointer place-items-center rounded-full ${PALETTE.includes(color) ? "ring-1 ring-line" : "ring-2 ring-ink ring-offset-2 ring-offset-paper"}`}
-                title="Any color"
-                style={PALETTE.includes(color) ? {} : { background: color }}
-              >
-                <input type="color" value={color} onChange={(e) => setColor(e.target.value)} className="absolute inset-0 cursor-pointer opacity-0" />
-                {PALETTE.includes(color) ? <span className="text-sm text-muted">+</span> : <Tick />}
-              </label>
-            </div>
+            <ColorChoice
+              color={color}
+              onChange={(c) => {
+                setColor(c);
+                setPicked(true);
+              }}
+              onReset={
+                category && byHand && !picked
+                  ? async () => {
+                      const res = await resetColor("category", category.id);
+                      if (res.ok && res.color) setColor(res.color);
+                      if (res.ok) setByHand(false);
+                      return res;
+                    }
+                  : undefined
+              }
+            />
           </Field>
           <p className="mt-6 text-sm text-muted">Settings for its jobs (a job can still choose differently):</p>
           <Prefs name={`${label}'s jobs`} value={p} onChange={(v) => setP({ ...p, ...v })} places={places} group />
@@ -1023,7 +1047,7 @@ function Goal({ value, per, onChange }: { value: number | null; per: "day" | "we
 }
 
 // A job's own color (not while it's in a category: then it's the category's).
-function JobColor({ color, onChange, category }: { color: string; onChange: (c: string) => void; category: Category | null }) {
+function JobColor({ color, onChange, category, onReset }: { color: string; onChange: (c: string) => void; category: Category | null; onReset?: () => Promise<{ ok: boolean; message?: string }> }) {
   if (category)
     return (
       <p className="flex items-center gap-2 text-sm text-muted">
@@ -1031,32 +1055,121 @@ function JobColor({ color, onChange, category }: { color: string; onChange: (c: 
         {category.name}&apos;s color. Take it out of {category.name} to give it its own.
       </p>
     );
+  return <ColorChoice color={color} onChange={onChange} onReset={onReset} />;
+}
+
+// Swatches (your theme's), any color, and "Reset to theme" for one you picked yourself.
+function ColorChoice({ color, onChange, onReset }: { color: string; onChange: (c: string) => void; onReset?: () => Promise<{ ok: boolean; message?: string }> }) {
+  const { colors, theme } = useContext(Swatches);
+  const [pending, start] = useTransition();
+  const [message, setMessage] = useState<string | null>(null);
+  const known = colors.includes(color);
   return (
-    <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Color">
-      {PALETTE.map((c) => (
-        <button
-          key={c}
-          type="button"
-          role="radio"
-          aria-checked={color === c}
-          aria-label={c}
-          onClick={() => onChange(c)}
-          className={`grid size-8 place-items-center rounded-full transition-transform hover:scale-110 ${color === c ? "ring-2 ring-ink ring-offset-2 ring-offset-paper" : ""}`}
-          style={{ background: c }}
+    <div>
+      <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Color">
+        {colors.map((c) => (
+          <button
+            key={c}
+            type="button"
+            role="radio"
+            aria-checked={color === c}
+            aria-label={c}
+            onClick={() => onChange(c)}
+            className={`grid size-8 place-items-center rounded-full transition-transform hover:scale-110 ${color === c ? "ring-2 ring-ink ring-offset-2 ring-offset-paper" : ""}`}
+            style={{ background: c }}
+          >
+            {color === c && <Tick />}
+          </button>
+        ))}
+        <label
+          className={`relative grid size-8 cursor-pointer place-items-center rounded-full ${known ? "ring-1 ring-line" : "ring-2 ring-ink ring-offset-2 ring-offset-paper"}`}
+          title="Any color"
+          style={known ? {} : { background: color }}
         >
-          {color === c && <Tick />}
+          <input type="color" value={color} onChange={(e) => onChange(e.target.value)} className="absolute inset-0 cursor-pointer opacity-0" />
+          {known ? <span className="text-sm text-muted">+</span> : <Tick />}
+        </label>
+        {!known && <span className="self-center text-sm text-muted">Your own color</span>}
+      </div>
+      {theme && onReset && (
+        <button
+          type="button"
+          disabled={pending}
+          onClick={() =>
+            start(async () => {
+              const res = await onReset();
+              setMessage(res.ok ? null : (res.message ?? "That didn't work."));
+            })
+          }
+          className="mt-3 text-sm font-semibold text-muted underline-offset-2 hover:text-ink hover:underline disabled:opacity-50"
+        >
+          {pending ? "Resetting…" : "Reset to theme"}
         </button>
-      ))}
-      <label
-        className={`relative grid size-8 cursor-pointer place-items-center rounded-full ${PALETTE.includes(color) ? "ring-1 ring-line" : "ring-2 ring-ink ring-offset-2 ring-offset-paper"}`}
-        title="Any color"
-        style={PALETTE.includes(color) ? {} : { background: color }}
-      >
-        <input type="color" value={color} onChange={(e) => onChange(e.target.value)} className="absolute inset-0 cursor-pointer opacity-0" />
-        {PALETTE.includes(color) ? <span className="text-sm text-muted">+</span> : <Tick />}
-      </label>
-      <span className="self-center text-sm text-muted">{PALETTE.includes(color) ? "" : "Your own color"}</span>
+      )}
+      {message && <p className="mt-1 text-sm text-danger">{message}</p>}
     </div>
+  );
+}
+
+// The color theme: every job and category takes its colors (the busiest first).
+function ThemePicker({ current }: { current: string | null }) {
+  const router = useRouter();
+  const confirm = useConfirm();
+  const [pending, start] = useTransition();
+  const [message, setMessage] = useState<string | null>(null);
+  const [chosen, setChosen] = useState(current);
+  const use = async (id: string, reset: boolean) => {
+    const t = themeById(id)!;
+    // (The first theme, or "Recolor everything": colors you picked go too. Ask first.)
+    if (reset && !(await confirm({ title: `Recolor everything with ${t.name}?`, body: "Every job and category takes its colors, including ones you colored yourself. You can still change any of them after.", confirmLabel: "Recolor" }))) return;
+    setChosen(id);
+    start(async () => {
+      const res = await applyColorTheme(id, reset);
+      if (!res.ok) {
+        setChosen(current);
+        return setMessage(res.message);
+      }
+      setMessage(null);
+      router.refresh();
+    });
+  };
+  return (
+    <section className="mt-8">
+      <h2 className="font-display text-xl font-semibold">Color theme</h2>
+      <div className="mt-3 grid gap-2 sm:grid-cols-2">
+        {THEMES.map((t) => {
+          const on = chosen === t.id;
+          return (
+            <button
+              key={t.id}
+              type="button"
+              disabled={pending}
+              aria-pressed={on}
+              onClick={() => !on && use(t.id, current === null)}
+              className={`flex items-center gap-3 rounded-card border bg-paper px-4 py-3 text-left transition-colors disabled:opacity-70 ${on ? "border-ink" : "border-line hover:border-ink/40"}`}
+            >
+              <span className="w-16 shrink-0 text-sm font-semibold">{t.name}</span>
+              <span className="flex min-w-0 flex-1 overflow-hidden rounded-full" aria-hidden="true">
+                {t.colors.slice(0, 10).map((c) => (
+                  <span key={c} className="h-4 flex-1" style={{ background: c }} />
+                ))}
+              </span>
+              {on && (
+                <svg viewBox="0 0 20 20" className="size-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="2.4" aria-hidden="true">
+                  <path d="m4.5 10.5 3.5 3.5 7.5-8" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              )}
+            </button>
+          );
+        })}
+      </div>
+      {chosen && (
+        <button type="button" disabled={pending} onClick={() => use(chosen, true)} className="mt-2 text-sm font-semibold text-muted hover:text-ink hover:underline disabled:opacity-50">
+          {pending ? "Recoloring…" : "Recolor everything, including colors you picked"}
+        </button>
+      )}
+      {message && <p className="mt-2 text-sm text-danger">{message}</p>}
+    </section>
   );
 }
 
