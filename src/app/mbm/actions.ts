@@ -852,6 +852,11 @@ export async function googleInfo() {
 
 export async function disconnectGoogle(): Promise<Result> {
   const client = await mbm();
+  // (Google takes back the access it gave too, not just this copy of it.)
+  const { data: acct } = await client.from("google_accounts").select("refresh_token").maybeSingle();
+  const token = (acct as { refresh_token?: string } | null)?.refresh_token;
+  if (token)
+    await fetch(`https://oauth2.googleapis.com/revoke?token=${encodeURIComponent(token)}`, { method: "POST", signal: AbortSignal.timeout(5000) }).catch(() => null);
   const { error } = await client.from("google_accounts").delete().not("user_id", "is", null);
   if (error) return fail(error.message);
   await client.from("calendar_events").delete().not("user_id", "is", null);

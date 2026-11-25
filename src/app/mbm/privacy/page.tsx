@@ -33,7 +33,10 @@ export default function PrivacyPage() {
               "while location tracking is on, the phone records where you are, the routes between places, and how you moved (walking, driving and so on), including when the app is closed. You can turn it off in Settings at any time.",
             ],
             ["What you do", "the jobs you start and stop, their times, places you name, and anything you type in."],
-            ["Your calendar", "if you connect Google Calendar: your events, read only. Minute by Minute never changes your calendar."],
+            [
+              "Your calendar",
+              "if you connect Google Calendar: your calendars' names and your events (title, time, place) from a week back to two days ahead. Minute by Minute only changes your calendar when you ask it to: adding, moving or deleting an event on the Plan page.",
+            ],
             ["Your sleep", "if you allow it: sleep times from Apple Health, read only."],
             ["Your phone use", "if you set up the Shortcuts automation: which apps you open and when. Not what you do in them."],
             ["About you", "if you fill it in: birthday, sex, state, and the other Future page answers. All optional."],
@@ -44,6 +47,18 @@ export default function PrivacyPage() {
       <Part title="What it's used for">
         <p>
           Only to show you your own days: your timeline, map, stats, suggestions and notifications. Nothing is sold, shared with advertisers, or used to train AI.
+        </p>
+      </Part>
+
+      <Part title="Google user data">
+        <p>
+          Calendar events from Google are used only to suggest and time your jobs and to show your plan, for you. They aren&apos;t shared with anyone (friends on
+          Social never see your calendar), sold, used for ads, or used to train AI. Disconnecting Google Calendar in Settings → Sign-in and connections deletes the
+          copied events and the access Google gave. Minute by Minute&apos;s use of information received from Google APIs adheres to the{" "}
+          <a href="https://developers.google.com/terms/api-services-user-data-policy" className="font-semibold underline underline-offset-2">
+            Google API Services User Data Policy
+          </a>
+          , including the Limited Use requirements.
         </p>
       </Part>
 
