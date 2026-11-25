@@ -65,6 +65,7 @@ function DayMapAll({
   gestures = "cooperative",
   topCover = 0,
   bottomCover = 0,
+  refitFrom,
   dayKey,
   finished = false,
   locked = null,
@@ -79,6 +80,7 @@ function DayMapAll({
   gestures?: "cooperative" | "greedy" | "none"; // none: just to watch (Reflect): nothing reacts to the pointer
   topCover?: number; // px at the top covered by something floating on the map: fit the day below it
   bottomCover?: number; // px at the bottom covered (the phone app's tab bar): fit above it, buttons above it
+  refitFrom?: number; // (the phone app's map: its own "whole day" button; bumping this zooms back out, and the map's own button is hidden)
   visits: Visit[];
   points: RoutePoint[];
   blocks?: Block[];
@@ -266,7 +268,7 @@ function DayMapAll({
 
   return (
     <div ref={box} className="relative size-full" style={{ background: dark ? MAP_GROUND.night : MAP_GROUND.day }} onMouseLeave={() => pointed && point(null)}>
-    {all.length > 0 && !follow && <WholeDay bottom={bottomCover} onClick={() => setRefit((n) => n + 1)} />}
+    {all.length > 0 && !follow && refitFrom === undefined && <WholeDay bottom={bottomCover} onClick={() => setRefit((n) => n + 1)} />}
     <APIProvider apiKey={KEY}>
       <Map
         styles={stylesFor(zoom, dark)}
@@ -307,7 +309,7 @@ function DayMapAll({
         }}
         className="size-full"
       >
-        {!follow && <FitTo spots={all} top={topCover} bottom={bottomCover} again={refit} />}
+        {!follow && <FitTo spots={all} top={topCover} bottom={bottomCover} again={refit + (refitFrom ?? 0)} />}
         {follow && <Follow spots={followSpots(lit, visits, trips, all)} cover={follow} />}
         {walk && <Walker trips={trips} walk={walk} />}
         {gestures !== "none" && <PointerTrack trips={trips} onHit={(hit, e, guesses) => point(hit.length ? { trips: hit, stops: [], guesses, ...where(e) } : null)} />}
