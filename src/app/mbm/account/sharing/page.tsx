@@ -1,3 +1,4 @@
+import Link from "next/link";
 import ShareSettings from "@/mbm/components/ShareSettings";
 import { Card, SubPage } from "@/mbm/components/AccountView";
 import { loadSocial } from "../../social/actions";
@@ -18,7 +19,15 @@ export default function SharingPage() {
         return (
           <SubPage mark="sharing"
             title="What others see"
-            note="Your name and picture always show. Everything else is up to you, and starts as Nobody. Mutuals: people you follow who follow you back. Private jobs show as Busy (Jobs and categories)."
+            note={
+              <>
+                Your name and picture always show. Private jobs show as Busy, you can set that on the{" "}
+                <Link href="/account/jobs" className="underline underline-offset-2 hover:text-ink">
+                  Jobs and categories
+                </Link>{" "}
+                page.
+              </>
+            }
           >
             <Card>
               {social.ok ? (

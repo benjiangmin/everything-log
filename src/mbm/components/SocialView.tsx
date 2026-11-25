@@ -155,7 +155,6 @@ export default function SocialView({ social, renderedAt }: { social: Social; ren
             <Empty>No followers yet. When someone asks to follow you, it shows under Requests.</Empty>
           ) : (
             <>
-              <p className="mb-3 text-sm text-muted">Close friends see your map, if you share it.</p>
               <ul className="divide-y divide-line rounded-card border border-line">
                 {social.followers.map((p) => (
                   <FollowerRow key={p.id} person={p} pending={pending} run={run} />

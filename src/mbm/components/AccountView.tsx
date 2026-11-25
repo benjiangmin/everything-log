@@ -68,7 +68,7 @@ export function SubPage({
   back = { href: "/account", label: "Settings" },
 }: {
   title: string;
-  note?: string;
+  note?: ReactNode;
   mark?: MarkKind; // (its big faint drawing behind the title)
   children: ReactNode;
   back?: { href: string; label: string };
