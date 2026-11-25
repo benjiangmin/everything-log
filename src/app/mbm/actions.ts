@@ -852,7 +852,7 @@ export async function bestGuesses(): Promise<Guess[]> {
 export async function rightNowPicks(): Promise<Pick[]> {
   const client = await mbm();
   await syncCalendar(client).catch(() => null);
-  return rightNow(client, { at: new Date(), tz: mbmTz() }).catch(() => []);
+  return rightNow(client, { at: new Date(), tz: mbmTz(), reuse: true }).catch(() => []);
 }
 
 // Your pinned jobs (Home's tiles, the phone's too; 084).

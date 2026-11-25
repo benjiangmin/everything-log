@@ -304,8 +304,11 @@ export async function pinnedJobs(client: SupabaseClient): Promise<string[]> {
 // (suggest(): calendar, time of day, where you are), then your most recent jobs, never what's
 // pinned or running or a Commute. With AI suggestions on, the AI keeps only the ones that fit right
 // now, best first (fewer is fine). guesses: suggest()'s list, if you have it already.
-export async function rightNow(client: SupabaseClient, opts: Opts & { guesses?: Guess[]; limit?: number }): Promise<Pick[]> {
+// reuse (the website): the phone's latest answer if it's under 10 minutes old, so both show the
+// same ones (the phone knows where you are; the website only knows your last stop).
+export async function rightNow(client: SupabaseClient, opts: Opts & { guesses?: Guess[]; limit?: number; reuse?: boolean }): Promise<Pick[]> {
   const limit = opts.limit ?? 3;
+  const was = opts.reuse ? await readState<{ at: string; ids: string[] }>(client, "right_now") : null;
   const [g, acts, running, pins] = await Promise.all([
     opts.guesses
       ? Promise.resolve({ data: opts.guesses })
@@ -322,11 +325,13 @@ export async function rightNow(client: SupabaseClient, opts: Opts & { guesses?: 
   const recent = all.map((a) => a.id).filter(ok).slice(0, 14);
   const candidates = [...new Set([...picks, ...recent])].slice(0, 16);
   const toPick = (id: string) => ({ activity_id: id, name: byId.get(id)!.name, color: byId.get(id)!.color });
+  if (was && +opts.at - +new Date(was.at) < 10 * 60_000) return was.ids.filter(ok).slice(0, limit).map(toPick);
   const ai = await smartUsual(
     client,
     candidates.map((id) => ({ id, name: byId.get(id)!.name })),
     { ...opts, limit },
   ).catch(() => null);
-  const ids = ai ?? [...new Set([...picks.slice(0, 2), ...recent])];
-  return ids.filter(ok).slice(0, limit).map(toPick);
+  const ids = (ai ?? [...new Set([...picks.slice(0, 2), ...recent])]).filter(ok).slice(0, limit);
+  await writeState(client, "right_now", { at: opts.at.toISOString(), ids });
+  return ids.map(toPick);
 }
