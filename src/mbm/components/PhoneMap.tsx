@@ -60,9 +60,13 @@ export default function PhoneMap({ day, top }: { day: Day; top: number }) {
       {/* Back to the whole day: a tab at the right edge under the app's laptop tab, in its style. */}
       <button
         type="button"
-        onClick={() => setRefit((n) => n + 1)}
+        onClick={() => {
+          setRefit((n) => n + 1);
+          // (A tap you can feel: the app turns this into a haptic, see MapCard.swift.)
+          (window as unknown as { webkit?: { messageHandlers?: { mbm?: { postMessage: (m: string) => void } } } }).webkit?.messageHandlers?.mbm?.postMessage("tap");
+        }}
         aria-label="Show the whole day"
-        className="absolute right-0 z-40 grid h-9 w-12 translate-x-1 place-items-center rounded-l-[12px] border border-line bg-surface pr-1 text-ink shadow-[-2px_2px_6px_rgba(62,40,27,0.12)]"
+        className="absolute right-0 z-40 grid h-9 w-12 translate-x-1 place-items-center rounded-l-[12px] border border-line bg-surface pr-1 text-ink shadow-[-2px_2px_6px_rgba(62,40,27,0.12)] transition-[transform,background-color,color] duration-150 active:-translate-x-0.5 active:scale-90 active:bg-accent active:text-accent-ink"
         style={{ top: top + 6 + 36 + 8 }}
       >
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true">
