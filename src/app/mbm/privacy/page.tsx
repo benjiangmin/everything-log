@@ -35,7 +35,7 @@ export default function PrivacyPage() {
             ["What you do", "the jobs you start and stop, their times, places you name, and anything you type in."],
             [
               "Your calendar",
-              "if you connect Google Calendar: your calendars' names and your events (title, time, place) from a week back to two days ahead. Minute by Minute only changes your calendar when you ask it to: adding, moving or deleting an event on the Plan page.",
+              "if you connect Google Calendar: your calendars' names and your events (title, time, place) from a week back to two days ahead. Read only: Minute by Minute never changes your calendar.",
             ],
             ["Your sleep", "if you allow it: sleep times from Apple Health, read only."],
             ["Your phone use", "if you set up the Shortcuts automation: which apps you open and when. Not what you do in them."],

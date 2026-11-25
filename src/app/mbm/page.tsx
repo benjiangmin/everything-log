@@ -126,8 +126,8 @@ function Landing() {
       <div className="mt-14 grid gap-8 sm:grid-cols-3">
         <Feature title="Your day, laid out">Every job you start and stop on a timeline, with the places you went and the routes between them on a map.</Feature>
         <Feature title="Google Calendar, if you want it">
-          Connect it and your events suggest what you&apos;re about to do and stop a job when its event ends. On the Plan page you can add or move events, and
-          they&apos;re saved to your calendar.
+          Connect it and your events suggest what you&apos;re about to do and stop a job when its event ends. It only reads
+          your calendar, never changes it.
         </Feature>
         <Feature title="Yours">Nothing is sold or used for ads. You choose what friends see, and you can delete everything at any time.</Feature>
       </div>

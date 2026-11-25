@@ -18,7 +18,9 @@ export const googleReady = () => Boolean(process.env.GOOGLE_CLIENT_ID && process
 const CALENDAR = "https://www.googleapis.com/auth/calendar.readonly";
 // (Adding, moving and deleting events from the Plan tab: 041_plan.sql.)
 export const WRITE = "https://www.googleapis.com/auth/calendar.events";
-const SCOPES = ["openid", "email", CALENDAR, WRITE];
+// (WRITE is left out until the Plan page is ready: Google's review only covers reading for now.
+// Accounts that already gave it keep it; canWrite checks.)
+const SCOPES = ["openid", "email", CALENDAR];
 // (Both are in Google Cloud: minutexminute.com/google/callback, and the old /mbm one.)
 export const redirectUri = (origin: string) => `${origin}${baseFor(origin)}/google/callback`;
 
