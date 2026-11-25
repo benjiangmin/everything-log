@@ -64,6 +64,7 @@ function DayMapAll({
   onPointer,
   gestures = "cooperative",
   topCover = 0,
+  bottomCover = 0,
   dayKey,
   finished = false,
   locked = null,
@@ -77,6 +78,7 @@ function DayMapAll({
   locked?: LockedTrip[] | null; // its saved routes: drawn as they are, nothing worked out again
   gestures?: "cooperative" | "greedy" | "none"; // none: just to watch (Reflect): nothing reacts to the pointer
   topCover?: number; // px at the top covered by something floating on the map: fit the day below it
+  bottomCover?: number; // px at the bottom covered (the phone app's tab bar): fit above it, buttons above it
   visits: Visit[];
   points: RoutePoint[];
   blocks?: Block[];
@@ -264,7 +266,7 @@ function DayMapAll({
 
   return (
     <div ref={box} className="relative size-full" style={{ background: dark ? MAP_GROUND.night : MAP_GROUND.day }} onMouseLeave={() => pointed && point(null)}>
-    {all.length > 0 && !follow && <WholeDay onClick={() => setRefit((n) => n + 1)} />}
+    {all.length > 0 && !follow && <WholeDay bottom={bottomCover} onClick={() => setRefit((n) => n + 1)} />}
     <APIProvider apiKey={KEY}>
       <Map
         styles={stylesFor(zoom, dark)}
@@ -305,7 +307,7 @@ function DayMapAll({
         }}
         className="size-full"
       >
-        {!follow && <FitTo spots={all} top={topCover} again={refit} />}
+        {!follow && <FitTo spots={all} top={topCover} bottom={bottomCover} again={refit} />}
         {follow && <Follow spots={followSpots(lit, visits, trips, all)} cover={follow} />}
         {walk && <Walker trips={trips} walk={walk} />}
         {gestures !== "none" && <PointerTrack trips={trips} onHit={(hit, e, guesses) => point(hit.length ? { trips: hit, stops: [], guesses, ...where(e) } : null)} />}
@@ -1500,7 +1502,7 @@ function BuildingNote({ status, needsSql }: { status: BuildingStatus | null; nee
 
 // Zooms to show the whole day: when the day opens (not every time new dots come in from the
 // phone, so the map doesn't jump while you look around).
-function FitTo({ spots, top = 0, again = 0 }: { spots: Spot[]; top?: number; again?: number }) {
+function FitTo({ spots, top = 0, bottom = 0, again = 0 }: { spots: Spot[]; top?: number; bottom?: number; again?: number }) {
   const map = useMap();
   const core = useMapsLibrary("core");
   const key = spots.length ? `${spots[0].lat},${spots[0].lng}` : "";
@@ -1513,7 +1515,7 @@ function FitTo({ spots, top = 0, again = 0 }: { spots: Spot[]; top?: number; aga
     }
     const bounds = new core.LatLngBounds();
     for (const s of spots) bounds.extend(s);
-    map.fitBounds(bounds, top ? { top: top + 32, right: 48, bottom: 48, left: 48 } : 48);
+    map.fitBounds(bounds, top || bottom ? { top: top + 32, right: 48, bottom: bottom + 48, left: 48 } : 48);
     // Stops all in one place (the same building all day): don't zoom in past the building and
     // its neighbours.
     const once = core.event.addListenerOnce(map, "idle", () => {
@@ -1521,7 +1523,7 @@ function FitTo({ spots, top = 0, again = 0 }: { spots: Spot[]; top?: number; aga
     });
     return () => once.remove();
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only for a new day (or a new cover)
-  }, [map, core, key, top, again]);
+  }, [map, core, key, top, bottom, again]);
   return null;
 }
 
@@ -1647,11 +1649,12 @@ function Ink({ path, color }: { path: Spot[]; color: string }) {
 }
 
 // Back to the whole day (in the corner where the zoom buttons were).
-function WholeDay({ onClick }: { onClick: () => void }) {
+function WholeDay({ onClick, bottom = 0 }: { onClick: () => void; bottom?: number }) {
   return (
     <button
       type="button"
       onClick={onClick}
+      style={bottom ? { bottom: bottom + 16 } : undefined}
       title="Show the whole day"
       className="absolute bottom-4 right-4 z-10 flex items-center gap-2 rounded-full bg-paper/95 px-3.5 py-2 text-sm font-semibold text-ink shadow-lg shadow-ink/15 ring-1 ring-line backdrop-blur transition-colors hover:bg-surface"
     >

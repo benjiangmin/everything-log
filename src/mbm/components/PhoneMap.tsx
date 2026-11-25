@@ -12,9 +12,10 @@ const Inner = dynamic(() => import("./DayMapInner"), { ssr: false, loading: () =
 export default function PhoneMap({ day }: { day: Day }) {
   const shown = useMemo(() => withArrival(day, day.loadedAt), [day]);
   const running = day.running[0]?.activity_id ? day.activities.find((a) => a.id === day.running[0].activity_id) : undefined;
-  // (Ends above the app's tab bar, so the map's "whole day" button isn't under it.)
+  // (The whole screen; the app's tab bar floats over the bottom, so the day fits above it, and the
+  // "whole day" button sits above it. The top: the phone's clock and battery.)
   return (
-    <div className="absolute inset-x-0 top-0 bottom-[84px]">
+    <div className="absolute inset-0">
       <Inner
         visits={shown.visits}
         points={shown.points}
@@ -27,6 +28,8 @@ export default function PhoneMap({ day }: { day: Day }) {
         dayKey={shown.dayKey}
         finished={shown.finished}
         locked={shown.locked}
+        topCover={44}
+        bottomCover={84}
         still
       />
     </div>
