@@ -63,7 +63,7 @@ export default function PhoneMap({ day, top }: { day: Day; top: number }) {
         onClick={() => setRefit((n) => n + 1)}
         aria-label="Show the whole day"
         className="absolute right-0 z-40 grid h-9 w-12 translate-x-1 place-items-center rounded-l-[12px] border border-line bg-surface pr-1 text-ink shadow-[-2px_2px_6px_rgba(62,40,27,0.12)]"
-        style={{ top: top + 6 + 36 + 10 }}
+        style={{ top: top + 6 + 36 + 8 }}
       >
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true">
           <path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />

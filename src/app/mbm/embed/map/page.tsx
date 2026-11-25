@@ -6,8 +6,10 @@ import { dayKeyOf } from "@/mbm/time";
 import PhoneMap from "@/mbm/components/PhoneMap";
 
 export const metadata = { title: "Map" };
-// (Inside the app: the page itself never zooms; pinching zooms the map.)
-export const viewport = { width: "device-width", initialScale: 1, maximumScale: 1, userScalable: false };
+// (Inside the app: the page itself never zooms; pinching zooms the map. viewport-fit cover: the page
+// starts at the very top of the screen and runs into the bottom corners; without it the phone kept
+// it inside the clock and the home bar, and everything placed from the top sat 47 points too low.)
+export const viewport = { width: "device-width", initialScale: 1, maximumScale: 1, userScalable: false, viewportFit: "cover" };
 
 // The phone app's Map tab: today's map, exactly as the Day page draws it (the same routes, stops
 // and buildings), only to look at. Shown inside the app (see /mbm/api/web-session).
