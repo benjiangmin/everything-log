@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState, useSyncExternalStore, type ReactNode } from "react";
+import { withArrival } from "@/mbm/arrival";
+import { useEffect, useMemo, useState, useSyncExternalStore, type ReactNode } from "react";
 import type { Day } from "@/mbm/data";
 import { useRouter } from "next/navigation";
 import { liftOut, tuckBetween } from "@/app/mbm/actions";
@@ -24,7 +25,7 @@ import { useNow } from "./useNow";
 //   - map: the map fills the window, with the title and a slimmer bar floating in a bubble on it
 // title / subtitle / nav (the day before / after) come from the page.
 export default function DayView({
-  day,
+  day: loaded,
   plans = [],
   today,
   renderedAt,
@@ -45,6 +46,9 @@ export default function DayView({
   nav: ReactNode;
 }) {
   const now = useNow(renderedAt);
+  // Today: just got somewhere you've named, before the phone sends the stop: there already.
+  const minute = Math.floor(now / 60_000);
+  const day = useMemo(() => (today ? withArrival(loaded, minute * 60_000 + 59_999) : loaded), [loaded, today, minute]);
   const dayStart = +new Date(day.start);
   const dayEnd = +new Date(day.end);
   const byId = new Map(day.activities.map((a) => [a.id, a]));

@@ -362,7 +362,7 @@ function DayMapAll({
                 type="button"
                 // Clicking it: its box opens, and the hover bubble goes (it was in the way of the box).
                 onClick={() => {
-                  if (gestures === "none" || viewOnly) return;
+                  if (gestures === "none" || viewOnly || v.arriving) return; // (not saved yet: nothing to edit)
                   point(null);
                   setOpen(v);
                 }}

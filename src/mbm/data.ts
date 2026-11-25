@@ -1,3 +1,4 @@
+import type { NamedPlace } from "./arrival";
 import "server-only";
 import type { Outline } from "./buildings";
 import { mbm } from "./supabase";
@@ -28,6 +29,7 @@ export type Visit = {
   placeId?: string; // the named place it's at
   placeNeedsOutline?: boolean; // that place's building hasn't been looked up yet
   stopNeedsOutline?: boolean; // an unnamed stop whose building hasn't been looked up yet
+  arriving?: boolean; // (not saved yet: you're standing still in a named place's building, arrival.ts)
   placeOwn?: string | null; // (047) your name for its place
   placeReal?: { name: string; address: string | null } | null; // (047) the actual place it's linked to
 };
@@ -49,6 +51,7 @@ export type Day = {
   loadedAt: number; // when the server read it (the live clock starts from here)
   finished: boolean; // the day's over (a few hours past its midnight): its routes can be saved
   locked: LockedTrip[] | null; // its saved routes (034_locked_days.sql): drawn as they are
+  named?: NamedPlace[]; // (not finished days) your places with a building, for arriving (arrival.ts)
 };
 
 // A route saved with a finished day (see Trip in trips.ts, without the dots).
@@ -163,6 +166,9 @@ export async function getDay(dayKey: string): Promise<Day> {
       });
   const points: RoutePoint[] = pointRows;
   const phone: PhoneUse[] = phoneRows.error ? [] : (phoneRows.data as PhoneUse[]); // (018 not run yet: none)
+  // (Today: your places with a building, so getting to one shows at once: arrival.ts.)
+  const namedRows = finished ? null : await client.from("places").select("id, name, lat, lng, outline").not("outline", "is", null).limit(500);
+  const named = ((namedRows?.data ?? []) as NamedPlace[]).filter((p) => p.name && p.outline);
 
   const error = blocks.error ?? activities.error ?? running.error;
   if (error) {
@@ -186,6 +192,7 @@ export async function getDay(dayKey: string): Promise<Day> {
     loadedAt: Date.now(),
     finished,
     locked,
+    named,
   };
 }
 
