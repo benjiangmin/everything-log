@@ -42,7 +42,7 @@ export default function JobsView(props: { jobs: Job[]; categories: Category[]; p
   );
 }
 
-function JobsPage({ jobs, categories, places, needsSql = false, now = 0, events = [], theme }: { jobs: Job[]; categories: Category[]; places: Place[]; needsSql?: boolean; now?: number; events?: CalEvent[]; theme?: string | null }) {
+function JobsPage({ jobs, categories, places, needsSql = false, now = 0, events = [] }: { jobs: Job[]; categories: Category[]; places: Place[]; needsSql?: boolean; now?: number; events?: CalEvent[]; theme?: string | null }) {
   const [openJob, setOpenJob] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null); // (opened straight at "Delete?")
   const [openCat, setOpenCat] = useState<string | null>(null);
