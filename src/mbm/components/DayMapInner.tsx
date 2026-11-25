@@ -748,10 +748,10 @@ function Tip({ x, y, rows: all, heading, cover = 0, under, gap = 14 }: { x: numb
     <div
       ref={ref}
       role="tooltip"
-      className="pointer-events-none invisible absolute left-0 top-0 z-30 w-max max-w-64 rounded-card bg-ink px-3 py-2 text-paper shadow-lg"
+      className="pointer-events-none invisible absolute left-0 top-0 z-30 w-max max-w-72 rounded-card bg-ink px-4 py-3 text-paper shadow-lg"
     >
       {heading && <p className="mb-1 text-[11px] text-paper/60">{heading}</p>}
-      <ul className="flex flex-col gap-1">
+      <ul className="flex flex-col gap-2">
         {rows.map((r) => (
           <li key={r.key} className="leading-tight">
             <p className={`flex items-center gap-1.5 text-sm font-semibold ${r.hint ? "whitespace-nowrap" : ""}`}>
