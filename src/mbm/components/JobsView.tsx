@@ -1136,8 +1136,11 @@ function ThemePicker({ current }: { current: string | null }) {
   return (
     <section className="mt-8">
       <h2 className="font-display text-xl font-semibold">Color theme</h2>
-      <div className="mt-3 grid gap-2 sm:grid-cols-2">
-        {THEMES.map((t) => {
+      {([["One color", THEMES.filter((t) => t.one)], ["Mixed", THEMES.filter((t) => !t.one)]] as const).map(([label, list]) => (
+        <div key={label}>
+          <p className="mt-3 text-sm text-muted">{label}</p>
+          <div className="mt-1.5 grid gap-2 sm:grid-cols-2">
+        {list.map((t) => {
           const on = chosen === t.id;
           return (
             <button
@@ -1162,7 +1165,9 @@ function ThemePicker({ current }: { current: string | null }) {
             </button>
           );
         })}
-      </div>
+          </div>
+        </div>
+      ))}
       {chosen && (
         <button type="button" disabled={pending} onClick={() => use(chosen, true)} className="mt-2 text-sm font-semibold text-muted hover:text-ink hover:underline disabled:opacity-50">
           {pending ? "Recoloring…" : "Recolor everything, including colors you picked"}
