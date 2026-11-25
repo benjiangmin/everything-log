@@ -77,7 +77,7 @@ export default function PrivacyPage() {
 
       <Part title="Deleting it">
         <p>
-          In the app (Profile) or on the website (Your account → Your data) you can clear everything you&apos;ve recorded, or delete your account. Deleting is immediate
+          In the app (Profile) or on the website (Settings → Your data) you can clear everything you&apos;ve recorded, or delete your account. Deleting is immediate
           and can&apos;t be undone: your account and all of its data are removed, and you&apos;re signed out everywhere.
         </p>
       </Part>

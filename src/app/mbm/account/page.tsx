@@ -3,7 +3,7 @@ import type { Profile } from "@/mbm/life";
 import AccountView from "@/mbm/components/AccountView";
 import AccountShell from "./shell";
 
-export const metadata = { title: "Your account" };
+export const metadata = { title: "Settings" };
 
 // Your account: picture and name, then the list of settings pages.
 export default function AccountPage() {

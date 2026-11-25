@@ -227,7 +227,7 @@ export async function createGoogleEvent(client: SupabaseClient, e: Times): Promi
     signal: AbortSignal.timeout(8000),
   });
   const j = (await res.json().catch(() => ({}))) as { id?: string; error?: { message?: string } };
-  if (!res.ok || !j.id) return { problem: res.status === 403 ? "Google didn't allow adding events: reconnect Google from Your account." : (j.error?.message ?? `Google said ${res.status}.`) };
+  if (!res.ok || !j.id) return { problem: res.status === 403 ? "Google didn't allow adding events: reconnect Google in Settings." : (j.error?.message ?? `Google said ${res.status}.`) };
   return { id: `${a.primary}:${j.id}` };
 }
 

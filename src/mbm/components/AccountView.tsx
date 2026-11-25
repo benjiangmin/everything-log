@@ -16,8 +16,7 @@ const field = "w-full rounded-control border border-line bg-paper px-3 py-2.5 te
 const SECTIONS: { href: string; title: string; note: string }[] = [
   { href: "/account/about", title: "About you", note: "Birthday and the rest, for the Future page" },
   { href: "/account/sharing", title: "What others see", note: "Your username, and who sees what on Social" },
-  { href: "/account/jobs", title: "Jobs and categories", note: "Colors, places, starting by themselves" },
-  { href: "/account/colors", title: "Color theme", note: "One set of colors for every job and category" },
+  { href: "/account/jobs", title: "Jobs and categories", note: "Color theme, places, starting by themselves" },
   { href: "/account/places", title: "Places", note: "Your places, and stops you haven't named" },
   { href: "/account/sign-in", title: "Sign-in and connections", note: "Email, password, Google" },
   { href: "/account/reflect", title: "Reflect and setup", note: "When Reflect opens, and the welcome again" },
@@ -54,16 +53,16 @@ export default function AccountView({ email, profile }: { email: string | null; 
   );
 }
 
-// One settings page: "Your account" to go back, its title, a line on what it's for, then the settings.
-export function SubPage({ title, note, children }: { title: string; note?: string; children: ReactNode }) {
+// One settings page: "Settings" to go back, its title, a line on what it's for, then the settings.
+export function SubPage({ title, note, children, back = { href: "/account", label: "Settings" } }: { title: string; note?: string; children: ReactNode; back?: { href: string; label: string } }) {
   return (
     <div>
       <p className="text-sm font-semibold text-muted">
-        <Link href="/account" className="inline-flex items-center gap-1 hover:text-ink">
+        <Link href={back.href} className="inline-flex items-center gap-1 hover:text-ink">
           <svg viewBox="0 0 20 20" className="size-4" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
             <path d="M12.5 4.5 7 10l5.5 5.5" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
-          Your account
+          {back.label}
         </Link>
       </p>
       <h1 className="mt-1 font-display text-3xl font-semibold tracking-tight sm:text-4xl">{title}</h1>
@@ -122,7 +121,7 @@ function Header({ email, profile, onChange }: { email: string | null; profile: (
       </button>
       <input ref={file} type="file" accept="image/*" className="hidden" onChange={(e) => e.target.files?.[0] && pick(e.target.files[0])} />
       <div className="min-w-0">
-        <h1 className="font-display text-3xl font-semibold tracking-tight sm:text-4xl">{profile?.name || "Your account"}</h1>
+        <h1 className="font-display text-3xl font-semibold tracking-tight sm:text-4xl">{profile?.name || "Settings"}</h1>
         <p className="text-muted">{email}</p>
         {profile?.avatar && (
           <button type="button" onClick={() => start(async () => { await saveAvatar(""); onChange(); })} className="mt-1 text-sm text-muted underline-offset-2 hover:text-ink hover:underline">

@@ -193,7 +193,7 @@ export default function PlacesView({
       <PageMark kind="places" />
       <p className="text-sm font-semibold text-muted">
         <Link href="/account" className="hover:text-ink">
-          Your account
+          Settings
         </Link>
       </p>
       <h1 className="font-display text-3xl font-semibold tracking-tight sm:text-4xl">

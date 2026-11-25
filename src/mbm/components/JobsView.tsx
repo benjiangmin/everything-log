@@ -42,7 +42,7 @@ export default function JobsView(props: { jobs: Job[]; categories: Category[]; p
   );
 }
 
-function JobsPage({ jobs, categories, places, needsSql = false, now = 0, events = [] }: { jobs: Job[]; categories: Category[]; places: Place[]; needsSql?: boolean; now?: number; events?: CalEvent[]; theme?: string | null }) {
+function JobsPage({ jobs, categories, places, needsSql = false, now = 0, events = [], theme }: { jobs: Job[]; categories: Category[]; places: Place[]; needsSql?: boolean; now?: number; events?: CalEvent[]; theme?: string | null }) {
   const [openJob, setOpenJob] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null); // (opened straight at "Delete?")
   const [openCat, setOpenCat] = useState<string | null>(null);
@@ -145,7 +145,7 @@ function JobsPage({ jobs, categories, places, needsSql = false, now = 0, events 
       <PageMark kind="jobs" />
       <p className="text-sm font-semibold text-muted">
         <Link href="/account" className="hover:text-ink">
-          Your account
+          Settings
         </Link>
       </p>
       <h1 className="font-display text-3xl font-semibold tracking-tight sm:text-4xl">Jobs</h1>
@@ -154,6 +154,23 @@ function JobsPage({ jobs, categories, places, needsSql = false, now = 0, events 
         <p role="alert" className="mt-4 rounded-control bg-surface px-4 py-3 text-sm text-danger">
           Run 043_jobs_and_categories.sql, then 044_clearer_jobs.sql, in Supabase to use this page.
         </p>
+      )}
+      {/* The color theme: its own page, a row here. */}
+      {theme !== undefined && !needsSql && (
+        <Link href="/account/jobs/colors" className="group mt-8 flex items-center gap-4 rounded-card border border-line bg-paper px-5 py-4 transition-colors hover:bg-surface/60">
+          <span className="min-w-0 flex-1">
+            <span className="block font-semibold">Color theme</span>
+            <span className="block text-sm text-muted">{themeById(theme)?.name ?? "None yet: pick one to color every job and category"}</span>
+          </span>
+          <span className="flex h-3 w-28 shrink-0 overflow-hidden rounded-full" aria-hidden="true">
+            {(themeById(theme)?.colors ?? PALETTE).slice(0, 8).map((c) => (
+              <span key={c} className="flex-1" style={{ background: c }} />
+            ))}
+          </span>
+          <svg viewBox="0 0 20 20" className="size-4 shrink-0 text-muted transition-transform group-hover:translate-x-0.5" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+            <path d="M7.5 4.5 13 10l-5.5 5.5" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </Link>
       )}
 
       {/* Jobs: a search, with your 5 most recent before you type (or sort or filter them all). */}

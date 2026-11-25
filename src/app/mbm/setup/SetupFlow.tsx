@@ -86,7 +86,7 @@ export default function SetupFlow({ name, email, calendar, phone, start }: { nam
             dir={dir}
             top={<Clock />}
             title={name ? `You're all set, ${name.split(" ")[0]}` : "You're all set"}
-            body="Your day starts filling in as soon as your phone is set up. Everything here can be changed later in Your account."
+            body="Your day starts filling in as soon as your phone is set up. Everything here can be changed later in Settings."
             actions={<Primary href="/">Go to today</Primary>}
           />
         )}

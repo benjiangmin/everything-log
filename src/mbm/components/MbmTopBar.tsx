@@ -184,7 +184,7 @@ function ProfileMenu({
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
-        aria-label="Your account"
+        aria-label="Account and settings"
         className="grid place-items-center rounded-full p-0.5 ring-offset-2 ring-offset-paper transition-shadow hover:ring-2 hover:ring-line"
       >
         <Avatar src={me?.avatar} name={me?.name} email={email} size={34} />
@@ -221,7 +221,7 @@ function ProfileMenu({
               <ThemeChoice app="mbm" />
             </div>
             <Link href="/account" onClick={() => setOpen(false)} className={item} role="menuitem">
-              Your account
+              Settings
             </Link>
           </div>
           <div className="h-px bg-line" />
