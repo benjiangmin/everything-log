@@ -9,11 +9,14 @@ type User = NonNullable<Awaited<ReturnType<typeof mbmUser>>>;
 // Every settings page: the page frame, signed in first (back here after), then what it shows.
 export default function AccountShell({ path, render }: { path: string; render: (user: User) => Promise<ReactNode> }) {
   return (
-    <main className="mx-auto w-full max-w-3xl px-4 pb-24 pt-10 sm:pt-14">
-      <Suspense fallback={<Loading tall />}>
-        <Inner path={path} render={render} />
-      </Suspense>
-    </main>
+    // (Clipped sideways: a page's big drawing reaches out past the column, never off the screen.)
+    <div className="w-full overflow-x-clip">
+      <main className="mx-auto w-full max-w-3xl px-4 pb-24 pt-10 sm:pt-14">
+        <Suspense fallback={<Loading tall />}>
+          <Inner path={path} render={render} />
+        </Suspense>
+      </main>
+    </div>
   );
 }
 

@@ -75,7 +75,7 @@ export function SubPage({
 }) {
   return (
     <div className="relative isolate">
-      {mark && <PageMark kind={mark} small />}
+      {mark && <PageMark kind={mark} side />}
       <p className="text-sm font-semibold text-muted">
         <Link href={back.href} className="inline-flex items-center gap-1 hover:text-ink">
           <svg viewBox="0 0 20 20" className="size-4" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
