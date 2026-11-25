@@ -865,6 +865,17 @@ export async function keepGoingOn(blockId: string): Promise<Result> {
   return { ok: true };
 }
 
+// A nudge after this many minutes untracked, or off (null) (Settings → Notifications; 083).
+export async function setUntrackedAfter(minutes: number | null): Promise<Result> {
+  const user = await mbmUser();
+  if (!user) return fail("Sign in first.");
+  const m = minutes == null ? null : Math.round(Number(minutes));
+  if (m != null && !(m >= 5 && m <= 720)) return fail("Pick a time.");
+  const { error } = await (await mbm()).from("profiles").upsert({ user_id: user.id, untracked_after_min: m }, { onConflict: "user_id" });
+  if (error) return fail(/untracked_after_min/.test(error.message) ? "Run supabase/minute-by-minute/083_untracked_nudge.sql in Supabase first." : error.message);
+  return { ok: true };
+}
+
 // AI suggestions on or off (Settings → Notifications; 081).
 export async function setAiSuggestions(on: boolean): Promise<Result> {
   const client = await mbm();

@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { setAiSuggestions } from "@/app/mbm/actions";
+import { setAiSuggestions, setUntrackedAfter } from "@/app/mbm/actions";
+import Select from "./Select";
 
 // AI suggestions on or off (081). Off by default.
 export default function AiSwitch({ on: start, needsSql, ready }: { on: boolean; needsSql: boolean; ready: boolean }) {
@@ -37,6 +38,41 @@ export default function AiSwitch({ on: start, needsSql, ready }: { on: boolean; 
         </button>
       </div>
       {on && !ready && <p className="mt-2 text-sm text-muted">AI isn&apos;t set up on the website yet, so suggestions work as before for now.</p>}
+      {message && <p className="mt-2 text-sm text-danger">{message}</p>}
+    </div>
+  );
+}
+
+// After how long untracked the phone asks (083). Off by default.
+const AFTER = [
+  { value: "", label: "Off" },
+  ...[15, 30, 45, 60, 90, 120, 180].map((m) => ({ value: String(m), label: m < 60 ? `${m} minutes` : m === 60 ? "1 hour" : `${m / 60} hours` })),
+];
+export function UntrackedAfter({ value, needsSql }: { value: number | null; needsSql: boolean }) {
+  const [v, setV] = useState(value == null ? "" : String(value));
+  const [message, setMessage] = useState<string | null>(needsSql ? "Run supabase/minute-by-minute/083_untracked_nudge.sql in Supabase first." : null);
+  const [, run] = useTransition();
+  const options = AFTER.some((o) => o.value === v) ? AFTER : [...AFTER, { value: v, label: `${v} minutes` }];
+  return (
+    <div>
+      <Select
+        value={v}
+        options={options}
+        label="Ask after"
+        disabled={needsSql}
+        onChange={(next) => {
+          const was = v;
+          setV(next);
+          setMessage(null);
+          run(async () => {
+            const res = await setUntrackedAfter(next ? Number(next) : null);
+            if (!res.ok) {
+              setV(was);
+              setMessage(res.message);
+            }
+          });
+        }}
+      />
       {message && <p className="mt-2 text-sm text-danger">{message}</p>}
     </div>
   );

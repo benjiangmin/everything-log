@@ -49,5 +49,21 @@ export async function POST(req: Request) {
     smartGuesses(client, (guess.data ?? []) as Guess[], { ...opts, limit: 2 }).catch(() => ((guess.data ?? []) as Guess[]).slice(0, 2)),
     smartOver(client, (over.data ?? []) as Over[], opts).catch(() => []),
   ]);
-  return Response.json({ suggestions, over: nudges, events, calendar: calendar.ok });
+  // Untracked a while (083): nothing running, and your last entry ended at least your chosen
+  // minutes ago. The phone asks what you're doing (once per stretch: keyed by "since").
+  let untracked: { since: string; minutes: number } | null = null;
+  const prof = await client.from("profiles").select("untracked_after_min").maybeSingle();
+  const after = (prof.data as { untracked_after_min?: number | null } | null)?.untracked_after_min;
+  if (after) {
+    const [run, last] = await Promise.all([
+      client.from("blocks").select("id").is("ended_at", null).limit(1),
+      client.from("blocks").select("ended_at").not("ended_at", "is", null).lte("ended_at", now.toISOString()).order("ended_at", { ascending: false }).limit(1).maybeSingle(),
+    ]);
+    const since = (last.data as { ended_at?: string } | null)?.ended_at;
+    if (!run.data?.length && since) {
+      const minutes = Math.floor((+now - +new Date(since)) / 60_000);
+      if (minutes >= after) untracked = { since, minutes };
+    }
+  }
+  return Response.json({ suggestions, over: nudges, events, calendar: calendar.ok, untracked });
 }
