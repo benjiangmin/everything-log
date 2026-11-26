@@ -42,4 +42,13 @@ export const THEMES: Theme[] = [
   { id: "pastel", name: "Pastel", colors: ["#8fb8d9", "#e3a6a1", "#a9cfa0", "#c9b2e0", "#f0c48a", "#9fd2c9", "#e8a8c8", "#b7c48a", "#a6b4e8", "#e5b99a"] },
   { id: "ink", name: "Ink", colors: ["#2b1c14", "#86705f", "#4a3a30", "#b8a493", "#5f4b3e", "#6e5a4c", "#3a2a20", "#a08b79", "#574538", "#c9b8a6"] },
 ];
-export const themeById = (id: string | null | undefined) => THEMES.find((t) => t.id === id) ?? null;
+// (custom: your own themes, 088; their ids start "own-".)
+export const themeById = (id: string | null | undefined, custom: Theme[] = []) => [...THEMES, ...custom].find((t) => t.id === id) ?? null;
+
+// Your own themes take this many colors, like the others.
+export const OWN_COLORS = 10;
+export const isHex = (c: unknown): c is string => typeof c === "string" && /^#[0-9a-f]{6}$/i.test(c);
+export const ownThemes = (raw: unknown): Theme[] =>
+  (Array.isArray(raw) ? raw : [])
+    .filter((t): t is Theme => !!t && typeof t.id === "string" && typeof t.name === "string" && Array.isArray(t.colors) && t.colors.every(isHex))
+    .map((t) => ({ id: t.id, name: t.name, colors: t.colors }));

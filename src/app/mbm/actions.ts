@@ -10,7 +10,7 @@ import { redirect } from "next/navigation";
 import { headers } from "next/headers";
 import { mbm, mbmReady, mbmUser } from "@/mbm/supabase";
 import { getDay, getNowInfo, mbmTz, type Day, type LockedTrip, type NowInfo } from "@/mbm/data";
-import { PALETTE, themeById } from "@/mbm/colors";
+import { isHex, OWN_COLORS, ownThemes, PALETTE, themeById, type Theme } from "@/mbm/colors";
 import { dayKeyOf, dayRange } from "@/mbm/time";
 
 // NOTE: the whole site also sits behind the password lock (src/proxy.ts). On top of that,
@@ -1255,10 +1255,48 @@ export async function saveCategory(input: { id?: string; name: string; color: st
 
 // A color theme for every job and category (080). reset: colors you picked yourself go too.
 export async function applyColorTheme(id: string, reset: boolean): Promise<Result> {
-  const theme = themeById(id);
+  const theme = themeById(id, await myThemes());
   if (!theme) return fail("That isn't a theme.");
   const { error } = await (await mbm()).rpc("apply_color_theme", { p_name: theme.id, p_colors: theme.colors, p_reset: !!reset });
   if (error) return fail(/apply_color_theme/.test(error.message) ? "Run supabase/minute-by-minute/080_color_themes.sql in Supabase first." : error.message);
+  refresh();
+  return { ok: true };
+}
+
+// Your own color themes (088).
+async function myThemes(): Promise<Theme[]> {
+  const { data, error } = await (await mbm()).from("profiles").select("custom_themes").maybeSingle();
+  return error ? [] : ownThemes((data as { custom_themes?: unknown } | null)?.custom_themes);
+}
+
+// Make or change one of your own themes: a name and ten colors. If it's the theme you're using,
+// your jobs and categories take the new colors (the ones you picked yourself stay).
+export async function saveOwnTheme(input: { id?: string; name: string; colors: string[] }): Promise<Result & { id?: string }> {
+  const user = await mbmUser();
+  if (!user) return fail("Sign in first.");
+  const name = String(input?.name ?? "").trim().slice(0, 30);
+  if (!name) return fail("Give it a name.");
+  const colors = Array.isArray(input?.colors) ? input.colors.slice(0, OWN_COLORS) : [];
+  if (colors.length !== OWN_COLORS || !colors.every(isHex)) return fail(`Pick all ${OWN_COLORS} colors.`);
+  const client = await mbm();
+  const mine = await myThemes();
+  const id = input.id && mine.some((t) => t.id === input.id) ? input.id : `own-${crypto.randomUUID().slice(0, 8)}`;
+  const next = mine.some((t) => t.id === id) ? mine.map((t) => (t.id === id ? { id, name, colors } : t)) : [...mine, { id, name, colors }];
+  const { error } = await client.from("profiles").upsert({ user_id: user.id, custom_themes: next }, { onConflict: "user_id" });
+  if (error) return fail(/custom_themes/.test(error.message) ? "Run supabase/minute-by-minute/088_custom_themes.sql in Supabase first." : error.message);
+  const { data } = await client.from("profiles").select("color_theme").maybeSingle();
+  if ((data as { color_theme?: string | null } | null)?.color_theme === id) await client.rpc("apply_color_theme", { p_name: id, p_colors: colors, p_reset: false });
+  refresh();
+  return { ok: true, id };
+}
+
+// Delete one of your own themes (if you're using it, your colors stay as they are).
+export async function deleteOwnTheme(id: string): Promise<Result> {
+  const user = await mbmUser();
+  if (!user) return fail("Sign in first.");
+  const next = (await myThemes()).filter((t) => t.id !== id);
+  const { error } = await (await mbm()).from("profiles").upsert({ user_id: user.id, custom_themes: next }, { onConflict: "user_id" });
+  if (error) return fail(error.message);
   refresh();
   return { ok: true };
 }

@@ -1,3 +1,4 @@
+import { ownThemes } from "@/mbm/colors";
 import { Suspense } from "react";
 import Loading from "@/mbm/components/Loading";
 import { connection } from "next/server";
@@ -68,6 +69,9 @@ async function Jobs() {
     client.from("categories").select("id, color_by_hand"),
   ]);
   const theme = th.error ? undefined : ((th.data as { color_theme: string | null } | null)?.color_theme ?? null);
+  // (Your own themes, 088: none until it's run.)
+  const ownRes = await client.from("profiles").select("custom_themes").maybeSingle();
+  const own = ownRes.error ? [] : ownThemes((ownRes.data as { custom_themes?: unknown } | null)?.custom_themes);
   const handJ = new Set(((hj.data ?? []) as { id: string; color_by_hand: boolean }[]).filter((x) => x.color_by_hand).map((x) => x.id));
   const handC = new Set(((hc.data ?? []) as { id: string; color_by_hand: boolean }[]).filter((x) => x.color_by_hand).map((x) => x.id));
   const ignored = new Map(((ci.data ?? []) as { id: string; calendar_ignore: string[] | null }[]).map((x) => [x.id, x.calendar_ignore ?? []]));
@@ -86,7 +90,7 @@ async function Jobs() {
   const events = [...counts.values()].sort((a, b) => b.n - a.n);
   const priv = new Set([...((pj.data ?? []) as { id: string; private: boolean }[]), ...((pc.data ?? []) as { id: string; private: boolean }[])].filter((x) => x.private).map((x) => x.id));
   const mark = <T extends { id: string }>(xs: T[]) => xs.map((x) => ({ ...x, private: priv.has(x.id) }));
-  return <JobsView now={await loadedAt()} events={events} jobs={mark((jobs.data ?? []) as Job[]).map((j) => ({ ...j, calendar_names: linked.get(j.id) ?? [], calendar_ignore: ignored.get(j.id) ?? [], color_by_hand: handJ.has(j.id), ...(endJ ? { stop_at_event_end: endJ.get(j.id) ?? null } : {}) }))} theme={theme} categories={mark((cats.data ?? []) as Category[]).map((c) => ({ ...c, color_by_hand: handC.has(c.id), ...(endC ? { stop_at_event_end: endC.get(c.id) ?? null } : {}) }))} places={(places.data ?? []) as { id: string; name: string }[]} />;
+  return <JobsView now={await loadedAt()} events={events} jobs={mark((jobs.data ?? []) as Job[]).map((j) => ({ ...j, calendar_names: linked.get(j.id) ?? [], calendar_ignore: ignored.get(j.id) ?? [], color_by_hand: handJ.has(j.id), ...(endJ ? { stop_at_event_end: endJ.get(j.id) ?? null } : {}) }))} theme={theme} own={own} categories={mark((cats.data ?? []) as Category[]).map((c) => ({ ...c, color_by_hand: handC.has(c.id), ...(endC ? { stop_at_event_end: endC.get(c.id) ?? null } : {}) }))} places={(places.data ?? []) as { id: string; name: string }[]} />;
 }
 
 // (Outside the component: it reads the clock.)

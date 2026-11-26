@@ -12,7 +12,7 @@ import { setPrivate } from "@/app/mbm/social/actions";
 import Menu from "./IconMenu";
 import { reveal } from "./reveal";
 import PlaceSearch from "./PlaceSearch";
-import { PALETTE, themeById } from "@/mbm/colors";
+import { PALETTE, themeById, type Theme } from "@/mbm/colors";
 import { eventJobId, overlap } from "@/mbm/eventJob";
 
 // Jobs and categories. Each job's settings are written as what will actually happen ("Work starts
@@ -33,8 +33,8 @@ const blank: JobPrefs = { stop_on_commute: null, places: null, start_mode: null,
 const RECENT = 5;
 const STALE_DAYS = 50; // (not used in this long: listed apart, below)
 
-export default function JobsView(props: { jobs: Job[]; categories: Category[]; places: Place[]; needsSql?: boolean; now?: number; events?: CalEvent[]; theme?: string | null }) {
-  const t = themeById(props.theme);
+export default function JobsView(props: { jobs: Job[]; categories: Category[]; places: Place[]; needsSql?: boolean; now?: number; events?: CalEvent[]; theme?: string | null; own?: Theme[] }) {
+  const t = themeById(props.theme, props.own);
   return (
     <Swatches.Provider value={{ colors: t?.colors ?? PALETTE, theme: !!t }}>
       <JobsPage {...props} />
@@ -42,7 +42,7 @@ export default function JobsView(props: { jobs: Job[]; categories: Category[]; p
   );
 }
 
-function JobsPage({ jobs, categories, places, needsSql = false, now = 0, events = [], theme }: { jobs: Job[]; categories: Category[]; places: Place[]; needsSql?: boolean; now?: number; events?: CalEvent[]; theme?: string | null }) {
+function JobsPage({ jobs, categories, places, needsSql = false, now = 0, events = [], theme, own = [] }: { jobs: Job[]; categories: Category[]; places: Place[]; needsSql?: boolean; now?: number; events?: CalEvent[]; theme?: string | null; own?: Theme[] }) {
   const [openJob, setOpenJob] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null); // (opened straight at "Delete?")
   const [openCat, setOpenCat] = useState<string | null>(null);
@@ -160,10 +160,10 @@ function JobsPage({ jobs, categories, places, needsSql = false, now = 0, events 
         <Link href="/account/jobs/colors" className="group mt-8 flex items-center gap-4 rounded-card border border-line bg-paper px-5 py-4 transition-colors hover:bg-surface/60">
           <span className="min-w-0 flex-1">
             <span className="block font-semibold">Color theme</span>
-            <span className="block text-sm text-muted">{themeById(theme)?.name ?? "None yet: pick one to color every job and category"}</span>
+            <span className="block text-sm text-muted">{themeById(theme, own)?.name ?? "None yet: pick one to color every job and category"}</span>
           </span>
           <span className="flex h-3 w-28 shrink-0 overflow-hidden rounded-full" aria-hidden="true">
-            {(themeById(theme)?.colors ?? PALETTE).slice(0, 8).map((c) => (
+            {(themeById(theme, own)?.colors ?? PALETTE).slice(0, 8).map((c) => (
               <span key={c} className="flex-1" style={{ background: c }} />
             ))}
           </span>
