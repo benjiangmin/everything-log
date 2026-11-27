@@ -448,13 +448,13 @@ function DayMapAll({
         </p>
       )}
       {pin && !pin.at && !moving && (
-        <p style={topCover ? { top: topCover + 12 } : undefined} className="pointer-events-none absolute left-3 top-3 rounded-full bg-paper/95 px-3 py-1 text-xs text-muted shadow-sm ring-1 ring-line">
+        <p style={topCover ? { top: topCover + 28 } : undefined} className="pointer-events-none absolute left-3 top-3 rounded-full bg-paper/95 px-3 py-1 text-xs text-muted shadow-sm ring-1 ring-line">
           {pin.location ? `Not sure where “${pin.location.split(",")[0]}” is` : "No place set for this plan"}
         </p>
       )}
       {nothingLit && !moving && !pin && (
         // (Below the day bar when it floats over the map: it was hidden behind it.)
-        <p style={follow ? { top: follow.top } : topCover ? { top: topCover + 12 } : undefined} className="pointer-events-none absolute left-3 top-3 rounded-full bg-paper/95 px-3 py-1 text-xs text-muted shadow-sm ring-1 ring-line">
+        <p style={follow ? { top: follow.top } : topCover ? { top: topCover + 28 } : undefined} className="pointer-events-none absolute left-3 top-3 rounded-full bg-paper/95 px-3 py-1 text-xs text-muted shadow-sm ring-1 ring-line">
           {focus?.kind === "moving" ? "No route recorded then" : "No location recorded then"}
         </p>
       )}
