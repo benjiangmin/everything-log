@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { deleteBlock, mergeBlocks, saveBlock } from "@/app/mbm/actions";
+import { addStop, deleteBlock, mergeBlocks, saveBlock } from "@/app/mbm/actions";
 import { undoable } from "@/mbm/undo";
 import type { Activity, Block } from "@/mbm/data";
 import { dayKeyOf, hhmm, zonedTime } from "@/mbm/time";
@@ -79,7 +79,9 @@ export default function BlockEditor({
 
   function save() {
     setMessage(null);
-    if (!name.trim()) return setMessage("What were you doing?");
+    // (No job but a place: just where you were. The time stays untracked.)
+    const placeOnly = !block && !name.trim() && Boolean(place);
+    if (!name.trim() && !placeOnly) return setMessage(block ? "What were you doing?" : "What were you doing? (Or just add a place.)");
     if (!going && end !== null && end <= start) return setMessage("The end has to be after the start.");
     // A time you didn't change stays exactly as it was, to the second (the boxes only show
     // minutes): filling in an untracked gap that starts at 11:52:40 starts at 11:52:40, not
@@ -99,6 +101,12 @@ export default function BlockEditor({
         const span = { start: startIso, end: endIso ?? new Date().toISOString() };
         const far = p.kind === "mine" ? await notNextTo({ span }, { placeId: p.id }) : await notNextTo({ span }, { lat: p.lat, lng: p.lng }, place!.name);
         if (far) return setMessage(far);
+      }
+      if (placeOnly) {
+        const res = await addStop({ start: startIso, end: endIso, place: p! });
+        if (res.ok) onDone();
+        else setMessage(res.message);
+        return;
       }
       const res = await undoable(dayKey, block ? `Change ${name.trim()}` : `Add ${name.trim()}`, () =>
         saveBlock({ id: block?.id, name, start: startIso, end: endIso, note: showNote ? note : (block?.note ?? ""), place: p }),
@@ -248,7 +256,7 @@ export default function BlockEditor({
       {/* At the bottom of the panel (and stays there if the panel scrolls). */}
       <div className="sticky bottom-0 -mx-5 -mb-5 mt-auto flex items-center gap-2 border-t border-line bg-paper px-5 py-4">
         <button type="submit" disabled={pending} className="h-11 flex-1 rounded-control bg-accent px-4 font-semibold text-accent-ink transition-opacity hover:opacity-90 disabled:opacity-60">
-          {pending ? "Saving…" : block ? "Save changes" : "Add"}
+          {pending ? "Saving…" : block ? "Save changes" : !name.trim() && place ? `Add ${place.name}` : "Add"}
         </button>
         {block && (
           <button type="button" onClick={remove} className="h-11 rounded-control px-4 text-sm text-muted transition-colors hover:bg-surface hover:text-danger">

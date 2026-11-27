@@ -211,6 +211,48 @@ export async function saveBlock(input: {
   return { ok: true };
 }
 
+// Just where you were, for a stretch with no job (the time stays untracked): a stop of your own at
+// that place. (source 'manual': the phone's syncs only redo its own stops, so this one stays.)
+export async function addStop(input: { start: string; end: string | null; place: EntryPlaceDraft }): Promise<Result> {
+  const start = new Date(input.start);
+  const end = new Date(input.end ?? Date.now());
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return fail("Those times don't look right.");
+  if (end <= start) return fail("The end has to be after the start.");
+  const client = await mbm();
+  const p = input.place;
+  let placeId: string | null = null;
+  if (p.kind === "mine") placeId = isUuid(p.id) ? p.id : null;
+  else if (p.kind === "new") {
+    const name = String(p.name ?? "").replace(/\s+/g, " ").trim().slice(0, 80);
+    if (!name) return fail("What is this place called?");
+    const { data, error } = await client.rpc("create_place", { p_name: name, p_lat: p.lat, p_lng: p.lng });
+    if (error) return fail(error.message);
+    placeId = data as string;
+  } else {
+    const real = realOf(p);
+    if (!real) return fail("That place has no location.");
+    const { data, error } = await client.rpc("place_for_real", { p_real: real });
+    if (error) return fail(/place_for_real/.test(error.message) ? NEEDS_047 : error.message);
+    placeId = data as string;
+  }
+  if (!placeId) return fail("That place is gone.");
+  const { data: pl } = await client.from("places").select("lat, lng").eq("id", placeId).maybeSingle();
+  if (!pl) return fail("That place is gone.");
+  const { lat, lng } = pl as { lat: number; lng: number };
+  const { error } = await client.from("visits").insert({
+    arrived_at: start.toISOString(),
+    departed_at: end.toISOString(),
+    lat,
+    lng,
+    place_id: placeId,
+    source: "manual",
+    pinned: true,
+  });
+  if (error) return fail(/visits_arrival/.test(error.message) ? "There's already a stop starting then." : error.message);
+  refresh();
+  return { ok: true };
+}
+
 export async function deleteBlock(id: string): Promise<Result> {
   if (!isUuid(id)) return fail("That entry is gone.");
   const client = await mbm();
