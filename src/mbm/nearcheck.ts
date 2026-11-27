@@ -17,7 +17,7 @@ async function clear(a: [number, number], b: [number, number]): Promise<boolean 
 
 // null: fine. Otherwise what to tell you.
 export async function notNextTo(
-  of: { visitId?: string; blockId?: string },
+  of: { visitId?: string; blockId?: string; span?: { start: string; end: string } },
   place: { placeId?: string; lat?: number; lng?: number },
   name = "That place",
 ): Promise<string | null> {
@@ -44,7 +44,7 @@ export async function cantMoveTo(visitId: string, lat: number, lng: number): Pro
 
 // The same, for a place picked in the search (one of yours, or a real one from the map).
 export function pickIsNear(
-  of: { visitId?: string; blockId?: string },
+  of: { visitId?: string; blockId?: string; span?: { start: string; end: string } },
   pick: { kind: "mine"; id: string } | { kind: "real"; name: string; lat: number; lng: number } | null,
 ): Promise<string | null> {
   if (!pick) return Promise.resolve(null);

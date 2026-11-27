@@ -163,7 +163,17 @@ export async function stopEntry(id?: string): Promise<Result> {
 // Add a missed entry, or change one. start / end are moments (ISO); end null = still going.
 // An end later than now is pulled back to now (the future isn't tracked).
 // stopRunning (new entries that are still going): end whatever else is running at its start.
-export async function saveBlock(input: { id?: string; name: string; start: string; end: string | null; note?: string; stopRunning?: boolean }): Promise<Result> {
+// place (new entries): where it happened, set once it's saved.
+export type EntryPlaceDraft = PlacePick | { kind: "new"; name: string; lat: number; lng: number };
+export async function saveBlock(input: {
+  id?: string;
+  name: string;
+  start: string;
+  end: string | null;
+  note?: string;
+  stopRunning?: boolean;
+  place?: EntryPlaceDraft | null;
+}): Promise<Result> {
   const activity = cleanName(input.name);
   if (!activity) return fail("What were you doing?");
   const start = new Date(input.start);
@@ -181,7 +191,7 @@ export async function saveBlock(input: { id?: string; name: string; start: strin
       const { error } = await client.rpc("stop_running", { p_at: start.toISOString() });
       if (error) return fail(error.message);
     }
-    const { error } = await client.rpc("place_block", {
+    const { data: saved, error } = await client.rpc("place_block", {
       p_start: start.toISOString(),
       p_end: endAt?.toISOString() ?? null,
       p_activity_id: id,
@@ -189,6 +199,11 @@ export async function saveBlock(input: { id?: string; name: string; start: strin
       p_id: isUuid(input.id) ? input.id : null,
     });
     if (error) return fail(error.message);
+    const p = input.place;
+    if (p && isUuid(saved)) {
+      const res = p.kind === "new" ? await newPlaceForEntry(saved, p.name, p.lat, p.lng) : await setEntryPlacePick(saved, p);
+      if (!res.ok) return fail(`Added, but the place didn't save: ${res.message}`);
+    }
   } catch (err) {
     return fail((err as Error).message);
   }
@@ -409,7 +424,7 @@ export async function buildingsBetween(a: [number, number], b: [number, number])
 }
 
 export async function nearCheckInfo(
-  of: { visitId?: string; blockId?: string },
+  of: { visitId?: string; blockId?: string; span?: { start: string; end: string } },
   place: { placeId?: string; lat?: number; lng?: number },
 ): Promise<{ spots: [number, number][]; target: { lat: number; lng: number; outline: [number, number][] | null } | null }> {
   const client = await mbm();
@@ -433,6 +448,14 @@ export async function nearCheckInfo(
       if (blk.ended_at) q = q.lt("arrived_at", blk.ended_at);
       stops = ((await q).data ?? []) as V[];
     }
+  } else if (of.span && [of.span.start, of.span.end].every((t) => !Number.isNaN(Date.parse(t)))) {
+    // (An entry not saved yet: the stops during its time.)
+    const { data } = await client
+      .from("visits")
+      .select("id, arrived_at, departed_at, lat, lng, place_id")
+      .lt("arrived_at", of.span.end)
+      .or(`departed_at.is.null,departed_at.gt.${of.span.start}`);
+    stops = (data ?? []) as V[];
   }
   const spots: [number, number][] = [];
   for (const v of stops) {

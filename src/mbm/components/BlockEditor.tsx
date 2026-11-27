@@ -9,6 +9,8 @@ import { useConfirm } from "@/components/ui/ConfirmDialog";
 import ActivityInput from "./ActivityInput";
 import ColorRow from "./ColorRow";
 import EntryPlace from "./EntryPlace";
+import NewEntryPlace, { type PlaceChoice } from "./NewEntryPlace";
+import { notNextTo } from "@/mbm/nearcheck";
 import TimeRange, { type Pick } from "./TimeRange";
 
 // The same job right before or after this entry, offered to merge into one.
@@ -65,6 +67,7 @@ export default function BlockEditor({
   ]);
   const [note, setNote] = useState(block?.note ?? "");
   const [showNote, setShowNote] = useState(Boolean(block?.note));
+  const [place, setPlace] = useState<PlaceChoice>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [pending, run] = useTransition();
   const confirm = useConfirm();
@@ -89,8 +92,16 @@ export default function BlockEditor({
         end !== endShown ? zonedTime(dayKey, end, tz).toISOString() : endsLater ? block!.ended_at : new Date(to!).toISOString();
     }
     run(async () => {
+      // A place for a new entry: only one next to where the phone had you then, if it had you
+      // anywhere (an untracked stretch: nothing to go against).
+      const p = !block ? place?.place : null;
+      if (p) {
+        const span = { start: startIso, end: endIso ?? new Date().toISOString() };
+        const far = p.kind === "mine" ? await notNextTo({ span }, { placeId: p.id }) : await notNextTo({ span }, { lat: p.lat, lng: p.lng }, place!.name);
+        if (far) return setMessage(far);
+      }
       const res = await undoable(dayKey, block ? `Change ${name.trim()}` : `Add ${name.trim()}`, () =>
-        saveBlock({ id: block?.id, name, start: startIso, end: endIso, note: showNote ? note : (block?.note ?? "") }),
+        saveBlock({ id: block?.id, name, start: startIso, end: endIso, note: showNote ? note : (block?.note ?? ""), place: p }),
       );
       if (res.ok) onDone();
       else setMessage(res.message);
@@ -185,7 +196,7 @@ export default function BlockEditor({
 
 
       {/* Where it happened (an entry that's already saved). */}
-      {block && <EntryPlace blockId={block.id} />}
+      {block ? <EntryPlace blockId={block.id} /> : <NewEntryPlace value={place} onChange={setPlace} />}
 
 
       {/* The same job right before or after: make them one entry. */}
