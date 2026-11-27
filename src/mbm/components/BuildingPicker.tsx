@@ -10,7 +10,8 @@ import { HtmlMarker, KEY, MAP_GROUND, stylesFor } from "./mapBits";
 
 // A place's building, picked by hand: every building around it from OpenStreetMap, on a map;
 // click the right one (or each piece of one, like Theory's wings) and save. If OpenStreetMap
-// doesn't answer, it says what each server did.
+// doesn't answer, it says what each server did. A house OpenStreetMap doesn't have: draw it
+// yourself, a click on each corner.
 export default function BuildingPicker({ place, outline }: { place: { id: string; name: string; lat: number; lng: number; real_name?: string | null }; outline: Outline | null }) {
   const router = useRouter();
   const confirm = useConfirm();
@@ -21,6 +22,8 @@ export default function BuildingPicker({ place, outline }: { place: { id: string
   const [message, setMessage] = useState<string | null>(null);
   const [saved, setSaved] = useState<string | null>(null); // (what was just saved, to say so)
   const [pending, start] = useTransition();
+  const [drawing, setDrawing] = useState(false);
+  const [corners, setCorners] = useState<Outline>([]);
 
   // Look around it: your browser first, then the website's server.
   const look = async () => {
@@ -58,6 +61,8 @@ export default function BuildingPicker({ place, outline }: { place: { id: string
       const res = await adjustPlaceOutline(place.id, o);
       if (!res.ok) return setMessage(res.message);
       setSaved(o ? "Saved." : "Saved: not in a building.");
+      setDrawing(false);
+      setCorners([]);
       router.refresh();
     });
   };
@@ -68,9 +73,25 @@ export default function BuildingPicker({ place, outline }: { place: { id: string
     <div>
       <div className="relative isolate h-72 overflow-hidden rounded-card ring-1 ring-line" style={{ background: MAP_GROUND.day }}>
         <APIProvider apiKey={KEY}>
-          <Map styles={stylesFor(18)} backgroundColor={MAP_GROUND.day} defaultCenter={{ lat: place.lat, lng: place.lng }} defaultZoom={18} gestureHandling="cooperative" disableDefaultUI clickableIcons={false}>
-            {!shapes && outline && <Shape outline={outline} on />}
-            {shapes?.map((s, i) => (
+          <Map
+            onClick={(e) => {
+              const ll = e.detail.latLng;
+              if (!drawing || !ll) return;
+              setSaved(null);
+              setCorners((c) => [...c, [ll.lat, ll.lng]]);
+            }}
+            draggableCursor={drawing ? "crosshair" : undefined}
+            styles={stylesFor(18)} backgroundColor={MAP_GROUND.day} defaultCenter={{ lat: place.lat, lng: place.lng }} defaultZoom={18} gestureHandling="cooperative" disableDefaultUI clickableIcons={false}>
+            {/* (The saved one, when it isn't among what was found: e.g. one you drew.) */}
+            {!drawing && outline && picked.size === 0 && <Shape outline={outline} on />}
+            {drawing && corners.length >= 2 && <Shape outline={corners} on />}
+            {drawing &&
+              corners.map(([lat, lng], i) => (
+                <HtmlMarker key={i} position={{ lat, lng }} zIndex={6} passive>
+                  <span className="block size-2.5 translate-y-1/2 rounded-full border-2 border-paper bg-accent shadow" />
+                </HtmlMarker>
+              ))}
+            {!drawing && shapes?.map((s, i) => (
               <Shape
                 key={i}
                 outline={s}
@@ -91,7 +112,12 @@ export default function BuildingPicker({ place, outline }: { place: { id: string
             </HtmlMarker>
           </Map>
         </APIProvider>
-        {looking && <p className="absolute inset-x-0 top-3 mx-auto w-max rounded-full bg-paper/95 px-3 py-1.5 text-xs font-semibold text-muted shadow">Finding buildings around it…</p>}
+        {drawing && (
+          <p className="absolute inset-x-0 top-3 mx-auto w-max rounded-full bg-paper/95 px-3 py-1.5 text-xs font-semibold text-ink shadow">
+            {corners.length < 3 ? "Click each corner of the building" : "Keep clicking corners, then save"}
+          </p>
+        )}
+        {looking && !drawing && <p className="absolute inset-x-0 top-3 mx-auto w-max rounded-full bg-paper/95 px-3 py-1.5 text-xs font-semibold text-muted shadow">Finding buildings around it…</p>}
       </div>
       {log ? (
         <div className="mt-2 rounded-control bg-surface px-3 py-2 text-sm">
@@ -104,9 +130,39 @@ export default function BuildingPicker({ place, outline }: { place: { id: string
         </div>
       ) : (
         !looking && (
-          shapes?.length === 0 && <p className="mt-2 text-sm text-muted">No buildings found around it.</p>
+          !drawing && shapes?.length === 0 && <p className="mt-2 text-sm text-muted">No buildings found around it. You can draw it yourself.</p>
         )
       )}
+      {drawing ? (
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            disabled={pending || corners.length < 3}
+            onClick={() => save(corners)}
+            className="h-10 rounded-control bg-accent px-5 text-sm font-semibold text-accent-ink disabled:opacity-40"
+          >
+            {pending ? "Saving…" : "Save building"}
+          </button>
+          <button
+            type="button"
+            disabled={corners.length === 0}
+            onClick={() => setCorners((c) => c.slice(0, -1))}
+            className="h-10 rounded-control px-4 text-sm font-semibold text-ink hover:bg-surface disabled:opacity-40"
+          >
+            Undo corner
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setDrawing(false);
+              setCorners([]);
+            }}
+            className="h-10 rounded-control px-4 text-sm font-semibold text-muted hover:bg-surface hover:text-ink"
+          >
+            Cancel
+          </button>
+        </div>
+      ) : (
       <div className="mt-3 flex flex-wrap items-center gap-2">
         <button
           type="button"
@@ -124,7 +180,21 @@ export default function BuildingPicker({ place, outline }: { place: { id: string
             Try again
           </button>
         )}
+        <button
+          type="button"
+          disabled={pending}
+          onClick={() => {
+            setDrawing(true);
+            setCorners([]);
+            setSaved(null);
+            setMessage(null);
+          }}
+          className="h-10 rounded-control px-4 text-sm font-semibold text-muted hover:bg-surface hover:text-ink"
+        >
+          Draw it yourself
+        </button>
       </div>
+      )}
       {message && <p className="mt-2 text-sm text-danger">{message}</p>}
       {saved && !message && <p className="mt-2 text-sm text-muted">{saved}</p>}
     </div>
