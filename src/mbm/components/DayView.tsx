@@ -283,16 +283,23 @@ function useNoPageZoom() {
 // "on the way" starts at the first dot after it.
 function partAt(visits: Day["visits"], points: Day["points"], t: number, from: number, to: number, now: number): (Focus & { where: string }) | null {
   const spans = visits
-    .map((v) => ({ start: Math.max(from, +new Date(v.arrived_at)), end: Math.min(to, v.departed_at ? +new Date(v.departed_at) : now), where: v.place ?? v.auto_name ?? "a stop" }))
+    .map((v) => ({ start: Math.max(from, +new Date(v.arrived_at)), end: Math.min(to, v.departed_at ? +new Date(v.departed_at) : now), where: v.place ?? v.auto_name ?? "a stop", lat: v.lat, lng: v.lng }))
     .filter((s) => s.end > s.start)
     .sort((a, b) => a.start - b.start);
-  // Each stop runs on until the first dot of you going (or the next stop).
+  // Each stop runs on until the first dot of you going (or the next stop): a moving dot away from
+  // it. (A "walking" dot inside the house isn't going anywhere: Home! (2.0) on Nov 26 showed as
+  // "on the way" for hours while the app was being reinstalled.)
+  const away = (p: Day["points"][number], s: { lat: number; lng: number }) => {
+    const r = Math.PI / 180;
+    const d = Math.hypot((p.lng - s.lng) * r * Math.cos(((p.lat + s.lat) / 2) * r), (p.lat - s.lat) * r) * 6371000;
+    return d > Math.max(60, 2 * (p.accuracy_m ?? 30));
+  };
   spans.forEach((s, i) => {
     const next = spans[i + 1]?.start ?? to;
     if (s.end >= next) return;
     const first = points.find((p) => {
       const at = +new Date(p.at);
-      return at > s.end && at < next && p.motion !== "still";
+      return at > s.end && at < next && p.motion !== "still" && away(p, s);
     });
     s.end = first ? Math.max(s.end, +new Date(first.at)) : next;
   });
